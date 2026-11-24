@@ -111,7 +111,7 @@
     $('#app').innerHTML = `
       <div class="login">
         <form id="login-form">
-          <div class="logo"><img src="/favicon.svg" alt=""><div><b>VINILO</b><small>Gestión de Almacén</small></div></div>
+          <div class="logo"><img src="/logo.png" alt="Vinilo"><div><b>VINILO</b><small>Gestión de Almacén</small></div></div>
           <div class="f"><label for="u">Usuario</label><input id="u" autocomplete="username" required autofocus></div>
           <div class="f"><label for="p">Contraseña</label><input id="p" type="password" autocomplete="current-password" required></div>
           <div class="err" id="login-err"></div>
@@ -146,6 +146,25 @@
   }
 
   // ---------- Navegación ----------
+  const ICON_PATHS = {
+    panel: '<rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/>',
+    stock: '<path d="M12 3 3 7.5l9 4.5 9-4.5L12 3Z"/><path d="m3 12 9 4.5 9-4.5"/><path d="m3 16.5 9 4.5 9-4.5"/>',
+    pedidos: '<rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4V3h6v1"/><path d="M9 10h6M9 14h6M9 18h3"/>',
+    compras: '<circle cx="9" cy="20" r="1.4"/><circle cx="18" cy="20" r="1.4"/><path d="M2.5 3h2.6l2.3 11.2a1.5 1.5 0 0 0 1.5 1.2h8.6a1.5 1.5 0 0 0 1.5-1.1L21 7H6"/>',
+    proveedores: '<path d="M2 6h11v10H2z"/><path d="M13 9h4.5L21 12.5V16h-8z"/><circle cx="6" cy="18" r="1.8"/><circle cx="17" cy="18" r="1.8"/>',
+    recepcion: '<path d="M12 3v11"/><path d="m7.5 9.5 4.5 4.5 4.5-4.5"/><path d="M3 14v4a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-4"/>',
+    transferencia: '<path d="M4 8h14"/><path d="m14 4 4 4-4 4"/><path d="M20 16H6"/><path d="m10 12-4 4 4 4"/>',
+    consumo: '<path d="M6 3h12l-1.2 7.2A4.9 4.9 0 0 1 12 14.5a4.9 4.9 0 0 1-4.8-4.3L6 3Z"/><path d="M12 14.5V20"/><path d="M8 21h8"/><path d="M6.6 7h10.8"/>',
+    ajuste: '<path d="M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1"/><circle cx="15" cy="6" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="18" r="2"/>',
+    movimientos: '<path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v4h4"/><path d="M12 7.5V12l3 2"/>',
+    productos: '<path d="M3 12.6V4.5A1.5 1.5 0 0 1 4.5 3h8.1a1.5 1.5 0 0 1 1 .4l7 7a1.5 1.5 0 0 1 0 2.1l-8.1 8.1a1.5 1.5 0 0 1-2.1 0l-7-7a1.5 1.5 0 0 1-.4-1Z"/><circle cx="8" cy="8" r="1.5"/>',
+    almacenes: '<path d="M3 21V9l9-5 9 5v12"/><path d="M7 21v-8h10v8"/><path d="M7 17h10"/>',
+    usuarios: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.6a3.5 3.5 0 0 1 0 6.8"/><path d="M18.5 14.5a6.5 6.5 0 0 1 3 5.5"/>',
+    salir: '<path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3"/><path d="M10 16l-4-4 4-4"/><path d="M6 12h10"/>',
+    clave: '<circle cx="8" cy="15" r="4"/><path d="m11 12 9-9"/><path d="m17 6 3 3"/>',
+  };
+  const icono = (k) => `<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICON_PATHS[k] || ''}</svg>`;
+
   const NAV = [
     { sec: 'General' },
     { id: 'panel', lbl: 'Panel', ok: () => true },
@@ -170,15 +189,15 @@
   function renderShell() {
     const links = NAV.filter((n) => !n.ok || n.ok()).map((n) => n.sec
       ? `<div class="sec">${n.sec}</div>`
-      : `<a class="nav" href="#/${n.id}" data-nav="${n.id}">${n.lbl}${n.pill ? '<span class="pill" id="pill-ped" hidden></span>' : ''}${n.pillOc ? '<span class="pill" id="pill-oc" hidden></span>' : ''}</a>`).join('');
+      : `<a class="nav" href="#/${n.id}" data-nav="${n.id}">${icono(n.id)}<span class="lbl">${n.lbl}</span>${n.pill ? '<span class="pill" id="pill-ped" hidden></span>' : ''}${n.pillOc ? '<span class="pill" id="pill-oc" hidden></span>' : ''}</a>`).join('');
     $('#app').innerHTML = `
-      <div class="topbar"><button id="menu-btn" aria-label="Menú">☰</button><b>VINILO</b></div>
+      <div class="topbar"><button id="menu-btn" aria-label="Menú">☰</button><span class="logo-tile sm"><img src="/logo.png" alt=""></span><b>VINILO</b></div>
       <div class="layout">
         <nav class="side" id="side">
-          <div class="brand"><img src="/favicon.svg" alt=""><div><b>VINILO</b><small>Gestión de Almacén</small></div></div>
+          <div class="brand"><span class="logo-tile"><img src="/logo.png" alt="Vinilo"></span><div><b>VINILO</b><small>Gestión de Almacén</small></div></div>
           ${links}
           <div class="who"><b>${esc(S.user.nombre)}</b>${ROL_LBL[S.user.rol]}${S.user.proveedor ? ' · ' + esc(S.user.proveedor) : ''}${S.user.permiso_compras && S.user.rol !== 'ADMIN' ? ' · Compras' : ''}
-            <div class="links"><button id="pwd-btn">Contraseña</button><button id="out-btn">Salir</button></div></div>
+            <div class="links"><button id="pwd-btn">${icono('clave')}Contraseña</button><button id="out-btn">${icono('salir')}Salir</button></div></div>
         </nav>
         <main id="main"></main>
       </div>`;
