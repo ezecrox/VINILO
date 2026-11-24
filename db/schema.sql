@@ -254,3 +254,18 @@ DO $$ BEGIN
     ALTER TABLE usuarios ADD CONSTRAINT usuarios_rol_fk FOREIGN KEY (rol) REFERENCES roles(codigo) ON UPDATE CASCADE;
   END IF;
 END $$;
+
+-- ===== Registro de accesos (solo ADMIN) =====
+CREATE TABLE IF NOT EXISTS login_log (
+  id          SERIAL PRIMARY KEY,
+  fecha       TIMESTAMPTZ NOT NULL DEFAULT now(),
+  usuario_id  INT REFERENCES usuarios(id),
+  username    VARCHAR(120),
+  evento      VARCHAR(20) NOT NULL,   -- INGRESO / FALLIDO / SALIDA
+  motivo      VARCHAR(60),
+  ip          VARCHAR(60),
+  user_agent  VARCHAR(300)
+);
+CREATE INDEX IF NOT EXISTS idx_login_fecha ON login_log (fecha DESC);
+CREATE INDEX IF NOT EXISTS idx_login_user ON login_log (usuario_id, fecha DESC);
+DELETE FROM login_log WHERE fecha < now() - interval '400 days';

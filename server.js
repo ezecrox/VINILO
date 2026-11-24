@@ -195,12 +195,63 @@ async function registrarMovimiento(client, mov) {
 }
 
 // ---------- Auth ----------
-route('POST', '/api/login', async ({ body }) => {
-  const { rows } = await query('SELECT * FROM usuarios WHERE lower(username) = lower($1)', [String(body.username || '').trim()]);
+function origen(req) {
+  const ip = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.socket.remoteAddress || '';
+  return { ip: ip.slice(0, 60), ua: String(req.headers['user-agent'] || '').slice(0, 300) };
+}
+async function registrarAcceso(req, { usuario_id = null, username, evento, motivo = null }) {
+  const o = origen(req);
+  try {
+    await query('INSERT INTO login_log (usuario_id, username, evento, motivo, ip, user_agent) VALUES ($1,$2,$3,$4,$5,$6)',
+      [usuario_id, String(username || '').slice(0, 120), evento, motivo, o.ip, o.ua]);
+  } catch (e) { console.error('No se pudo registrar el acceso:', e.message); }
+}
+
+route('POST', '/api/login', async ({ req, body }) => {
+  const username = String(body.username || '').trim();
+  const { rows } = await query('SELECT * FROM usuarios WHERE lower(username) = lower($1)', [username]);
   const u = rows[0];
-  if (!u || !isTrue(u.activo) || !verifyPassword(body.password || '', u.password_hash)) fail(401, 'Usuario o contraseña incorrectos');
+  let motivo = null;
+  if (!u) motivo = 'Usuario inexistente';
+  else if (!isTrue(u.activo)) motivo = 'Usuario inactivo';
+  else if (!verifyPassword(body.password || '', u.password_hash)) motivo = 'Contraseña incorrecta';
+  if (motivo) {
+    await registrarAcceso(req, { usuario_id: u ? Number(u.id) : null, username, evento: 'FALLIDO', motivo });
+    fail(401, 'Usuario o contraseña incorrectos');
+  }
+  await registrarAcceso(req, { usuario_id: Number(u.id), username: u.username, evento: 'INGRESO' });
   return { token: signToken({ uid: Number(u.id) }), user: { id: Number(u.id), username: u.username, nombre: u.nombre, rol: u.rol } };
 }, { auth: false });
+
+route('POST', '/api/logout', async ({ req, user }) => {
+  await registrarAcceso(req, { usuario_id: user.id, username: user.username, evento: 'SALIDA' });
+  return { ok: true };
+});
+
+// Registro de accesos: solo el rol ADMIN
+route('GET', '/api/accesos', async ({ user, url }) => {
+  if (user.rol !== 'ADMIN') fail(403, 'Solo el administrador puede ver el registro de accesos');
+  const q = url.searchParams;
+  const where = [];
+  const params = [];
+  const add = (cond, v) => { params.push(v); where.push(cond.replace('?', `$${params.length}`)); };
+  if (q.get('usuario_id')) add('l.usuario_id = ?', toInt(q.get('usuario_id')));
+  if (q.get('evento')) add('l.evento = ?', q.get('evento'));
+  if (fechaOk(q.get('desde'))) add("l.fecha >= (?::date)::timestamp AT TIME ZONE 'America/Argentina/Buenos_Aires'", q.get('desde'));
+  if (fechaOk(q.get('hasta'))) add("l.fecha < ((?::date) + 1)::timestamp AT TIME ZONE 'America/Argentina/Buenos_Aires'", q.get('hasta'));
+  const { rows } = await query(
+    `SELECT l.id, l.fecha, l.usuario_id, l.username, l.evento, l.motivo, l.ip, l.user_agent, u.nombre, u.rol
+     FROM login_log l LEFT JOIN usuarios u ON u.id = l.usuario_id
+     ${where.length ? 'WHERE ' + where.join(' AND ') : ''} ORDER BY l.fecha DESC, l.id DESC LIMIT 500`, params);
+  const { rows: r24 } = await query(
+    `SELECT count(*) FILTER (WHERE evento = 'INGRESO')::int AS ingresos, count(*) FILTER (WHERE evento = 'FALLIDO')::int AS fallidos,
+            count(DISTINCT usuario_id) FILTER (WHERE evento = 'INGRESO')::int AS usuarios
+     FROM login_log WHERE fecha > now() - interval '24 hours'`);
+  return {
+    ultimas24h: { ingresos: Number(r24[0].ingresos), fallidos: Number(r24[0].fallidos), usuarios: Number(r24[0].usuarios) },
+    registros: rows.map((r) => ({ ...r, id: Number(r.id), usuario_id: r.usuario_id ? Number(r.usuario_id) : null })),
+  };
+});
 
 route('GET', '/api/me', async ({ user }) => ({ user, permisos: user.permisos }));
 
@@ -216,7 +267,8 @@ route('POST', '/api/me/password', async ({ user, body }) => {
 route('GET', '/api/usuarios', async ({ user }) => {
   permitir(user, 'usuarios');
   const { rows } = await query(
-    `SELECT u.id, u.username, u.nombre, u.rol, u.activo, u.permiso_compras, u.proveedor_id, p.nombre AS proveedor, u.creado_en, r.nombre AS rol_nombre
+    `SELECT u.id, u.username, u.nombre, u.rol, u.activo, u.permiso_compras, u.proveedor_id, p.nombre AS proveedor, u.creado_en, r.nombre AS rol_nombre,
+            (SELECT max(l.fecha) FROM login_log l WHERE l.usuario_id = u.id AND l.evento = 'INGRESO') AS ultimo_ingreso
      FROM usuarios u LEFT JOIN proveedores p ON p.id = u.proveedor_id LEFT JOIN roles r ON r.codigo = u.rol ORDER BY u.nombre`);
   return rows.map((r) => ({ ...r, id: Number(r.id), activo: isTrue(r.activo), permiso_compras: isTrue(r.permiso_compras), proveedor_id: r.proveedor_id ? Number(r.proveedor_id) : null }));
 });

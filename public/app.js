@@ -213,7 +213,7 @@
         </nav>
         <main id="main"></main>
       </div>`;
-    $('#out-btn').onclick = logout;
+    $('#out-btn').onclick = async () => { try { await api('/api/logout', { method: 'POST' }); } catch (_) { /* igual salimos */ } logout(); };
     $('#pwd-btn').onclick = cambiarPassword;
     $('#menu-btn').onclick = () => $('#side').classList.toggle('open');
     $$('#side a.nav').forEach((a) => a.addEventListener('click', () => $('#side').classList.remove('open')));
@@ -978,12 +978,14 @@
   VIEWS.usuarios = async (main) => {
     const tab = new URLSearchParams(location.hash.split('?')[1] || '').get('tab');
     if (tab === 'roles') return vistaRoles(main);
+    if (tab === 'accesos' && S.user.rol === 'ADMIN') return vistaAccesos(main);
     const [us, provs, roles] = await Promise.all([api('/api/usuarios'), api('/api/proveedores'), api('/api/roles')]);
     main.innerHTML = `${tabsUsuarios('usuarios')}<h1>Usuarios</h1><p class="sub">Cada usuario tiene un <b>rol</b>, que define qué opciones del menú y qué almacenes ve (se configuran en la pestaña <a href="#/usuarios?tab=roles">Roles</a>). El permiso <b>Compras</b> se puede sumar a cualquier usuario.</p>
       <div class="toolbar"><div class="spacer"></div><button class="btn" id="us-new">+ Nuevo usuario</button></div>
-      <div class="tbl-wrap"><table><thead><tr><th>Usuario</th><th>Nombre</th><th>Rol</th><th>Compras</th><th>Proveedor</th><th>Estado</th><th></th></tr></thead><tbody>
+      <div class="tbl-wrap"><table><thead><tr><th>Usuario</th><th>Nombre</th><th>Rol</th><th>Compras</th><th>Proveedor</th><th>Último ingreso</th><th>Estado</th><th></th></tr></thead><tbody>
       ${us.map((u) => `<tr class="${u.activo ? '' : 'inactive'}"><td class="code">${esc(u.username)}</td><td>${esc(u.nombre)}</td><td><span class="badge b-rol">${esc(u.rol_nombre || u.rol)}</span></td>
         <td>${u.rol === 'ADMIN' || u.permiso_compras ? '<span class="badge b-COMPLETADO">Sí</span>' : ''}</td><td>${esc(u.proveedor || '')}</td>
+        <td class="muted">${u.ultimo_ingreso ? fmtFecha(u.ultimo_ingreso) : 'Nunca'}</td>
         <td>${u.activo ? 'Activo' : 'Inactivo'}</td><td class="num"><button class="btn ghost sm" data-ed="${u.id}">Editar</button></td></tr>`).join('')}
       </tbody></table></div>`;
     const editar = (u) => {
@@ -1022,7 +1024,7 @@
 
 
   // ---------- Roles ----------
-  const tabsUsuarios = (act) => `<div class="tabs"><a href="#/usuarios" class="${act === 'usuarios' ? 'on' : ''}">Usuarios</a><a href="#/usuarios?tab=roles" class="${act === 'roles' ? 'on' : ''}">Roles</a></div>`;
+  const tabsUsuarios = (act) => `<div class="tabs"><a href="#/usuarios" class="${act === 'usuarios' ? 'on' : ''}">Usuarios</a><a href="#/usuarios?tab=roles" class="${act === 'roles' ? 'on' : ''}">Roles</a>${S.user.rol === 'ADMIN' ? `<a href="#/usuarios?tab=accesos" class="${act === 'accesos' ? 'on' : ''}">Accesos</a>` : ''}</div>`;
 
   async function vistaRoles(main) {
     const [roles, cat] = await Promise.all([api('/api/roles'), api('/api/roles/catalogo')]);
@@ -1079,6 +1081,52 @@
     };
     $('#rl-new').onclick = () => editar(null);
     $$('[data-ed]').forEach((b) => b.addEventListener('click', () => editar(roles.find((x) => x.codigo === b.dataset.ed))));
+  }
+
+
+  // ---------- Registro de accesos (solo ADMIN) ----------
+  function dispositivo(ua) {
+    ua = String(ua || '');
+    if (!ua) return '—';
+    const nav = /Edg\//.test(ua) ? 'Edge' : /OPR\//.test(ua) ? 'Opera' : /Chrome\//.test(ua) ? 'Chrome' : /Firefox\//.test(ua) ? 'Firefox' : /Safari\//.test(ua) ? 'Safari' : 'Otro';
+    const so = /iPhone|iPad/.test(ua) ? 'iPhone/iPad' : /Android/.test(ua) ? 'Android' : /Windows/.test(ua) ? 'Windows' : /Mac OS/.test(ua) ? 'Mac' : /Linux/.test(ua) ? 'Linux' : '';
+    return `${nav}${so ? ' · ' + so : ''}${/Mobile|Android|iPhone/.test(ua) ? ' 📱' : ''}`;
+  }
+  async function vistaAccesos(main) {
+    const usuarios = await api('/api/usuarios');
+    const EV = { INGRESO: 'Ingreso', FALLIDO: 'Intento fallido', SALIDA: 'Salida' };
+    main.innerHTML = `${tabsUsuarios('accesos')}<h1>Registro de accesos</h1>
+      <p class="sub">Ingresos, intentos fallidos y salidas de los usuarios. Solo lo ve el administrador. Se guardan los últimos 400 días.</p>
+      <div class="resumen" id="ac-res" style="margin-bottom:16px"></div>
+      <div class="toolbar">
+        <div class="f"><label>Usuario</label><select id="ac-u"><option value="">Todos</option>${usuarios.map((u) => `<option value="${u.id}">${esc(u.nombre)} (${esc(u.username)})</option>`).join('')}</select></div>
+        <div class="f"><label>Evento</label><select id="ac-e"><option value="">Todos</option>${Object.entries(EV).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select></div>
+        <div class="f"><label>Desde</label><input type="date" id="ac-d"></div>
+        <div class="f"><label>Hasta</label><input type="date" id="ac-h"></div>
+        <div class="spacer"></div><button class="btn sec" id="ac-csv">Exportar CSV</button>
+      </div><div id="ac-tbl"></div>`;
+    let regs = [];
+    const cargar = async () => {
+      const qs = new URLSearchParams();
+      [['usuario_id', '#ac-u'], ['evento', '#ac-e'], ['desde', '#ac-d'], ['hasta', '#ac-h']].forEach(([k, sel]) => { if ($(sel).value) qs.set(k, $(sel).value); });
+      const r = await api('/api/accesos?' + qs);
+      regs = r.registros;
+      const h = r.ultimas24h;
+      $('#ac-res').innerHTML = `<a><span>Ingresos (24 h)</span><b>${fmtN(h.ingresos)}</b><small>${fmtN(h.usuarios)} usuarios distintos</small></a>
+        <a style="${h.fallidos ? 'border-color:#f3b8b1;background:#fff6f5' : ''}"><span>Intentos fallidos (24 h)</span><b style="${h.fallidos ? 'color:var(--accent)' : ''}">${fmtN(h.fallidos)}</b><small>contraseña o usuario incorrecto</small></a>`;
+      $('#ac-tbl').innerHTML = regs.length ? `<div class="tbl-wrap"><table><thead><tr><th>Fecha y hora</th><th>Usuario</th><th>Evento</th><th>Detalle</th><th>IP</th><th>Dispositivo</th></tr></thead><tbody>
+        ${regs.map((x) => `<tr><td>${fmtFecha(x.fecha)}</td><td>${x.nombre ? `<b>${esc(x.nombre)}</b> <span class="code">${esc(x.username)}</span>` : `<span class="code">${esc(x.username || '—')}</span>`}</td>
+          <td><span class="badge ac-${x.evento}">${EV[x.evento] || x.evento}</span></td><td class="muted">${esc(x.motivo || '')}</td>
+          <td class="code">${esc(x.ip || '')}</td><td title="${esc(x.user_agent || '')}">${esc(dispositivo(x.user_agent))}</td></tr>`).join('')}
+        </tbody></table></div><p class="muted">${regs.length === 500 ? 'Se muestran los últimos 500 registros; usá los filtros para acotar.' : `${regs.length} registros`}</p>`
+        : '<div class="card empty">No hay accesos para el filtro.</div>';
+    };
+    ['#ac-u', '#ac-e', '#ac-d', '#ac-h'].forEach((sel) => $(sel).addEventListener('change', () => cargar().catch((e) => toast(e.message, true))));
+    $('#ac-csv').onclick = () => descargarCSV(`accesos_${hoyISO()}.csv`, [
+      ['Fecha', 'Usuario', 'Nombre', 'Evento', 'Detalle', 'IP', 'Dispositivo'],
+      ...regs.map((x) => [fmtFecha(x.fecha), x.username || '', x.nombre || '', EV[x.evento] || x.evento, x.motivo || '', x.ip || '', dispositivo(x.user_agent)]),
+    ]);
+    await cargar();
   }
 
   // ---------- Proveedores ----------

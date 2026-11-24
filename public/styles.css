@@ -348,3 +348,7 @@ tbody tr:hover { background: #fffaf2; }
 .side a.nav { padding: 8px 12px; font-size: 0.96rem; }
 .side .sec { padding: 12px 12px 4px; }
 @media (max-width: 860px) { .layout { grid-template-columns: minmax(0, 1fr); } }
+.ac-INGRESO { background: #e7f4ec; color: var(--ok); }
+.ac-FALLIDO { background: #fde8e6; color: var(--accent); }
+.ac-SALIDA { background: #eaf2fa; color: var(--side); }
+.resumen a:not([href]) { cursor: default; }
