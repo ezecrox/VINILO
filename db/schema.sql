@@ -269,3 +269,6 @@ CREATE TABLE IF NOT EXISTS login_log (
 CREATE INDEX IF NOT EXISTS idx_login_fecha ON login_log (fecha DESC);
 CREATE INDEX IF NOT EXISTS idx_login_user ON login_log (usuario_id, fecha DESC);
 DELETE FROM login_log WHERE fecha < now() - interval '400 days';
+
+ALTER TABLE movimientos ADD COLUMN IF NOT EXISTS proveedor_id INT REFERENCES proveedores(id);
+CREATE INDEX IF NOT EXISTS idx_mov_prov ON movimientos (proveedor_id);

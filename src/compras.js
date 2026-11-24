@@ -16,7 +16,7 @@ module.exports = function registrarCompras({ route, query, tx, fail, permitir, r
   const normProv = (r) => ({ ...r, id: Number(r.id), activo: isTrue(r.activo), usuarios: r.usuarios === undefined ? undefined : Number(r.usuarios) });
 
   route('GET', '/api/proveedores', async ({ user }) => {
-    permitirAlguno(user, 'compras', 'verCompras', 'proveedores', 'usuarios');
+    permitirAlguno(user, 'compras', 'verCompras', 'proveedores', 'usuarios', 'recibir');
     const { rows } = await query(
       `SELECT p.*, (SELECT count(*)::int FROM usuarios u WHERE u.proveedor_id = p.id) AS usuarios
        FROM proveedores p ORDER BY p.nombre`);
@@ -276,7 +276,7 @@ module.exports = function registrarCompras({ route, query, tx, fail, permitir, r
       }
       const ref = str(body.referencia, 90);
       const movId = await registrarMovimiento(client, {
-        tipo: 'RECEPCION', destino_id: Number(oc.almacen_id), items: movItems, usuario_id: user.id, oc_id: id,
+        tipo: 'RECEPCION', destino_id: Number(oc.almacen_id), items: movItems, usuario_id: user.id, oc_id: id, proveedor_id: Number(oc.proveedor_id),
         referencia: `Pedido proveedor #${id}${ref ? ' · ' + ref : ''}`, observacion: str(body.observacion, 1000),
       });
       const { rows: tot } = await client.query(

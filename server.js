@@ -183,9 +183,10 @@ async function registrarMovimiento(client, mov) {
   if (itemsFinales.length === 0) fail(400, 'El ajuste no produce cambios: las cantidades contadas coinciden con el stock');
 
   const { rows: m } = await client.query(
-    `INSERT INTO movimientos (tipo, origen_id, destino_id, usuario_id, pedido_id, oc_id, referencia, observacion)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
-    [tipo, origen ? origen.id : null, destino ? destino.id : null, mov.usuario_id, mov.pedido_id || null, mov.oc_id || null, str(mov.referencia, 120), str(mov.observacion, 1000)]
+    `INSERT INTO movimientos (tipo, origen_id, destino_id, usuario_id, pedido_id, oc_id, proveedor_id, referencia, observacion)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
+    [tipo, origen ? origen.id : null, destino ? destino.id : null, mov.usuario_id, mov.pedido_id || null, mov.oc_id || null,
+     tipo === 'RECEPCION' && mov.proveedor_id ? mov.proveedor_id : null, str(mov.referencia, 120), str(mov.observacion, 1000)]
   );
   const movId = Number(m[0].id);
   for (const [pid, cant] of itemsFinales) {
@@ -579,7 +580,14 @@ route('POST', '/api/movimientos', async ({ user, body }) => {
   const accion = PERMISO_POR_TIPO[body.tipo];
   if (!accion) fail(400, 'Tipo de movimiento inválido');
   permitir(user, accion);
-  if (body.tipo === 'RECEPCION') exigirAlmacen(user, body.destino_id, 'destino');
+  if (body.tipo === 'RECEPCION') {
+    exigirAlmacen(user, body.destino_id, 'destino');
+    if (body.proveedor_id !== null && body.proveedor_id !== undefined && body.proveedor_id !== '') {
+      const { rows } = await query('SELECT activo FROM proveedores WHERE id = $1', [toInt(body.proveedor_id)]);
+      if (!rows[0]) fail(400, 'Proveedor inexistente');
+      body.proveedor_id = toInt(body.proveedor_id);
+    } else body.proveedor_id = null;
+  }
   else exigirAlmacen(user, body.origen_id, 'origen');
   const id = await tx((client) => registrarMovimiento(client, { ...body, usuario_id: user.id, pedido_id: null, oc_id: null }));
   return { id };
@@ -599,13 +607,14 @@ route('GET', '/api/movimientos', async ({ user, url }) => {
   if (q.get('producto_id')) add('EXISTS (SELECT 1 FROM movimiento_items x WHERE x.movimiento_id = m.id AND x.producto_id = ?)', toInt(q.get('producto_id')));
   const { rows } = await query(
     `SELECT m.id, m.tipo, m.fecha, m.referencia, m.observacion, m.pedido_id,
-            o.nombre AS origen, d.nombre AS destino, u.nombre AS usuario,
+            o.nombre AS origen, d.nombre AS destino, u.nombre AS usuario, pv.nombre AS proveedor,
             (SELECT count(*)::int FROM movimiento_items i WHERE i.movimiento_id = m.id) AS items,
             (SELECT coalesce(sum(i.cantidad),0)::int FROM movimiento_items i WHERE i.movimiento_id = m.id) AS unidades
      FROM movimientos m
      LEFT JOIN almacenes o ON o.id = m.origen_id
      LEFT JOIN almacenes d ON d.id = m.destino_id
      JOIN usuarios u ON u.id = m.usuario_id
+     LEFT JOIN proveedores pv ON pv.id = m.proveedor_id
      ${where.length ? 'WHERE ' + where.join(' AND ') : ''}
      ORDER BY m.fecha DESC, m.id DESC LIMIT 500`, params);
   return rows.map((r) => ({ ...r, id: Number(r.id), items: Number(r.items), unidades: Number(r.unidades) }));
@@ -615,9 +624,9 @@ route('GET', '/api/movimientos/:id', async ({ user, params }) => {
   permitir(user, 'verMovimientos');
   const id = toInt(params.id);
   const { rows } = await query(
-    `SELECT m.*, o.nombre AS origen, d.nombre AS destino, u.nombre AS usuario
+    `SELECT m.*, o.nombre AS origen, d.nombre AS destino, u.nombre AS usuario, pv.nombre AS proveedor
      FROM movimientos m LEFT JOIN almacenes o ON o.id = m.origen_id LEFT JOIN almacenes d ON d.id = m.destino_id
-     JOIN usuarios u ON u.id = m.usuario_id WHERE m.id = $1`, [id]);
+     JOIN usuarios u ON u.id = m.usuario_id LEFT JOIN proveedores pv ON pv.id = m.proveedor_id WHERE m.id = $1`, [id]);
   if (!rows[0]) fail(404, 'Movimiento inexistente');
   if (![rows[0].origen_id, rows[0].destino_id].filter(Boolean).some((a) => veAlmacen(user, a))) fail(404, 'Movimiento inexistente');
   const { rows: items } = await query(

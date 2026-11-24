@@ -401,6 +401,7 @@
       const stockData = puede('verStock') ? await api('/api/stock') : { productos: await api('/api/productos') };
       const productos = stockData.productos.filter((p) => p.activo);
       const pMap = new Map(productos.map((p) => [p.id, p]));
+      const provs = tipo === 'RECEPCION' ? (await api('/api/proveedores').catch(() => [])).filter((p) => p.activo) : [];
       const cfg = {
         RECEPCION: { t: 'Recepción de mercadería', s: 'Ingreso de productos a un almacén (compra, remito de proveedor, devolución).', origen: false, destino: true, ref: 'Remito / proveedor', btn: 'Registrar recepción' },
         TRANSFERENCIA: { t: 'Transferencia entre almacenes', s: 'Mueve unidades de un almacén a otro. Se valida el stock disponible en el origen.', origen: true, destino: true, ref: 'Referencia', btn: 'Registrar transferencia' },
@@ -411,11 +412,21 @@
       main.innerHTML = `
         <h1>${cfg.t}</h1><p class="sub">${cfg.s}</p>
         <div class="card">
+          ${tipo === 'RECEPCION' ? `
+          <div class="rec-grid">
+            <div class="f"><label>Almacén que recibe *</label><select id="m-destino">${optAlmacenes(S.almacenes.length === 1 ? S.almacenes[0].id : '', { vacio: 'Seleccionar…' })}</select></div>
+            <div>
+              <div class="f"><label>Proveedor</label><input id="m-prov" list="m-prov-list" autocomplete="off" placeholder="Escribí para buscar el proveedor…">
+                <datalist id="m-prov-list">${provs.map((p) => `<option value="${esc(p.nombre)}"></option>`).join('')}</datalist>
+                <div class="stock-hint" id="m-prov-hint">Dejalo vacío si es una devolución u otro ingreso sin proveedor.</div></div>
+              <div class="f mt"><label>N° de remito</label><input id="m-ref" maxlength="60" placeholder="Ej.: 0001-00001234" inputmode="text"></div>
+            </div>
+          </div>` : `
           <div class="row">
             ${cfg.origen ? `<div class="f"><label>${tipo === 'TRANSFERENCIA' ? 'Desde (origen)' : 'Almacén'}</label><select id="m-origen">${optAlmacenes('', { vacio: 'Seleccionar…' })}</select></div>` : ''}
             ${cfg.destino ? `<div class="f"><label>${tipo === 'TRANSFERENCIA' ? 'Hacia (destino)' : 'Almacén que recibe'}</label><select id="m-destino">${optAlmacenes('', { vacio: 'Seleccionar…', todos: tipo === 'TRANSFERENCIA' })}</select></div>` : ''}
             <div class="f"><label>${cfg.ref}</label><input id="m-ref" maxlength="120"></div>
-          </div>
+          </div>`}
         </div>
         <div class="card">
           <h2>Productos</h2>
@@ -482,15 +493,28 @@
       $('#m-cant').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); agregar(); } });
       $('#m-add').onclick = agregar;
       if (cfg.origen) $('#m-origen').addEventListener('change', () => { hint(); pintar(); });
-      $('#m-clear').onclick = () => { lineas.length = 0; $('#m-obs').value = ''; $('#m-ref').value = ''; pintar(); };
+      const provSel = () => {
+        const v = ($('#m-prov') && $('#m-prov').value.trim().toLowerCase()) || '';
+        return v ? provs.find((p) => p.nombre.toLowerCase() === v) || null : null;
+      };
+      if ($('#m-prov')) $('#m-prov').addEventListener('input', () => {
+        const v = $('#m-prov').value.trim();
+        const ok = !v || provSel();
+        $('#m-prov-hint').className = 'stock-hint' + (ok ? '' : ' bad');
+        $('#m-prov-hint').textContent = !v ? 'Dejalo vacío si es una devolución u otro ingreso sin proveedor.' : ok ? '✓ Proveedor seleccionado' : 'Elegí un proveedor de la lista';
+      });
+      $('#m-clear').onclick = () => { lineas.length = 0; $('#m-obs').value = ''; $('#m-ref').value = ''; if ($('#m-prov')) $('#m-prov').value = ''; pintar(); };
       $('#m-save').onclick = async () => {
         if (!lineas.length) return toast('Agregá al menos un producto', true);
+        if (tipo === 'RECEPCION' && $('#m-prov').value.trim() && !provSel()) return toast('El proveedor no está en la lista: elegilo de las opciones', true);
         const btn = $('#m-save');
         btn.disabled = true;
         try {
           const r = await api('/api/movimientos', { method: 'POST', body: {
             tipo, origen_id: cfg.origen ? $('#m-origen').value : null, destino_id: cfg.destino ? $('#m-destino').value : null,
-            referencia: $('#m-ref').value, observacion: $('#m-obs').value, items: lineas,
+            referencia: tipo === 'RECEPCION' ? ($('#m-ref').value.trim() ? `Remito ${$('#m-ref').value.trim()}` : '') : $('#m-ref').value,
+            proveedor_id: tipo === 'RECEPCION' && provSel() ? provSel().id : null,
+            observacion: $('#m-obs').value, items: lineas,
           } });
           toast(`${TIPO_LBL[tipo]} #${r.id} registrada`);
           router();
@@ -649,16 +673,16 @@
       const qs = new URLSearchParams();
       [['tipo', '#v-tipo'], ['almacen_id', '#v-alm'], ['desde', '#v-desde'], ['hasta', '#v-hasta']].forEach(([k, s]) => { if ($(s).value) qs.set(k, $(s).value); });
       rows = await api('/api/movimientos?' + qs);
-      $('#v-tbl').innerHTML = rows.length ? `<div class="tbl-wrap"><table><thead><tr><th>#</th><th>Fecha</th><th>Tipo</th><th>Desde</th><th>Hacia</th><th>Referencia</th><th class="num">Ítems</th><th class="num">Unidades</th><th>Usuario</th><th></th></tr></thead><tbody>
+      $('#v-tbl').innerHTML = rows.length ? `<div class="tbl-wrap"><table><thead><tr><th>#</th><th>Fecha</th><th>Tipo</th><th>Desde</th><th>Hacia</th><th>Proveedor / referencia</th><th class="num">Ítems</th><th class="num">Unidades</th><th>Usuario</th><th></th></tr></thead><tbody>
         ${rows.map((m) => `<tr><td>${m.id}</td><td>${fmtFecha(m.fecha)}</td><td><span class="badge b-${m.tipo}">${TIPO_LBL[m.tipo]}</span></td><td>${esc(m.origen || '—')}</td><td>${esc(m.destino || (m.tipo === 'AJUSTE' ? '' : '—'))}</td>
-          <td>${esc(m.referencia || '')}</td><td class="num">${m.items}</td><td class="num">${m.tipo === 'AJUSTE' && m.unidades > 0 ? '+' : ''}${fmtN(m.unidades)}</td><td>${esc(m.usuario)}</td>
+          <td>${m.proveedor ? `<b>${esc(m.proveedor)}</b>${m.referencia ? '<br>' : ''}` : ''}<span class="${m.proveedor ? 'muted' : ''}">${esc(m.referencia || '')}</span></td><td class="num">${m.items}</td><td class="num">${m.tipo === 'AJUSTE' && m.unidades > 0 ? '+' : ''}${fmtN(m.unidades)}</td><td>${esc(m.usuario)}</td>
           <td><button class="btn ghost sm" data-ver="${m.id}">Ver</button></td></tr>`).join('')}</tbody></table></div>` : '<div class="card empty">Sin movimientos para el filtro.</div>';
       $$('[data-ver]').forEach((b) => b.addEventListener('click', () => verMovimiento(b.dataset.ver)));
     };
     ['#v-tipo', '#v-alm', '#v-desde', '#v-hasta'].forEach((s) => $(s).addEventListener('change', () => cargar().catch((e) => toast(e.message, true))));
     $('#v-csv').onclick = () => descargarCSV(`movimientos_${hoyISO()}.csv`, [
-      ['Id', 'Fecha', 'Tipo', 'Desde', 'Hacia', 'Referencia', 'Items', 'Unidades', 'Usuario', 'Observacion'],
-      ...rows.map((m) => [m.id, fmtFecha(m.fecha), TIPO_LBL[m.tipo], m.origen || '', m.destino || '', m.referencia || '', m.items, m.unidades, m.usuario, m.observacion || '']),
+      ['Id', 'Fecha', 'Tipo', 'Desde', 'Hacia', 'Proveedor', 'Referencia', 'Items', 'Unidades', 'Usuario', 'Observacion'],
+      ...rows.map((m) => [m.id, fmtFecha(m.fecha), TIPO_LBL[m.tipo], m.origen || '', m.destino || '', m.proveedor || '', m.referencia || '', m.items, m.unidades, m.usuario, m.observacion || '']),
     ]);
     await cargar();
   };
@@ -668,7 +692,7 @@
       const m = await api('/api/movimientos/' + id);
       modal(`<h2>${TIPO_LBL[m.tipo]} #${m.id}</h2>
         <p class="muted">${fmtFecha(m.fecha)} · ${esc(m.usuario)}${m.origen ? ` · Desde <b>${esc(m.origen)}</b>` : ''}${m.destino ? ` · Hacia <b>${esc(m.destino)}</b>` : ''}</p>
-        ${m.referencia ? `<p><b>Referencia:</b> ${esc(m.referencia)}</p>` : ''}${m.pedido_id ? `<p><b>Nota de pedido:</b> #${m.pedido_id}</p>` : ''}
+        ${m.proveedor ? `<p><b>Proveedor:</b> ${esc(m.proveedor)}</p>` : ''}${m.referencia ? `<p><b>Referencia:</b> ${esc(m.referencia)}</p>` : ''}${m.pedido_id ? `<p><b>Nota de pedido:</b> #${m.pedido_id}</p>` : ''}
         <div class="tbl-wrap"><table><thead><tr><th>Código</th><th>Producto</th><th class="num">Cantidad</th></tr></thead><tbody>
         ${m.items.map((i) => `<tr><td class="code">${esc(i.codigo)}</td><td>${esc(i.nombre)}</td><td class="num">${m.tipo === 'AJUSTE' && i.cantidad > 0 ? '+' : ''}${fmtN(i.cantidad)} ${esc(i.unidad)}</td></tr>`).join('')}
         </tbody></table></div>${m.observacion ? `<p class="obs mt">${esc(m.observacion)}</p>` : ''}

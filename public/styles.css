@@ -352,3 +352,5 @@ tbody tr:hover { background: #fffaf2; }
 .ac-FALLIDO { background: #fde8e6; color: var(--accent); }
 .ac-SALIDA { background: #eaf2fa; color: var(--side); }
 .resumen a:not([href]) { cursor: default; }
+.rec-grid { display: grid; grid-template-columns: 1fr 1.3fr; gap: 16px; align-items: start; }
+@media (max-width: 700px) { .rec-grid { grid-template-columns: 1fr; } }
