@@ -84,6 +84,20 @@ El importador de la pantalla acepta tanto ese mismo formato (ID, Categoría, Sub
 
 Si el código ya existe, el producto se actualiza (se puede reimportar sin duplicar). También se aceptan encabezados como `descripcion`, `rubro`, `sku`.
 
+## Integración con Fudo (proveedores)
+
+La app trae los proveedores desde Fudo y mantiene sus cambios: crea los nuevos, actualiza nombre, email, teléfono, dirección, CUIT, comentario y estado, y deja **inactivos** los que se borran en Fudo. El campo *Contacto* es solo de esta app. La relación es por el **Id de Fudo** (los proveedores importados desde la planilla de Fudo ya quedan vinculados).
+
+Se sincroniza al arrancar, cada `FUDO_SYNC_MINUTES` minutos (30 por defecto; con el plan gratuito de Render solo mientras el servicio está despierto) y con el botón **Sincronizar con Fudo** en Proveedores.
+
+| Variable | Valor |
+|---|---|
+| `FUDO_API_KEY` | apiKey de Fudo (Administración → Usuarios → "Establecer API Secret", o pedirla a soporte@fu.do) |
+| `FUDO_API_SECRET` | apiSecret correspondiente |
+| `FUDO_SYNC_MINUTES` | opcional, minutos entre sincronizaciones (0 = solo manual) |
+
+La API de Fudo requiere plan Pro o superior y el usuario de la apiKey debe tener permiso para ver proveedores.
+
 ## Ejecutar localmente
 
 ```bash

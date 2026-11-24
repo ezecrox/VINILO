@@ -166,3 +166,22 @@ CREATE TABLE IF NOT EXISTS app_config (
   valor TEXT,
   actualizado_en TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- ===== Integración Fudo =====
+ALTER TABLE proveedores ADD COLUMN IF NOT EXISTS fudo_id VARCHAR(20);
+ALTER TABLE proveedores ADD COLUMN IF NOT EXISTS fudo_sync_en TIMESTAMPTZ;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_prov_fudo ON proveedores (fudo_id) WHERE fudo_id IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS fudo_sync_log (
+  id            SERIAL PRIMARY KEY,
+  entidad       VARCHAR(30) NOT NULL DEFAULT 'proveedores',
+  origen        VARCHAR(20) NOT NULL,          -- AUTO / MANUAL / ARRANQUE
+  inicio        TIMESTAMPTZ NOT NULL DEFAULT now(),
+  fin           TIMESTAMPTZ,
+  ok            BOOLEAN,
+  leidos        INT DEFAULT 0,
+  creados       INT DEFAULT 0,
+  actualizados  INT DEFAULT 0,
+  desactivados  INT DEFAULT 0,
+  detalle       TEXT
+);

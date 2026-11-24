@@ -606,6 +606,21 @@ route('POST', '/api/pedidos/:id/cancelar', async ({ user, params }) => {
 // ---------- Compras a proveedores ----------
 require('./src/compras')({ route, query, tx, fail, permitir, registrarMovimiento, almacenActivo, isTrue, toInt, str, fechaOk });
 
+// ---------- Integración Fudo ----------
+const fudo = require('./src/fudo');
+const { pool } = require('./src/db');
+route('GET', '/api/fudo/estado', async ({ user }) => {
+  if (!user.permisos.includes('compras') && !user.permisos.includes('parametrizar')) fail(403, 'No tenés permiso para esta operación');
+  const { rows } = await query("SELECT * FROM fudo_sync_log WHERE entidad = 'proveedores' ORDER BY id DESC LIMIT 1");
+  const { rows: v } = await query('SELECT count(*)::int AS n FROM proveedores WHERE fudo_id IS NOT NULL');
+  return { configurado: fudo.configurado(), minutos: Number(process.env.FUDO_SYNC_MINUTES ?? 30), ultimo: rows[0] || null, vinculados: Number(v[0].n) };
+});
+route('POST', '/api/fudo/sincronizar', async ({ user }) => {
+  if (!user.permisos.includes('compras') && !user.permisos.includes('parametrizar')) fail(403, 'No tenés permiso para esta operación');
+  if (!fudo.configurado()) fail(400, 'La integración con Fudo no está configurada: cargá FUDO_API_KEY y FUDO_API_SECRET en Render.');
+  try { return await fudo.sincronizarProveedores(pool, 'MANUAL'); } catch (e) { fail(502, e.message); }
+});
+
 // ---------- Panel ----------
 route('GET', '/api/dashboard', async ({ user }) => {
   const res = { rol: user.rol, pedidos_pendientes: 0 };
@@ -684,5 +699,8 @@ const server = http.createServer(async (req, res) => {
 
 console.log(`Iniciando Vinilo Almacén (Node ${process.version})…`);
 migrate()
-  .then(() => server.listen(PORT, '0.0.0.0', () => console.log(`Vinilo Almacén escuchando en puerto ${PORT}`)))
+  .then(() => server.listen(PORT, '0.0.0.0', () => {
+    console.log(`Vinilo Almacén escuchando en puerto ${PORT}`);
+    fudo.iniciarSincronizacionAutomatica(pool);
+  }))
   .catch((err) => { console.error('Error al inicializar la base de datos:', err.message || err); process.exit(1); });

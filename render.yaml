@@ -25,5 +25,9 @@ services:
         value: admin
       - key: ADMIN_PASSWORD
         sync: false     # Render la pide al crear el Blueprint
+      - key: FUDO_API_KEY
+        sync: false     # apiKey de Fudo
+      - key: FUDO_API_SECRET
+        sync: false     # apiSecret de Fudo
       - key: NODE_VERSION
         value: "20"

@@ -819,8 +819,17 @@
   // ---------- Proveedores ----------
   VIEWS.proveedores = async (main) => {
     const provs = await api('/api/proveedores');
-    const vistaProv = { q: '', inac: false };
+    const fe = await api('/api/fudo/estado').catch(() => null);
+    const u = fe && fe.ultimo;
+    const fudoHtml = !fe ? '' : !fe.configurado
+      ? `<div class="card" style="background:#faf8f5">🔌 <b>Fudo:</b> sincronización no configurada. Cargá <span class="code">FUDO_API_KEY</span> y <span class="code">FUDO_API_SECRET</span> en Render (Environment) para traer los proveedores automáticamente.</div>`
+      : `<div class="card" style="background:#faf8f5;display:flex;gap:14px;align-items:center;flex-wrap:wrap">
+          <div style="flex:1;min-width:260px">🔄 <b>Sincronizado con Fudo</b>${fe.minutos ? ` cada ${fe.minutos} min` : ''} · ${fe.vinculados} proveedores vinculados<br>
+          <span class="stock-hint">${u ? `Última: ${fmtFecha(u.fin || u.inicio)} · ${u.ok === false ? `<b class="bad">Error: ${esc(u.detalle || '')}</b>` : u.ok ? `${u.leidos} leídos, ${u.creados} nuevos, ${u.actualizados} actualizados, ${u.desactivados} desactivados` : 'en curso…'}` : 'Todavía no se sincronizó.'}
+          ${u && u.ok && u.detalle ? `<br>⚠ ${esc(u.detalle).replace(/\n/g, '<br>⚠ ')}` : ''}</span></div>
+          <button class="btn sec" id="pv-sync">Sincronizar con Fudo</button></div>`;
     main.innerHTML = `<h1>Proveedores</h1><p class="sub">Para que un proveedor entre al sistema, creá un usuario con rol <b>Proveedor</b> vinculado acá${puede('parametrizar') ? ' (en Usuarios)' : ' (lo hace el administrador)'}.</p>
+      ${fudoHtml}
       <div class="toolbar"><div class="grow"><label>Buscar</label><input id="pv-q" placeholder="Nombre, CUIT, comentario…"></div>
         <label class="check" style="margin-bottom:10px"><input type="checkbox" id="pv-inac"> Ver inactivos</label>
         <div class="spacer"></div><button class="btn" id="pv-new">+ Nuevo proveedor</button></div>
@@ -829,14 +838,14 @@
       const q = $('#pv-q').value.trim().toLowerCase();
       const rows = provs.filter((p) => ($('#pv-inac').checked || p.activo) && (!q || [p.nombre, p.cuit, p.comentario, p.contacto, p.email].join(' ').toLowerCase().includes(q)));
       $('#pv-tbl').innerHTML = `<div class="tbl-wrap"><table><thead><tr><th>Nombre</th><th>CUIT</th><th>Contacto</th><th>Teléfono / Email</th><th>Dirección</th><th>Comentario</th><th class="num">Usuarios</th><th></th></tr></thead><tbody>
-      ${rows.length ? rows.map((p) => `<tr class="${p.activo ? '' : 'inactive'}"><td><b>${esc(p.nombre)}</b>${p.activo ? '' : ' (inactivo)'}</td><td>${esc(p.cuit || '')}</td><td>${esc(p.contacto || '')}</td>
+      ${rows.length ? rows.map((p) => `<tr class="${p.activo ? '' : 'inactive'}"><td><b>${esc(p.nombre)}</b>${p.fudo_id ? ' <span class="badge b-rol" title="Sincronizado desde Fudo">Fudo</span>' : ''}${p.activo ? '' : ' (inactivo)'}</td><td>${esc(p.cuit || '')}</td><td>${esc(p.contacto || '')}</td>
         <td>${esc(p.telefono || '')}${p.telefono && p.email ? '<br>' : ''}${esc(p.email || '')}</td><td>${esc(p.direccion || '')}</td><td class="muted">${esc(p.comentario || '')}</td>
         <td class="num">${p.usuarios}</td><td class="num"><button class="btn ghost sm" data-ed="${p.id}">Editar</button></td></tr>`).join('') : '<tr><td colspan="8" class="empty">Sin proveedores para el filtro.</td></tr>'}
       </tbody></table></div><p class="muted">${rows.length} de ${provs.length} proveedores</p>`;
       $$('#pv-tbl [data-ed]').forEach((b) => b.addEventListener('click', () => editar(provs.find((x) => x.id == b.dataset.ed))));
     };
     const editar = (p) => {
-      const m = modal(`<h2>${p ? 'Editar' : 'Nuevo'} proveedor</h2><form id="f-pv">
+      const m = modal(`<h2>${p ? 'Editar' : 'Nuevo'} proveedor</h2>${p && p.fudo_id ? `<p class="obs" style="margin-top:-6px">🔄 Vinculado a Fudo (Id ${esc(p.fudo_id)}): nombre, email, teléfono, dirección, CUIT, comentario y estado se actualizan desde Fudo; los cambios hechos acá se pisan en la próxima sincronización. El campo <b>Contacto</b> es solo de esta app.</p>` : ''}<form id="f-pv">
         <div class="f"><label>Razón social / nombre *</label><input name="nombre" value="${esc(p ? p.nombre : '')}" required maxlength="150"></div>
         <div class="row mt"><div class="f"><label>CUIT</label><input name="cuit" value="${esc(p ? p.cuit || '' : '')}" maxlength="20"></div>
           <div class="f"><label>Contacto</label><input name="contacto" value="${esc(p ? p.contacto || '' : '')}" maxlength="120"></div></div>
@@ -859,6 +868,14 @@
     };
     $('#pv-new').onclick = () => editar(null);
     ['#pv-q', '#pv-inac'].forEach((sel) => $(sel).addEventListener('input', pintarProv));
+    if ($('#pv-sync')) $('#pv-sync').onclick = async () => {
+      const b = $('#pv-sync'); b.disabled = true; b.textContent = 'Sincronizando…';
+      try {
+        const r = await api('/api/fudo/sincronizar', { method: 'POST' });
+        toast(`Fudo: ${r.creados} nuevos, ${r.actualizados} actualizados, ${r.desactivados} desactivados`);
+        router();
+      } catch (err) { toast(err.message, true); b.disabled = false; b.textContent = 'Sincronizar con Fudo'; }
+    };
     pintarProv();
   };
 

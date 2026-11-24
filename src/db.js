@@ -122,6 +122,24 @@ async function migrate() {
       [`creados ${creados}, completados ${completados}`]);
     console.log(`Maestro de proveedores: ${creados} creados, ${completados} existentes completados`);
   }
+
+  // Vincular con Fudo: la planilla exportada de Fudo trae su Id (columna id_origen)
+  const { rows: hecho2 } = await pool.query("SELECT 1 FROM app_config WHERE clave = 'vinculo_fudo_v1'");
+  if (!hecho2.length && fs.existsSync(archProv)) {
+    const filas = parseCSV(fs.readFileSync(archProv, 'utf8'));
+    const head = filas[0];
+    let n = 0;
+    for (const f of filas.slice(1)) {
+      const r = Object.fromEntries(head.map((h, i) => [h, (f[i] || '').trim()]));
+      if (!r.id_origen || !r.nombre) continue;
+      const { rowCount } = await pool.query(
+        `UPDATE proveedores SET fudo_id = $1 WHERE fudo_id IS NULL AND lower(trim(nombre)) = lower($2)
+           AND NOT EXISTS (SELECT 1 FROM proveedores x WHERE x.fudo_id = $1)`, [r.id_origen, r.nombre]);
+      n += rowCount || 0;
+    }
+    await pool.query("INSERT INTO app_config (clave, valor) VALUES ('vinculo_fudo_v1', $1) ON CONFLICT (clave) DO NOTHING", [`vinculados ${n}`]);
+    console.log(`Proveedores vinculados a Fudo por Id: ${n}`);
+  }
 }
 
 module.exports = { pool, query, tx, migrate };
