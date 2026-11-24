@@ -2,7 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const pg = require('pg');
 const { hashPassword } = require('./auth');
-const { productosDesdeMaestro } = require('./csv');
+const { productosDesdeMaestro, parseCSV } = require('./csv');
 
 // DATE como texto 'YYYY-MM-DD' (evita corrimientos por zona horaria)
 pg.types.setTypeParser(1082, (v) => v);
@@ -91,6 +91,36 @@ async function migrate() {
       await pool.query('INSERT INTO proveedores (nombre) VALUES ($1) ON CONFLICT (nombre) DO NOTHING', [n.slice(0, 150)]);
     }
     if (nombres.length) console.log(`Proveedores iniciales: ${nombres.join(', ')}`);
+  }
+
+  // Maestro de proveedores (una sola vez): crea los que faltan y completa datos vacíos de los existentes
+  const archProv = path.join(__dirname, '..', 'db', 'proveedores_iniciales.csv');
+  const { rows: hecho } = await pool.query("SELECT 1 FROM app_config WHERE clave = 'seed_proveedores_v1'");
+  if (!hecho.length && fs.existsSync(archProv)) {
+    const filas = parseCSV(fs.readFileSync(archProv, 'utf8'));
+    const head = filas[0];
+    let creados = 0, completados = 0;
+    for (const f of filas.slice(1)) {
+      const r = Object.fromEntries(head.map((h, i) => [h, (f[i] || '').trim() || null]));
+      if (!r.nombre) continue;
+      const { rows: ex } = await pool.query('SELECT id FROM proveedores WHERE lower(trim(nombre)) = lower($1)', [r.nombre]);
+      if (ex.length) {
+        await pool.query(
+          `UPDATE proveedores SET email = coalesce(nullif(email,''), $2), telefono = coalesce(nullif(telefono,''), $3),
+             direccion = coalesce(nullif(direccion,''), $4), cuit = coalesce(nullif(cuit,''), $5), comentario = coalesce(nullif(comentario,''), $6)
+           WHERE id = $1`, [ex[0].id, r.email, r.telefono, r.direccion, r.cuit, r.comentario]);
+        completados++;
+      } else {
+        await pool.query(
+          `INSERT INTO proveedores (nombre, email, telefono, direccion, cuit, comentario, activo) VALUES ($1,$2,$3,$4,$5,$6,$7)
+           ON CONFLICT (nombre) DO NOTHING`,
+          [r.nombre.slice(0, 150), r.email, r.telefono, r.direccion, r.cuit, r.comentario, r.activo !== 'NO']);
+        creados++;
+      }
+    }
+    await pool.query("INSERT INTO app_config (clave, valor) VALUES ('seed_proveedores_v1', $1) ON CONFLICT (clave) DO NOTHING",
+      [`creados ${creados}, completados ${completados}`]);
+    console.log(`Maestro de proveedores: ${creados} creados, ${completados} existentes completados`);
   }
 }
 

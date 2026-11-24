@@ -819,12 +819,22 @@
   // ---------- Proveedores ----------
   VIEWS.proveedores = async (main) => {
     const provs = await api('/api/proveedores');
+    const vistaProv = { q: '', inac: false };
     main.innerHTML = `<h1>Proveedores</h1><p class="sub">Para que un proveedor entre al sistema, creá un usuario con rol <b>Proveedor</b> vinculado acá${puede('parametrizar') ? ' (en Usuarios)' : ' (lo hace el administrador)'}.</p>
-      <div class="toolbar"><div class="spacer"></div><button class="btn" id="pv-new">+ Nuevo proveedor</button></div>
-      <div class="tbl-wrap"><table><thead><tr><th>Nombre</th><th>CUIT</th><th>Contacto</th><th>Email</th><th>Teléfono</th><th class="num">Usuarios</th><th>Estado</th><th></th></tr></thead><tbody>
-      ${provs.length ? provs.map((p) => `<tr class="${p.activo ? '' : 'inactive'}"><td><b>${esc(p.nombre)}</b></td><td>${esc(p.cuit || '')}</td><td>${esc(p.contacto || '')}</td><td>${esc(p.email || '')}</td><td>${esc(p.telefono || '')}</td>
-        <td class="num">${p.usuarios}</td><td>${p.activo ? 'Activo' : 'Inactivo'}</td><td class="num"><button class="btn ghost sm" data-ed="${p.id}">Editar</button></td></tr>`).join('') : '<tr><td colspan="8" class="empty">Sin proveedores.</td></tr>'}
-      </tbody></table></div>`;
+      <div class="toolbar"><div class="grow"><label>Buscar</label><input id="pv-q" placeholder="Nombre, CUIT, comentario…"></div>
+        <label class="check" style="margin-bottom:10px"><input type="checkbox" id="pv-inac"> Ver inactivos</label>
+        <div class="spacer"></div><button class="btn" id="pv-new">+ Nuevo proveedor</button></div>
+      <div id="pv-tbl"></div>`;
+    const pintarProv = () => {
+      const q = $('#pv-q').value.trim().toLowerCase();
+      const rows = provs.filter((p) => ($('#pv-inac').checked || p.activo) && (!q || [p.nombre, p.cuit, p.comentario, p.contacto, p.email].join(' ').toLowerCase().includes(q)));
+      $('#pv-tbl').innerHTML = `<div class="tbl-wrap"><table><thead><tr><th>Nombre</th><th>CUIT</th><th>Contacto</th><th>Teléfono / Email</th><th>Dirección</th><th>Comentario</th><th class="num">Usuarios</th><th></th></tr></thead><tbody>
+      ${rows.length ? rows.map((p) => `<tr class="${p.activo ? '' : 'inactive'}"><td><b>${esc(p.nombre)}</b>${p.activo ? '' : ' (inactivo)'}</td><td>${esc(p.cuit || '')}</td><td>${esc(p.contacto || '')}</td>
+        <td>${esc(p.telefono || '')}${p.telefono && p.email ? '<br>' : ''}${esc(p.email || '')}</td><td>${esc(p.direccion || '')}</td><td class="muted">${esc(p.comentario || '')}</td>
+        <td class="num">${p.usuarios}</td><td class="num"><button class="btn ghost sm" data-ed="${p.id}">Editar</button></td></tr>`).join('') : '<tr><td colspan="8" class="empty">Sin proveedores para el filtro.</td></tr>'}
+      </tbody></table></div><p class="muted">${rows.length} de ${provs.length} proveedores</p>`;
+      $$('#pv-tbl [data-ed]').forEach((b) => b.addEventListener('click', () => editar(provs.find((x) => x.id == b.dataset.ed))));
+    };
     const editar = (p) => {
       const m = modal(`<h2>${p ? 'Editar' : 'Nuevo'} proveedor</h2><form id="f-pv">
         <div class="f"><label>Razón social / nombre *</label><input name="nombre" value="${esc(p ? p.nombre : '')}" required maxlength="150"></div>
@@ -832,12 +842,15 @@
           <div class="f"><label>Contacto</label><input name="contacto" value="${esc(p ? p.contacto || '' : '')}" maxlength="120"></div></div>
         <div class="row mt"><div class="f"><label>Email</label><input type="email" name="email" value="${esc(p ? p.email || '' : '')}" maxlength="150"></div>
           <div class="f"><label>Teléfono</label><input name="telefono" value="${esc(p ? p.telefono || '' : '')}" maxlength="50"></div></div>
+        <div class="f mt"><label>Dirección</label><input name="direccion" value="${esc(p ? p.direccion || '' : '')}" maxlength="200"></div>
+        <div class="f mt"><label>Comentario</label><input name="comentario" value="${esc(p ? p.comentario || '' : '')}" maxlength="1000" placeholder="Ej.: vinos y espumantes"></div>
         ${p ? `<label class="check mt"><input type="checkbox" name="activo" ${p.activo ? 'checked' : ''}> Activo</label>` : ''}
         <div class="form-actions"><button type="button" class="btn sec" data-close>Cancelar</button><button class="btn">Guardar</button></div></form>`);
       $('#f-pv', m).addEventListener('submit', async (e) => {
         e.preventDefault();
         const f = e.target;
-        const body = { nombre: f.nombre.value, cuit: f.cuit.value, contacto: f.contacto.value, email: f.email.value, telefono: f.telefono.value, activo: p ? f.activo.checked : true };
+        const body = { nombre: f.nombre.value, cuit: f.cuit.value, contacto: f.contacto.value, email: f.email.value, telefono: f.telefono.value,
+          direccion: f.direccion.value, comentario: f.comentario.value, activo: p ? f.activo.checked : true };
         try {
           await api(p ? '/api/proveedores/' + p.id : '/api/proveedores', { method: p ? 'PUT' : 'POST', body });
           closeModal(); toast('Proveedor guardado'); router();
@@ -845,7 +858,8 @@
       });
     };
     $('#pv-new').onclick = () => editar(null);
-    $$('[data-ed]').forEach((b) => b.addEventListener('click', () => editar(provs.find((x) => x.id == b.dataset.ed))));
+    ['#pv-q', '#pv-inac'].forEach((sel) => $(sel).addEventListener('input', pintarProv));
+    pintarProv();
   };
 
   // ---------- Pedidos a proveedores ----------

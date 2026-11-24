@@ -156,3 +156,13 @@ CREATE INDEX IF NOT EXISTS idx_oc_prov      ON ordenes_compra (proveedor_id);
 CREATE INDEX IF NOT EXISTS idx_ocitems_oc   ON oc_items (oc_id);
 CREATE INDEX IF NOT EXISTS idx_ocarch_oc    ON oc_archivos (oc_id);
 CREATE INDEX IF NOT EXISTS idx_mov_oc       ON movimientos (oc_id);
+
+ALTER TABLE proveedores ADD COLUMN IF NOT EXISTS direccion  VARCHAR(200);
+ALTER TABLE proveedores ADD COLUMN IF NOT EXISTS comentario TEXT;
+
+-- Marcas de cargas iniciales ya realizadas
+CREATE TABLE IF NOT EXISTS app_config (
+  clave VARCHAR(60) PRIMARY KEY,
+  valor TEXT,
+  actualizado_en TIMESTAMPTZ NOT NULL DEFAULT now()
+);

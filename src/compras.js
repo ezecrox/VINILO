@@ -26,14 +26,14 @@ module.exports = function registrarCompras({ route, query, tx, fail, permitir, r
   function datosProveedor(body) {
     const nombre = str(body.nombre, 150);
     if (!nombre) fail(400, 'El nombre del proveedor es obligatorio');
-    return [nombre, str(body.cuit, 20), str(body.email, 150), str(body.telefono, 50), str(body.contacto, 120)];
+    return [nombre, str(body.cuit, 20), str(body.email, 150), str(body.telefono, 50), str(body.contacto, 120), str(body.direccion, 200), str(body.comentario, 1000)];
   }
   const dup = (e) => { if (e.code === '23505' || /duplicate|unique/i.test(e.message)) fail(409, 'Ya existe un proveedor con ese nombre'); throw e; };
 
   route('POST', '/api/proveedores', async ({ user, body }) => {
     permitirAlguno(user, 'compras', 'parametrizar');
     try {
-      const { rows } = await query('INSERT INTO proveedores (nombre, cuit, email, telefono, contacto) VALUES ($1,$2,$3,$4,$5) RETURNING id', datosProveedor(body));
+      const { rows } = await query('INSERT INTO proveedores (nombre, cuit, email, telefono, contacto, direccion, comentario) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id', datosProveedor(body));
       return { id: Number(rows[0].id) };
     } catch (e) { return dup(e); }
   });
@@ -41,7 +41,7 @@ module.exports = function registrarCompras({ route, query, tx, fail, permitir, r
   route('PUT', '/api/proveedores/:id', async ({ user, body, params }) => {
     permitirAlguno(user, 'compras', 'parametrizar');
     try {
-      await query('UPDATE proveedores SET nombre=$2, cuit=$3, email=$4, telefono=$5, contacto=$6, activo=$7 WHERE id=$1',
+      await query('UPDATE proveedores SET nombre=$2, cuit=$3, email=$4, telefono=$5, contacto=$6, direccion=$7, comentario=$8, activo=$9 WHERE id=$1',
         [toInt(params.id), ...datosProveedor(body), body.activo === undefined ? true : !!body.activo]);
     } catch (e) { return dup(e); }
     return { ok: true };
