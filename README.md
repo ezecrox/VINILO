@@ -115,6 +115,15 @@ En **Operaciones → Consumos desde Fudo** (ADMIN y RECEPTOR) se elige un perío
 - Los productos vendidos que no están en la app aparecen como "No está en la app" y no se consumen; antes de importar se sincronizan los productos.
 - Un borrador se puede **anular** y el período queda libre para importarlo de nuevo.
 
+## Vinilito, el asistente
+
+Botón flotante abajo a la derecha (no aparece para proveedores). Responde con los datos de la app y **respeta los permisos y almacenes** del usuario. Es de solo lectura: no registra nada, pero lleva a la pantalla correspondiente.
+
+Ejemplos: "¿Cuántas Coca-Cola tengo en el Galpón?", "¿Qué tengo que reponer?", "¿Qué tareas tengo pendientes?", "¿Qué vence pronto?", "¿Qué pedidos a proveedores faltan recibir?", "¿Cuánto Fernet se consumió esta semana?".
+
+- **Sin configuración:** entiende esas consultas con un motor de reglas en español.
+- **Con IA (opcional):** cargando `ANTHROPIC_API_KEY` en Render usa Claude con herramientas de consulta (stock, reposición, tareas, vencimientos, pedidos, notas de pedido y movimientos) y entiende preguntas libres. Modelo configurable con `VINILITO_MODEL` (por defecto `claude-haiku-5-5`). Límite de 30 consultas cada 10 minutos por usuario; si la API falla, responde con el motor de reglas.
+
 ## Ejecutar localmente
 
 ```bash

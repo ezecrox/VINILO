@@ -104,6 +104,9 @@
   function logout() {
     S.token = null; S.user = null;
     localStorage.removeItem('vinilo_token');
+    try { sessionStorage.removeItem('vinilito_hist'); } catch (_) { /* sin storage */ }
+    document.querySelectorAll('#vn-fab, #vn-panel').forEach((e) => e.parentElement.remove());
+    if (typeof VN !== 'undefined') { VN.historial = []; VN.abierto = false; }
     renderLogin();
   }
 
@@ -148,6 +151,7 @@
       await cargarAlmacenes();
     } catch (_) { return renderLogin(); }
     renderShell();
+    montarVinilito();
     router();
   }
 
@@ -1392,6 +1396,81 @@
     };
     $('#r-ok', m).onclick = () => enviar(false);
     calc();
+  }
+
+
+  // ---------- Vinilito (asistente) ----------
+  const VN = { abierto: false, historial: [], modo: 'reglas', ejemplos: [] };
+  try { VN.historial = JSON.parse(sessionStorage.getItem('vinilito_hist') || '[]'); } catch (_) { VN.historial = []; }
+  const guardarHist = () => { try { sessionStorage.setItem('vinilito_hist', JSON.stringify(VN.historial.slice(-30))); } catch (_) { /* sin storage */ } };
+  // Markdown mínimo y seguro: **negrita** y listas con "- "
+  function mdLite(txt) {
+    const lineas = esc(txt).split('\n');
+    let html = '', enLista = false;
+    for (const l of lineas) {
+      const li = l.match(/^\s*[-•]\s+(.*)$/);
+      if (li) { if (!enLista) { html += '<ul>'; enLista = true; } html += `<li>${li[1]}</li>`; continue; }
+      if (enLista) { html += '</ul>'; enLista = false; }
+      html += l.trim() ? `<p>${l}</p>` : '';
+    }
+    if (enLista) html += '</ul>';
+    return html.replace(/\*\*(.+?)\*\*/g, '<b>$1</b>');
+  }
+
+  function montarVinilito() {
+    if (S.user.rol === 'PROVEEDOR' || $('#vn-fab')) return;
+    const root = document.createElement('div');
+    root.innerHTML = `
+      <button id="vn-fab" class="vn-fab" aria-label="Preguntale a Vinilito" title="Preguntale a Vinilito"><img src="/vinilito-cara.svg" alt=""><span class="vn-fab-txt">Preguntale a Vinilito</span></button>
+      <section id="vn-panel" class="vn-panel" hidden role="dialog" aria-label="Vinilito">
+        <header><img src="/vinilito.svg" alt=""><div><b>Vinilito</b><small id="vn-modo">Tu mozo de almacén</small></div>
+          <button class="vn-x" id="vn-limpiar" title="Nueva conversación">↺</button><button class="vn-x" id="vn-cerrar" aria-label="Cerrar">✕</button></header>
+        <div class="vn-msgs" id="vn-msgs" aria-live="polite"></div>
+        <div class="vn-chips" id="vn-chips"></div>
+        <form id="vn-form" class="vn-form"><input id="vn-in" autocomplete="off" maxlength="1000" placeholder="Ej.: ¿Cuántas Coca-Cola hay en el Galpón?"><button class="btn" aria-label="Enviar">➤</button></form>
+      </section>`;
+    document.body.appendChild(root);
+    $('#vn-fab').onclick = () => abrirVinilito(!VN.abierto);
+    $('#vn-cerrar').onclick = () => abrirVinilito(false);
+    $('#vn-limpiar').onclick = () => { VN.historial = []; guardarHist(); pintarVinilito(); };
+    $('#vn-form').addEventListener('submit', (e) => { e.preventDefault(); preguntarVinilito($('#vn-in').value); });
+    document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && VN.abierto) abrirVinilito(false); });
+    api('/api/vinilito').then((r) => { VN.modo = r.modo; VN.ejemplos = r.ejemplos; pintarVinilito(); }).catch(() => {});
+  }
+  function abrirVinilito(si) {
+    VN.abierto = si;
+    $('#vn-panel').hidden = !si;
+    $('#vn-fab').classList.toggle('on', si);
+    if (si) { pintarVinilito(); setTimeout(() => $('#vn-in').focus(), 50); }
+  }
+  function pintarVinilito(pensando = false) {
+    const box = $('#vn-msgs');
+    if (!box) return;
+    const saludo = { rol: 'vinilito', texto: `¡Hola ${S.user.nombre.split(' ')[0]}! Soy **Vinilito** 🍕. ¿Qué te traigo? Preguntame por stock, reposición, vencimientos, pedidos o consumos.` };
+    box.innerHTML = [saludo, ...VN.historial].map((m) => `<div class="vn-m ${m.rol === 'yo' ? 'yo' : 'vn'}">${m.rol === 'yo' ? '' : '<img src="/vinilito-cara.svg" alt="">'}
+      <div class="vn-b">${m.rol === 'yo' ? `<p>${esc(m.texto)}</p>` : mdLite(m.texto)}${(m.acciones || []).map((a) => `<a class="vn-acc" href="${esc(a.link)}">${esc(a.texto)} →</a>`).join('')}</div></div>`).join('')
+      + (pensando ? '<div class="vn-m vn"><img src="/vinilito-cara.svg" alt=""><div class="vn-b vn-typing"><span></span><span></span><span></span></div></div>' : '');
+    box.scrollTop = box.scrollHeight;
+    $('#vn-chips').innerHTML = VN.historial.length ? '' : (VN.ejemplos || []).slice(0, 4).map((e) => `<button type="button" class="vn-chip">${esc(e)}</button>`).join('');
+    $$('#vn-chips .vn-chip').forEach((c) => c.addEventListener('click', () => preguntarVinilito(c.textContent)));
+    $$('#vn-msgs .vn-acc').forEach((a) => a.addEventListener('click', () => { if (window.innerWidth < 860) abrirVinilito(false); }));
+    $('#vn-modo').textContent = VN.modo === 'claude' ? 'Tu mozo de almacén · con IA' : 'Tu mozo de almacén';
+  }
+  async function preguntarVinilito(txt) {
+    txt = String(txt || '').trim();
+    if (!txt) return;
+    $('#vn-in').value = '';
+    const previo = VN.historial.slice(-8).map((m) => ({ rol: m.rol, texto: m.texto }));
+    VN.historial.push({ rol: 'yo', texto: txt });
+    pintarVinilito(true);
+    try {
+      const r = await api('/api/vinilito', { method: 'POST', body: { mensaje: txt, historial: previo } });
+      VN.historial.push({ rol: 'vinilito', texto: r.texto, acciones: r.acciones || [] });
+    } catch (err) {
+      VN.historial.push({ rol: 'vinilito', texto: `Uy, se me cayó la bandeja 😬: ${err.message}` });
+    }
+    guardarHist();
+    pintarVinilito();
   }
 
   boot();

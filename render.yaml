@@ -29,5 +29,7 @@ services:
         sync: false     # apiKey de Fudo
       - key: FUDO_API_SECRET
         sync: false     # apiSecret de Fudo
+      - key: ANTHROPIC_API_KEY
+        sync: false     # opcional: activa Vinilito con IA (Claude)
       - key: NODE_VERSION
         value: "20"

@@ -1,0 +1,42 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 240" role="img" aria-label="Vinilito, el mozo con cara de pizza">
+  <!-- Cuerpo: camisa, chaleco, moño y repasador -->
+  <path d="M38 240 C40 196 62 176 100 174 C138 176 160 196 162 240 Z" fill="#ffffff" stroke="#1d2430" stroke-width="3"/>
+  <path d="M38 240 C40 200 58 182 84 177 L100 214 L100 240 Z" fill="#1d2430"/>
+  <path d="M162 240 C160 200 142 182 116 177 L100 214 L100 240 Z" fill="#1d2430"/>
+  <circle cx="100" cy="222" r="3" fill="#fdf6ec"/>
+  <circle cx="100" cy="233" r="3" fill="#fdf6ec"/>
+  <path d="M100 186 L78 174 Q74 186 78 198 Z" fill="#c0221f" stroke="#7a1212" stroke-width="2" stroke-linejoin="round"/>
+  <path d="M100 186 L122 174 Q126 186 122 198 Z" fill="#c0221f" stroke="#7a1212" stroke-width="2" stroke-linejoin="round"/>
+  <rect x="93" y="179" width="14" height="14" rx="4" fill="#e03a35" stroke="#7a1212" stroke-width="2"/>
+  <!-- Repasador sobre el brazo -->
+  <path d="M150 196 L176 204 L170 240 L146 236 Z" fill="#fdf6ec" stroke="#1d2430" stroke-width="2.5" stroke-linejoin="round"/>
+  <path d="M150 206 L173 213 M148 218 L171 224" stroke="#165f96" stroke-width="3"/>
+  <!-- Cabeza: pizza -->
+  <circle cx="100" cy="88" r="80" fill="#c97a2b"/>
+  <circle cx="100" cy="88" r="72" fill="#e7a24a"/>
+  <circle cx="100" cy="88" r="66" fill="#c0221f"/>
+  <path d="M100 26 C142 24 168 56 164 92 C161 126 134 152 100 152 C62 152 36 124 37 90 C38 56 62 28 100 26 Z" fill="#f6c84c"/>
+  <path d="M52 70 C60 76 58 84 50 86 M150 74 C142 80 146 88 154 88 M88 36 C92 44 102 44 108 36" fill="none" stroke="#fbe08f" stroke-width="5" stroke-linecap="round"/>
+  <!-- Pepperoni -->
+  <circle cx="64" cy="52" r="9" fill="#a3201d"/><circle cx="62" cy="50" r="2.5" fill="#c9443d"/>
+  <circle cx="136" cy="50" r="8" fill="#a3201d"/><circle cx="134" cy="48" r="2.2" fill="#c9443d"/>
+  <circle cx="100" cy="36" r="6" fill="#a3201d"/>
+  <circle cx="148" cy="118" r="7" fill="#a3201d"/>
+  <circle cx="54" cy="116" r="6.5" fill="#a3201d"/>
+  <!-- Albahaca -->
+  <path d="M118 30 q10 -6 16 4 q-10 4 -16 -4z" fill="#3f8f45"/>
+  <!-- Cachetes -->
+  <ellipse cx="62" cy="100" rx="11" ry="7" fill="#ef8a6b" opacity="0.7"/>
+  <ellipse cx="138" cy="100" rx="11" ry="7" fill="#ef8a6b" opacity="0.7"/>
+  <!-- Ojos -->
+  <ellipse cx="78" cy="78" rx="12" ry="14" fill="#ffffff" stroke="#1d2430" stroke-width="3"/>
+  <ellipse cx="122" cy="78" rx="12" ry="14" fill="#ffffff" stroke="#1d2430" stroke-width="3"/>
+  <circle cx="81" cy="81" r="6" fill="#1d2430"/><circle cx="83" cy="78" r="2" fill="#ffffff"/>
+  <circle cx="125" cy="81" r="6" fill="#1d2430"/><circle cx="127" cy="78" r="2" fill="#ffffff"/>
+  <path d="M64 60 Q78 52 90 60 M110 60 Q122 52 136 60" fill="none" stroke="#1d2430" stroke-width="4" stroke-linecap="round"/>
+  <!-- Bigote de mozo -->
+  <path d="M100 104 C92 96 76 96 70 104 C66 110 72 114 76 110 C82 104 92 106 100 110 C108 106 118 104 124 110 C128 114 134 110 130 104 C124 96 108 96 100 104 Z" fill="#4a2a14"/>
+  <!-- Sonrisa -->
+  <path d="M82 118 Q100 136 118 118 Q100 126 82 118 Z" fill="#7a1212" stroke="#1d2430" stroke-width="2.5" stroke-linejoin="round"/>
+  <path d="M92 124 Q100 130 108 124" fill="#ef8a6b"/>
+</svg>

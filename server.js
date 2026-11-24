@@ -734,6 +734,9 @@ require('./src/consumos')({ route, query, tx, fail, permitir, registrarMovimient
 
 const { calcularTareas } = require('./src/tareas');
 
+// ---------- Vinilito (asistente) ----------
+require('./src/vinilito/agente')({ route, query, fail, calcularTareas, fudo, sqlAlm });
+
 // ---------- Panel ----------
 route('GET', '/api/dashboard', async ({ user }) => {
   const res = { rol: user.rol, pedidos_pendientes: 0, tareas: await calcularTareas(user, { query, fudo, sqlAlm }) };
