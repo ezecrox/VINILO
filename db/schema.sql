@@ -92,3 +92,67 @@ CREATE INDEX IF NOT EXISTS idx_pitems_ped  ON pedido_items (pedido_id);
 -- Almacenes iniciales
 INSERT INTO almacenes (nombre) VALUES ('CENTRAL'), ('VINILO BAR'), ('EL GALPON VINILO')
 ON CONFLICT (nombre) DO NOTHING;
+
+-- ===== Compras a proveedores =====
+CREATE TABLE IF NOT EXISTS proveedores (
+  id        SERIAL PRIMARY KEY,
+  nombre    VARCHAR(150) NOT NULL UNIQUE,
+  cuit      VARCHAR(20),
+  email     VARCHAR(150),
+  telefono  VARCHAR(50),
+  contacto  VARCHAR(120),
+  activo    BOOLEAN NOT NULL DEFAULT TRUE,
+  creado_en TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS permiso_compras BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS proveedor_id INT REFERENCES proveedores(id);
+ALTER TABLE usuarios DROP CONSTRAINT IF EXISTS usuarios_rol_check;
+ALTER TABLE usuarios ADD CONSTRAINT usuarios_rol_check
+  CHECK (rol IN ('ADMIN','RECEPTOR','ENCARGADO','REQUIRENTE','PROVEEDOR'));
+
+CREATE TABLE IF NOT EXISTS ordenes_compra (
+  id             SERIAL PRIMARY KEY,
+  proveedor_id   INT NOT NULL REFERENCES proveedores(id),
+  almacen_id     INT NOT NULL REFERENCES almacenes(id),   -- almacén de entrega
+  estado         VARCHAR(20) NOT NULL DEFAULT 'BORRADOR'
+                 CHECK (estado IN ('BORRADOR','CONFIRMADA','PARCIAL','RECIBIDA','CERRADA','ANULADA')),
+  fecha_entrega  DATE,
+  observacion    TEXT,
+  creado_por     INT NOT NULL REFERENCES usuarios(id),
+  creado_en      TIMESTAMPTZ NOT NULL DEFAULT now(),
+  confirmado_por INT REFERENCES usuarios(id),
+  confirmado_en  TIMESTAMPTZ,
+  cerrado_por    INT REFERENCES usuarios(id),
+  cerrado_en     TIMESTAMPTZ,
+  motivo_cierre  TEXT
+);
+
+CREATE TABLE IF NOT EXISTS oc_items (
+  id                SERIAL PRIMARY KEY,
+  oc_id             INT NOT NULL REFERENCES ordenes_compra(id) ON DELETE CASCADE,
+  producto_id       INT NOT NULL REFERENCES productos(id),
+  cantidad          INT NOT NULL CHECK (cantidad > 0),
+  cantidad_recibida INT NOT NULL DEFAULT 0 CHECK (cantidad_recibida >= 0)
+);
+
+CREATE TABLE IF NOT EXISTS oc_archivos (
+  id             SERIAL PRIMARY KEY,
+  oc_id          INT NOT NULL REFERENCES ordenes_compra(id) ON DELETE CASCADE,
+  tipo           VARCHAR(20) NOT NULL CHECK (tipo IN ('REMITO','FACTURA','OTRO')),
+  numero         VARCHAR(60),
+  nombre_archivo VARCHAR(200) NOT NULL,
+  mime           VARCHAR(120) NOT NULL,
+  tamano         INT NOT NULL,
+  contenido      BYTEA NOT NULL,
+  subido_por     INT NOT NULL REFERENCES usuarios(id),
+  subido_en      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+ALTER TABLE movimientos ADD COLUMN IF NOT EXISTS oc_id INT REFERENCES ordenes_compra(id);
+
+CREATE INDEX IF NOT EXISTS idx_oc_estado    ON ordenes_compra (estado);
+CREATE INDEX IF NOT EXISTS idx_oc_prov      ON ordenes_compra (proveedor_id);
+CREATE INDEX IF NOT EXISTS idx_ocitems_oc   ON oc_items (oc_id);
+CREATE INDEX IF NOT EXISTS idx_ocarch_oc    ON oc_archivos (oc_id);
+CREATE INDEX IF NOT EXISTS idx_mov_oc       ON movimientos (oc_id);

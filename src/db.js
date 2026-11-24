@@ -72,6 +72,16 @@ async function migrate() {
     }
     console.log(`Maestro inicial cargado: ${productos.length} productos`);
   }
+
+  // Proveedores iniciales tomados del maestro (solo si no hay ninguno)
+  const { rows: cp } = await pool.query('SELECT count(*)::int AS n FROM proveedores');
+  if (Number(cp[0].n) === 0 && fs.existsSync(maestro)) {
+    const nombres = [...new Set(productosDesdeMaestro(fs.readFileSync(maestro, 'utf8')).map((p) => p.proveedor).filter(Boolean))];
+    for (const n of nombres) {
+      await pool.query('INSERT INTO proveedores (nombre) VALUES ($1) ON CONFLICT (nombre) DO NOTHING', [n.slice(0, 150)]);
+    }
+    if (nombres.length) console.log(`Proveedores iniciales: ${nombres.join(', ')}`);
+  }
 }
 
 module.exports = { pool, query, tx, migrate };

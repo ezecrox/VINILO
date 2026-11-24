@@ -6,7 +6,7 @@ const { hashPassword, verifyPassword, signToken, verifyToken } = require('./src/
 
 const PORT = process.env.PORT || 3000;
 const PUBLIC_DIR = path.join(__dirname, 'public');
-const ROLES = ['ADMIN', 'RECEPTOR', 'ENCARGADO', 'REQUIRENTE'];
+const ROLES = ['ADMIN', 'RECEPTOR', 'ENCARGADO', 'REQUIRENTE', 'PROVEEDOR'];
 
 // Permisos por rol
 const PUEDE = {
@@ -19,14 +19,30 @@ const PUEDE = {
   verMovimientos: ['ADMIN', 'RECEPTOR', 'ENCARGADO'],
   crearPedido: ['ADMIN', 'REQUIRENTE'],
   atenderPedido: ['ADMIN', 'RECEPTOR'],
+  verPedidos: ['ADMIN', 'RECEPTOR', 'ENCARGADO', 'REQUIRENTE'],
+  verProductos: ['ADMIN', 'RECEPTOR', 'ENCARGADO', 'REQUIRENTE'],
+  // Compras: ADMIN siempre; el resto según el permiso "Compras" del usuario (ver permisosDe)
+  compras: ['ADMIN'],
+  verCompras: ['ADMIN', 'RECEPTOR', 'ENCARGADO'],
+  portalProveedor: ['PROVEEDOR'],
 };
+
+function permisosDe(u) {
+  const p = Object.keys(PUEDE).filter((k) => PUEDE[k].includes(u.rol));
+  if (u.permiso_compras && u.rol !== 'PROVEEDOR') {
+    if (!p.includes('compras')) p.push('compras');
+    if (!p.includes('verCompras')) p.push('verCompras');
+    if (!p.includes('verProductos')) p.push('verProductos');
+  }
+  return p;
+}
 const PERMISO_POR_TIPO = { RECEPCION: 'recibir', TRANSFERENCIA: 'transferir', CONSUMO: 'consumir', AJUSTE: 'ajustar' };
 
 class HttpError extends Error {
   constructor(status, message) { super(message); this.status = status; }
 }
 const fail = (status, msg) => { throw new HttpError(status, msg); };
-const permitir = (user, accion) => { if (!PUEDE[accion].includes(user.rol)) fail(403, 'No tenés permiso para esta operación'); };
+const permitir = (user, accion) => { if (!user.permisos.includes(accion)) fail(403, 'No tenés permiso para esta operación'); };
 
 // ---------- Mini router ----------
 const routes = [];
@@ -48,7 +64,7 @@ function readBody(req) {
     const chunks = [];
     req.on('data', (c) => {
       size += c.length;
-      if (size > 10 * 1024 * 1024) { reject(new HttpError(413, 'Cuerpo demasiado grande')); req.destroy(); return; }
+      if (size > 15 * 1024 * 1024) { reject(new HttpError(413, 'Cuerpo demasiado grande')); req.destroy(); return; }
       chunks.push(c);
     });
     req.on('end', () => {
@@ -73,10 +89,19 @@ async function currentUser(req) {
   const h = req.headers.authorization || '';
   const payload = verifyToken(h.startsWith('Bearer ') ? h.slice(7) : null);
   if (!payload) return null;
-  const { rows } = await query('SELECT id, username, nombre, rol, activo FROM usuarios WHERE id = $1', [payload.uid]);
+  const { rows } = await query(
+    `SELECT u.id, u.username, u.nombre, u.rol, u.activo, u.permiso_compras, u.proveedor_id, p.nombre AS proveedor
+     FROM usuarios u LEFT JOIN proveedores p ON p.id = u.proveedor_id WHERE u.id = $1`, [payload.uid]);
   const u = rows[0];
   if (!u || !isTrue(u.activo)) return null;
-  return { id: Number(u.id), username: u.username, nombre: u.nombre, rol: u.rol };
+  if (u.rol === 'PROVEEDOR' && !u.proveedor_id) return null;
+  const user = {
+    id: Number(u.id), username: u.username, nombre: u.nombre, rol: u.rol,
+    permiso_compras: isTrue(u.permiso_compras) || u.rol === 'ADMIN',
+    proveedor_id: u.proveedor_id ? Number(u.proveedor_id) : null, proveedor: u.proveedor || null,
+  };
+  user.permisos = permisosDe(user);
+  return user;
 }
 
 // ---------- Helpers ----------
@@ -174,9 +199,9 @@ async function registrarMovimiento(client, mov) {
   if (itemsFinales.length === 0) fail(400, 'El ajuste no produce cambios: las cantidades contadas coinciden con el stock');
 
   const { rows: m } = await client.query(
-    `INSERT INTO movimientos (tipo, origen_id, destino_id, usuario_id, pedido_id, referencia, observacion)
-     VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
-    [tipo, origen ? origen.id : null, destino ? destino.id : null, mov.usuario_id, mov.pedido_id || null, str(mov.referencia, 120), str(mov.observacion, 1000)]
+    `INSERT INTO movimientos (tipo, origen_id, destino_id, usuario_id, pedido_id, oc_id, referencia, observacion)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
+    [tipo, origen ? origen.id : null, destino ? destino.id : null, mov.usuario_id, mov.pedido_id || null, mov.oc_id || null, str(mov.referencia, 120), str(mov.observacion, 1000)]
   );
   const movId = Number(m[0].id);
   for (const [pid, cant] of itemsFinales) {
@@ -193,7 +218,7 @@ route('POST', '/api/login', async ({ body }) => {
   return { token: signToken({ uid: Number(u.id) }), user: { id: Number(u.id), username: u.username, nombre: u.nombre, rol: u.rol } };
 }, { auth: false });
 
-route('GET', '/api/me', async ({ user }) => ({ user, permisos: Object.keys(PUEDE).filter((k) => PUEDE[k].includes(user.rol)) }));
+route('GET', '/api/me', async ({ user }) => ({ user, permisos: user.permisos }));
 
 route('POST', '/api/me/password', async ({ user, body }) => {
   const { rows } = await query('SELECT password_hash FROM usuarios WHERE id = $1', [user.id]);
@@ -206,21 +231,40 @@ route('POST', '/api/me/password', async ({ user, body }) => {
 // ---------- Usuarios ----------
 route('GET', '/api/usuarios', async ({ user }) => {
   permitir(user, 'parametrizar');
-  const { rows } = await query('SELECT id, username, nombre, rol, activo, creado_en FROM usuarios ORDER BY nombre');
-  return rows;
+  const { rows } = await query(
+    `SELECT u.id, u.username, u.nombre, u.rol, u.activo, u.permiso_compras, u.proveedor_id, p.nombre AS proveedor, u.creado_en
+     FROM usuarios u LEFT JOIN proveedores p ON p.id = u.proveedor_id ORDER BY u.nombre`);
+  return rows.map((r) => ({ ...r, id: Number(r.id), activo: isTrue(r.activo), permiso_compras: isTrue(r.permiso_compras), proveedor_id: r.proveedor_id ? Number(r.proveedor_id) : null }));
 });
+
+// Valida rol / proveedor / permiso de compras
+async function datosRolUsuario(body, actual = {}) {
+  const rol = body.rol ?? actual.rol;
+  if (!ROLES.includes(rol)) fail(400, 'Rol inválido');
+  let proveedorId = null;
+  let compras = body.permiso_compras === undefined ? isTrue(actual.permiso_compras) : bool(body.permiso_compras);
+  if (rol === 'PROVEEDOR') {
+    proveedorId = toInt(body.proveedor_id ?? actual.proveedor_id);
+    if (!Number.isInteger(proveedorId)) fail(400, 'Un usuario PROVEEDOR debe estar vinculado a un proveedor');
+    const { rows } = await query('SELECT id FROM proveedores WHERE id = $1', [proveedorId]);
+    if (!rows[0]) fail(400, 'Proveedor inexistente');
+    compras = false;
+  }
+  return { rol, proveedorId, compras };
+}
 
 route('POST', '/api/usuarios', async ({ user, body }) => {
   permitir(user, 'parametrizar');
   const username = str(body.username, 60);
   const nombre = str(body.nombre, 120);
   if (!username || !nombre) fail(400, 'Usuario y nombre son obligatorios');
-  if (!ROLES.includes(body.rol)) fail(400, 'Rol inválido');
+  const { rol, proveedorId, compras } = await datosRolUsuario(body);
   if (!body.password || String(body.password).length < 6) fail(400, 'La contraseña debe tener al menos 6 caracteres');
   try {
     const { rows } = await query(
-      'INSERT INTO usuarios (username, nombre, password_hash, rol) VALUES ($1, $2, $3, $4) RETURNING id',
-      [username, nombre, hashPassword(body.password), body.rol]
+      `INSERT INTO usuarios (username, nombre, password_hash, rol, proveedor_id, permiso_compras)
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+      [username, nombre, hashPassword(body.password), rol, proveedorId, compras]
     );
     return { id: Number(rows[0].id) };
   } catch (e) {
@@ -235,11 +279,11 @@ route('PUT', '/api/usuarios/:id', async ({ user, body, params }) => {
   const { rows } = await query('SELECT * FROM usuarios WHERE id = $1', [id]);
   const u = rows[0];
   if (!u) fail(404, 'Usuario inexistente');
-  const rol = body.rol ?? u.rol;
+  const { rol, proveedorId, compras } = await datosRolUsuario(body, u);
   const activo = body.activo === undefined ? isTrue(u.activo) : bool(body.activo);
-  if (!ROLES.includes(rol)) fail(400, 'Rol inválido');
   if (id === user.id && (!activo || rol !== 'ADMIN')) fail(400, 'No podés quitarte el rol ADMIN ni desactivarte a vos mismo');
-  await query('UPDATE usuarios SET nombre = $2, rol = $3, activo = $4 WHERE id = $1', [id, str(body.nombre, 120) || u.nombre, rol, activo]);
+  await query('UPDATE usuarios SET nombre = $2, rol = $3, activo = $4, proveedor_id = $5, permiso_compras = $6 WHERE id = $1',
+    [id, str(body.nombre, 120) || u.nombre, rol, activo, proveedorId, compras]);
   if (body.password) {
     if (String(body.password).length < 6) fail(400, 'La contraseña debe tener al menos 6 caracteres');
     await query('UPDATE usuarios SET password_hash = $2 WHERE id = $1', [id, hashPassword(body.password)]);
@@ -298,7 +342,8 @@ function normalizarProducto(r) {
   };
 }
 
-route('GET', '/api/productos', async () => {
+route('GET', '/api/productos', async ({ user }) => {
+  permitir(user, 'verProductos');
   const { rows } = await query(`SELECT ${PRODUCTO_COLS} FROM productos ORDER BY nombre`);
   return rows.map(normalizarProducto);
 });
@@ -393,7 +438,7 @@ route('POST', '/api/movimientos', async ({ user, body }) => {
   const accion = PERMISO_POR_TIPO[body.tipo];
   if (!accion) fail(400, 'Tipo de movimiento inválido');
   permitir(user, accion);
-  const id = await tx((client) => registrarMovimiento(client, { ...body, usuario_id: user.id, pedido_id: null }));
+  const id = await tx((client) => registrarMovimiento(client, { ...body, usuario_id: user.id, pedido_id: null, oc_id: null }));
   return { id };
 });
 
@@ -465,6 +510,7 @@ async function cargarPedidos(whereSql, params) {
 }
 
 route('GET', '/api/pedidos', async ({ user, url }) => {
+  permitir(user, 'verPedidos');
   const estado = url.searchParams.get('estado');
   const where = [];
   const params = [];
@@ -547,6 +593,7 @@ route('POST', '/api/pedidos/:id/rechazar', async ({ user, body, params }) => {
 });
 
 route('POST', '/api/pedidos/:id/cancelar', async ({ user, params }) => {
+  permitir(user, 'verPedidos');
   const id = toInt(params.id);
   return tx(async (client) => {
     const pe = await pedidoPendiente(client, id);
@@ -556,16 +603,27 @@ route('POST', '/api/pedidos/:id/cancelar', async ({ user, params }) => {
   });
 });
 
+// ---------- Compras a proveedores ----------
+require('./src/compras')({ route, query, tx, fail, permitir, registrarMovimiento, almacenActivo, isTrue, toInt, str, fechaOk });
+
 // ---------- Panel ----------
 route('GET', '/api/dashboard', async ({ user }) => {
-  const res = { rol: user.rol };
+  const res = { rol: user.rol, pedidos_pendientes: 0 };
+  if (user.permisos.includes('verCompras') || user.permisos.includes('portalProveedor')) {
+    const prov = user.rol === 'PROVEEDOR';
+    const { rows } = await query(
+      `SELECT estado, count(*)::int AS n FROM ordenes_compra ${prov ? "WHERE proveedor_id = $1 AND estado <> 'BORRADOR'" : ''} GROUP BY estado`,
+      prov ? [user.proveedor_id] : []);
+    res.oc = Object.fromEntries(rows.map((r) => [r.estado, Number(r.n)]));
+  }
+  if (!user.permisos.includes('verPedidos')) return res;
   const pend = await query(
     user.rol === 'REQUIRENTE'
       ? "SELECT count(*)::int AS n FROM pedidos WHERE estado = 'PENDIENTE' AND solicitante_id = $1"
       : "SELECT count(*)::int AS n FROM pedidos WHERE estado = 'PENDIENTE'",
     user.rol === 'REQUIRENTE' ? [user.id] : []);
   res.pedidos_pendientes = Number(pend.rows[0].n);
-  if (PUEDE.verStock.includes(user.rol)) {
+  if (user.permisos.includes('verStock')) {
     const { rows: alm } = await query(
       `SELECT a.id, a.nombre, a.activo,
               count(s.producto_id) FILTER (WHERE s.cantidad > 0)::int AS productos,
@@ -614,6 +672,7 @@ const server = http.createServer(async (req, res) => {
     }
     const body = ['POST', 'PUT', 'PATCH'].includes(req.method) ? await readBody(req) : {};
     const data = await match.r.handler({ req, url, params: match.params, body, user });
+    if (data && data.__raw) { res.writeHead(200, data.__raw.headers); return res.end(data.__raw.body); }
     sendJson(res, 200, data);
   } catch (err) {
     if (err instanceof HttpError) return sendJson(res, err.status, { error: err.message });

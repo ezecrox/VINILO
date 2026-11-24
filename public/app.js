@@ -13,7 +13,8 @@
   const puede = (p) => S.permisos.includes(p);
   const hoyISO = () => new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
   const TIPO_LBL = { RECEPCION: 'Recepción', TRANSFERENCIA: 'Transferencia', CONSUMO: 'Consumo', AJUSTE: 'Ajuste' };
-  const ROL_LBL = { ADMIN: 'Administrador', RECEPTOR: 'Receptor', ENCARGADO: 'Encargado', REQUIRENTE: 'Requirente' };
+  const ROL_LBL = { ADMIN: 'Administrador', RECEPTOR: 'Receptor', ENCARGADO: 'Encargado', REQUIRENTE: 'Requirente', PROVEEDOR: 'Proveedor' };
+  const OC_EST = { BORRADOR: 'Borrador', CONFIRMADA: 'Confirmada', PARCIAL: 'Recepción parcial', RECIBIDA: 'Recibida', CERRADA: 'Cerrada', ANULADA: 'Anulada' };
 
   async function api(path, opts = {}) {
     const res = await fetch(path, {
@@ -149,7 +150,11 @@
     { sec: 'General' },
     { id: 'panel', lbl: 'Panel', ok: () => true },
     { id: 'stock', lbl: 'Stock por almacén', ok: () => puede('verStock') },
-    { id: 'pedidos', lbl: 'Notas de pedido', ok: () => true, pill: true },
+    { id: 'pedidos', lbl: 'Notas de pedido', ok: () => puede('verPedidos'), pill: true },
+    { id: 'compras', lbl: 'Mis pedidos', ok: () => puede('portalProveedor'), pillOc: true },
+    { sec: 'Compras', ok: () => puede('compras') || puede('verCompras') },
+    { id: 'compras', lbl: 'Pedidos a proveedores', ok: () => puede('compras') || puede('verCompras'), pillOc: true },
+    { id: 'proveedores', lbl: 'Proveedores', ok: () => puede('compras') || puede('parametrizar') },
     { sec: 'Operaciones', ok: () => puede('recibir') || puede('consumir') },
     { id: 'recepcion', lbl: 'Recepción', ok: () => puede('recibir') },
     { id: 'transferencia', lbl: 'Transferencia', ok: () => puede('transferir') },
@@ -165,14 +170,14 @@
   function renderShell() {
     const links = NAV.filter((n) => !n.ok || n.ok()).map((n) => n.sec
       ? `<div class="sec">${n.sec}</div>`
-      : `<a class="nav" href="#/${n.id}" data-nav="${n.id}">${n.lbl}${n.pill ? '<span class="pill" id="pill-ped" hidden></span>' : ''}</a>`).join('');
+      : `<a class="nav" href="#/${n.id}" data-nav="${n.id}">${n.lbl}${n.pill ? '<span class="pill" id="pill-ped" hidden></span>' : ''}${n.pillOc ? '<span class="pill" id="pill-oc" hidden></span>' : ''}</a>`).join('');
     $('#app').innerHTML = `
       <div class="topbar"><button id="menu-btn" aria-label="Menú">☰</button><b>VINILO</b></div>
       <div class="layout">
         <nav class="side" id="side">
           <div class="brand"><img src="/favicon.svg" alt=""><div><b>VINILO</b><small>Gestión de Almacén</small></div></div>
           ${links}
-          <div class="who"><b>${esc(S.user.nombre)}</b>${ROL_LBL[S.user.rol]}
+          <div class="who"><b>${esc(S.user.nombre)}</b>${ROL_LBL[S.user.rol]}${S.user.proveedor ? ' · ' + esc(S.user.proveedor) : ''}${S.user.permiso_compras && S.user.rol !== 'ADMIN' ? ' · Compras' : ''}
             <div class="links"><button id="pwd-btn">Contraseña</button><button id="out-btn">Salir</button></div></div>
         </nav>
         <main id="main"></main>
@@ -185,9 +190,18 @@
 
   async function actualizarPill() {
     try {
-      const pend = await api('/api/pedidos?estado=PENDIENTE');
-      const pill = $('#pill-ped');
-      if (pill) { pill.textContent = pend.length; pill.hidden = pend.length === 0; }
+      if (puede('verPedidos')) {
+        const pend = await api('/api/pedidos?estado=PENDIENTE');
+        const pill = $('#pill-ped');
+        if (pill) { pill.textContent = pend.length; pill.hidden = pend.length === 0; }
+      }
+      const pillOc = $('#pill-oc');
+      if (pillOc) {
+        // Proveedor: pedidos confirmados por entregar · Receptor: por recibir · Compras: borradores por confirmar
+        const ocs = await api('/api/oc?estado=ABIERTAS');
+        const n = ocs.filter((o) => (puede('compras') ? o.estado === 'BORRADOR' : ['CONFIRMADA', 'PARCIAL'].includes(o.estado))).length;
+        pillOc.textContent = n; pillOc.hidden = n === 0;
+      }
     } catch (_) { /* ignore */ }
   }
 
@@ -231,7 +245,18 @@
   // ---------- Panel ----------
   VIEWS.panel = async (main) => {
     const d = await api('/api/dashboard');
-    let html = `<h1>Hola, ${esc(S.user.nombre.split(' ')[0])}</h1><p class="sub">${ROL_LBL[S.user.rol]} · ${new Date().toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' })}</p>`;
+    let html = `<h1>Hola, ${esc(S.user.nombre.split(' ')[0])}</h1><p class="sub">${ROL_LBL[S.user.rol]}${S.user.proveedor ? ' · ' + esc(S.user.proveedor) : ''} · ${new Date().toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' })}</p>`;
+    const oc = d.oc || {};
+    const kpiOc = (lbl, n, det, href = '#/compras') => `<a class="kpi acc" href="${href}" style="text-decoration:none"><div class="lbl">${lbl}</div><div class="val">${n || 0}</div><div class="det">${det}</div></a>`;
+    if (S.user.rol === 'PROVEEDOR') {
+      html += `<div class="grid cols-3">${kpiOc('Pedidos por entregar', oc.CONFIRMADA, 'confirmados por Vinilo')}${kpiOc('Entregas parciales', oc.PARCIAL, 'con productos pendientes')}${kpiOc('Completados', (oc.RECIBIDA || 0) + (oc.CERRADA || 0), 'recibidos o cerrados')}</div>
+        <div class="card mt"><p style="margin:0">En <a href="#/compras"><b>Mis pedidos</b></a> ves cada nota de pedido, lo que Vinilo ya recibió y lo pendiente, y podés subir el <b>remito</b> o la <b>factura</b> (PDF o foto).</p></div>`;
+      main.innerHTML = html;
+      return;
+    }
+    if (d.oc && (puede('compras') || puede('recibir'))) {
+      html += `<div class="grid cols-3" style="margin-bottom:14px">${puede('compras') ? kpiOc('Borradores sin confirmar', oc.BORRADOR, 'pedidos a proveedores') : ''}${kpiOc('Por recibir de proveedores', oc.CONFIRMADA, 'confirmados')}${kpiOc('Recepción parcial', oc.PARCIAL, 'con faltantes')}</div>`;
+    }
     if (d.almacenes) {
       html += '<div class="grid cols-3">' + d.almacenes.filter((a) => a.activo).map((a) => `
         <a class="kpi" href="#/stock?alm=${a.id}" style="text-decoration:none">
@@ -749,26 +774,37 @@
 
   // ---------- Usuarios (ADMIN) ----------
   VIEWS.usuarios = async (main) => {
-    const us = await api('/api/usuarios');
-    main.innerHTML = `<h1>Usuarios</h1><p class="sub">Roles: <b>Administrador</b> (todo) · <b>Receptor</b> (recibe, transfiere, registra consumos y atiende pedidos) · <b>Encargado</b> (consulta stock y movimientos) · <b>Requirente</b> (hace notas de pedido).</p>
+    const [us, provs] = await Promise.all([api('/api/usuarios'), api('/api/proveedores')]);
+    main.innerHTML = `<h1>Usuarios</h1><p class="sub">Roles: <b>Administrador</b> (todo) · <b>Receptor</b> (recibe, transfiere, consume, atiende pedidos) · <b>Encargado</b> (consulta stock y movimientos) · <b>Requirente</b> (notas de pedido internas) · <b>Proveedor</b> (solo sus pedidos y documentos).<br>El permiso <b>Compras</b> habilita a crear y confirmar pedidos a proveedores y se puede sumar a cualquier rol.</p>
       <div class="toolbar"><div class="spacer"></div><button class="btn" id="us-new">+ Nuevo usuario</button></div>
-      <div class="tbl-wrap"><table><thead><tr><th>Usuario</th><th>Nombre</th><th>Rol</th><th>Estado</th><th></th></tr></thead><tbody>
-      ${us.map((u) => `<tr class="${u.activo === false || u.activo === 'f' ? 'inactive' : ''}"><td class="code">${esc(u.username)}</td><td>${esc(u.nombre)}</td><td><span class="badge b-rol">${ROL_LBL[u.rol]}</span></td>
-        <td>${u.activo === false || u.activo === 'f' ? 'Inactivo' : 'Activo'}</td><td class="num"><button class="btn ghost sm" data-ed="${u.id}">Editar</button></td></tr>`).join('')}
+      <div class="tbl-wrap"><table><thead><tr><th>Usuario</th><th>Nombre</th><th>Rol</th><th>Compras</th><th>Proveedor</th><th>Estado</th><th></th></tr></thead><tbody>
+      ${us.map((u) => `<tr class="${u.activo ? '' : 'inactive'}"><td class="code">${esc(u.username)}</td><td>${esc(u.nombre)}</td><td><span class="badge b-rol">${ROL_LBL[u.rol]}</span></td>
+        <td>${u.rol === 'ADMIN' || u.permiso_compras ? '<span class="badge b-COMPLETADO">Sí</span>' : ''}</td><td>${esc(u.proveedor || '')}</td>
+        <td>${u.activo ? 'Activo' : 'Inactivo'}</td><td class="num"><button class="btn ghost sm" data-ed="${u.id}">Editar</button></td></tr>`).join('')}
       </tbody></table></div>`;
     const editar = (u) => {
-      const activo = u ? !(u.activo === false || u.activo === 'f') : true;
       const m = modal(`<h2>${u ? 'Editar' : 'Nuevo'} usuario</h2><form id="f-us">
         <div class="row"><div class="f"><label>Usuario (login)</label><input name="username" value="${esc(u ? u.username : '')}" ${u ? 'disabled' : 'required'} maxlength="60" autocomplete="off"></div>
           <div class="f"><label>Nombre y apellido</label><input name="nombre" value="${esc(u ? u.nombre : '')}" required maxlength="120"></div></div>
         <div class="row mt"><div class="f"><label>Rol</label><select name="rol">${Object.entries(ROL_LBL).map(([k, v]) => `<option value="${k}" ${u && u.rol === k ? 'selected' : ''}>${v}</option>`).join('')}</select></div>
           <div class="f"><label>${u ? 'Nueva contraseña (dejar vacío para no cambiar)' : 'Contraseña (mín. 6)'}</label><input type="password" name="password" ${u ? '' : 'required'} minlength="6" autocomplete="new-password"></div></div>
-        ${u ? `<label class="check mt"><input type="checkbox" name="activo" ${activo ? 'checked' : ''}> Activo</label>` : ''}
+        <div class="row mt" id="us-prov"><div class="f"><label>Proveedor vinculado *</label><select name="proveedor_id"><option value="">Seleccionar…</option>
+          ${provs.filter((p) => p.activo || (u && u.proveedor_id === p.id)).map((p) => `<option value="${p.id}" ${u && u.proveedor_id === p.id ? 'selected' : ''}>${esc(p.nombre)}</option>`).join('')}</select>
+          <div class="stock-hint">El usuario solo verá los pedidos confirmados de este proveedor.</div></div></div>
+        <label class="check mt" id="us-comp"><input type="checkbox" name="permiso_compras" ${u && u.permiso_compras ? 'checked' : ''}> Permiso de <b>&nbsp;Compras</b>&nbsp;(crear y confirmar pedidos a proveedores)</label>
+        ${u ? `<label class="check mt"><input type="checkbox" name="activo" ${u.activo ? 'checked' : ''}> Activo</label>` : ''}
         <div class="form-actions"><button type="button" class="btn sec" data-close>Cancelar</button><button class="btn">Guardar</button></div></form>`);
-      $('#f-us', m).addEventListener('submit', async (e) => {
+      const f = $('#f-us', m);
+      const sync = () => {
+        const r = f.rol.value;
+        $('#us-prov', m).hidden = r !== 'PROVEEDOR';
+        $('#us-comp', m).hidden = r === 'PROVEEDOR' || r === 'ADMIN';
+      };
+      f.rol.addEventListener('change', sync); sync();
+      f.addEventListener('submit', async (e) => {
         e.preventDefault();
-        const f = e.target;
-        const body = { nombre: f.nombre.value, rol: f.rol.value, password: f.password.value || undefined };
+        const body = { nombre: f.nombre.value, rol: f.rol.value, password: f.password.value || undefined,
+          proveedor_id: f.rol.value === 'PROVEEDOR' ? f.proveedor_id.value : null, permiso_compras: f.permiso_compras.checked };
         if (u) body.activo = f.activo.checked; else body.username = f.username.value;
         try {
           await api(u ? '/api/usuarios/' + u.id : '/api/usuarios', { method: u ? 'PUT' : 'POST', body });
@@ -779,6 +815,292 @@
     $('#us-new').onclick = () => editar(null);
     $$('[data-ed]').forEach((b) => b.addEventListener('click', () => editar(us.find((x) => x.id == b.dataset.ed))));
   };
+
+  // ---------- Proveedores ----------
+  VIEWS.proveedores = async (main) => {
+    const provs = await api('/api/proveedores');
+    main.innerHTML = `<h1>Proveedores</h1><p class="sub">Para que un proveedor entre al sistema, creá un usuario con rol <b>Proveedor</b> vinculado acá${puede('parametrizar') ? ' (en Usuarios)' : ' (lo hace el administrador)'}.</p>
+      <div class="toolbar"><div class="spacer"></div><button class="btn" id="pv-new">+ Nuevo proveedor</button></div>
+      <div class="tbl-wrap"><table><thead><tr><th>Nombre</th><th>CUIT</th><th>Contacto</th><th>Email</th><th>Teléfono</th><th class="num">Usuarios</th><th>Estado</th><th></th></tr></thead><tbody>
+      ${provs.length ? provs.map((p) => `<tr class="${p.activo ? '' : 'inactive'}"><td><b>${esc(p.nombre)}</b></td><td>${esc(p.cuit || '')}</td><td>${esc(p.contacto || '')}</td><td>${esc(p.email || '')}</td><td>${esc(p.telefono || '')}</td>
+        <td class="num">${p.usuarios}</td><td>${p.activo ? 'Activo' : 'Inactivo'}</td><td class="num"><button class="btn ghost sm" data-ed="${p.id}">Editar</button></td></tr>`).join('') : '<tr><td colspan="8" class="empty">Sin proveedores.</td></tr>'}
+      </tbody></table></div>`;
+    const editar = (p) => {
+      const m = modal(`<h2>${p ? 'Editar' : 'Nuevo'} proveedor</h2><form id="f-pv">
+        <div class="f"><label>Razón social / nombre *</label><input name="nombre" value="${esc(p ? p.nombre : '')}" required maxlength="150"></div>
+        <div class="row mt"><div class="f"><label>CUIT</label><input name="cuit" value="${esc(p ? p.cuit || '' : '')}" maxlength="20"></div>
+          <div class="f"><label>Contacto</label><input name="contacto" value="${esc(p ? p.contacto || '' : '')}" maxlength="120"></div></div>
+        <div class="row mt"><div class="f"><label>Email</label><input type="email" name="email" value="${esc(p ? p.email || '' : '')}" maxlength="150"></div>
+          <div class="f"><label>Teléfono</label><input name="telefono" value="${esc(p ? p.telefono || '' : '')}" maxlength="50"></div></div>
+        ${p ? `<label class="check mt"><input type="checkbox" name="activo" ${p.activo ? 'checked' : ''}> Activo</label>` : ''}
+        <div class="form-actions"><button type="button" class="btn sec" data-close>Cancelar</button><button class="btn">Guardar</button></div></form>`);
+      $('#f-pv', m).addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const f = e.target;
+        const body = { nombre: f.nombre.value, cuit: f.cuit.value, contacto: f.contacto.value, email: f.email.value, telefono: f.telefono.value, activo: p ? f.activo.checked : true };
+        try {
+          await api(p ? '/api/proveedores/' + p.id : '/api/proveedores', { method: p ? 'PUT' : 'POST', body });
+          closeModal(); toast('Proveedor guardado'); router();
+        } catch (err) { toast(err.message, true); }
+      });
+    };
+    $('#pv-new').onclick = () => editar(null);
+    $$('[data-ed]').forEach((b) => b.addEventListener('click', () => editar(provs.find((x) => x.id == b.dataset.ed))));
+  };
+
+  // ---------- Pedidos a proveedores ----------
+  const ocAbierta = (o) => o.estado === 'CONFIRMADA' || o.estado === 'PARCIAL';
+  function estadoItem(i) {
+    if (i.excedente > 0) return `<span class="badge b-RECHAZADO">Excede ${fmtN(i.excedente)}</span>`;
+    if (i.pendiente === 0) return '<span class="badge b-COMPLETADO">Completo</span>';
+    if (i.cantidad_recibida === 0) return '<span class="badge b-CANCELADO">Sin recibir</span>';
+    return `<span class="badge b-PENDIENTE">Faltan ${fmtN(i.pendiente)}</span>`;
+  }
+  const fmtTam = (b) => (b > 1048576 ? (b / 1048576).toFixed(1) + ' MB' : Math.max(1, Math.round(b / 1024)) + ' KB');
+
+  VIEWS.compras = async (main) => {
+    const esProv = S.user.rol === 'PROVEEDOR';
+    const params = new URLSearchParams(location.hash.split('?')[1] || '');
+    const provs = esProv ? [] : await api('/api/proveedores');
+    main.innerHTML = `
+      <h1>${esProv ? 'Mis pedidos' : 'Pedidos a proveedores'}</h1>
+      <p class="sub">${esProv ? `Notas de pedido de Vinilo a ${esc(S.user.proveedor)}. Subí el remito o la factura de cada entrega.` : 'Notas de pedido a proveedores: se crean y confirman con el permiso de Compras; al recibir se valida lo entregado contra lo pedido.'}</p>
+      <div class="toolbar">
+        <div class="f"><label>Estado</label><select id="oc-est"><option value="ABIERTAS">Abiertos</option><option value="">Todos</option>
+          ${Object.entries(OC_EST).filter(([k]) => !(esProv && k === 'BORRADOR')).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select></div>
+        ${esProv ? '' : `<div class="f"><label>Proveedor</label><select id="oc-prov"><option value="">Todos</option>${provs.map((p) => `<option value="${p.id}">${esc(p.nombre)}</option>`).join('')}</select></div>`}
+        <div class="spacer"></div>${puede('compras') ? '<button class="btn" id="oc-new">+ Nuevo pedido a proveedor</button>' : ''}
+      </div><div id="oc-list"></div>`;
+    const cargar = async () => {
+      const qs = new URLSearchParams();
+      if ($('#oc-est').value) qs.set('estado', $('#oc-est').value);
+      if (!esProv && $('#oc-prov').value) qs.set('proveedor_id', $('#oc-prov').value);
+      const list = await api('/api/oc?' + qs);
+      $('#oc-list').innerHTML = list.length ? `<div class="tbl-wrap"><table><thead><tr><th>N°</th><th>Fecha</th>${esProv ? '' : '<th>Proveedor</th>'}<th>Entregar en</th><th>Entrega prevista</th><th>Estado</th>
+        <th class="num">Pedido</th><th class="num">Recibido</th><th class="num">Pendiente</th><th class="num">📎</th><th></th></tr></thead><tbody>
+        ${list.map((o) => `<tr><td><b>#${o.id}</b></td><td>${fmtFecha(o.creado_en)}</td>${esProv ? '' : `<td>${esc(o.proveedor)}</td>`}<td>${esc(o.almacen)}</td><td>${fmtDia(o.fecha_entrega)}</td>
+          <td><span class="badge oc-${o.estado}">${OC_EST[o.estado]}</span></td><td class="num">${fmtN(o.pedido)}</td><td class="num">${fmtN(o.recibido)}</td>
+          <td class="num ${o.pendiente && ocAbierta(o) ? 'stock-hint bad' : ''}">${fmtN(o.pendiente)}</td><td class="num">${o.archivos || ''}</td>
+          <td class="num"><button class="btn ghost sm" data-ver="${o.id}">Ver</button></td></tr>`).join('')}</tbody></table></div>`
+        : '<div class="card empty">No hay pedidos para este filtro.</div>';
+      $$('[data-ver]').forEach((b) => b.addEventListener('click', () => verOC(Number(b.dataset.ver), cargar)));
+    };
+    $('#oc-est').addEventListener('change', () => cargar().catch((e) => toast(e.message, true)));
+    if (!esProv) $('#oc-prov').addEventListener('change', () => cargar().catch((e) => toast(e.message, true)));
+    if ($('#oc-new')) $('#oc-new').onclick = () => formOC(null, cargar);
+    await cargar();
+    if (params.get('id')) verOC(Number(params.get('id')), cargar);
+  };
+
+  async function formOC(oc, onDone) {
+    const [provs, productos] = await Promise.all([api('/api/proveedores'), api('/api/productos')]);
+    const activos = productos.filter((p) => p.activo);
+    const pMap = new Map(productos.map((p) => [p.id, p]));
+    const lineas = oc ? oc.items.map((i) => ({ producto_id: i.producto_id, cantidad: i.cantidad })) : [];
+    const m = modal(`<h2>${oc ? `Editar pedido #${oc.id}` : 'Nuevo pedido a proveedor'}</h2>
+      <div class="row"><div class="f w"><label>Proveedor *</label><select id="o-prov"><option value="">Seleccionar…</option>
+        ${provs.filter((p) => p.activo).map((p) => `<option value="${p.id}" ${oc && oc.proveedor_id === p.id ? 'selected' : ''}>${esc(p.nombre)}</option>`).join('')}</select></div>
+        <div class="f"><label>Entregar en *</label><select id="o-alm">${optAlmacenes(oc ? oc.almacen_id : '', { vacio: 'Seleccionar…' })}</select></div>
+        <div class="f s" style="flex-basis:160px"><label>Entrega prevista</label><input type="date" id="o-fecha" value="${oc && oc.fecha_entrega ? oc.fecha_entrega : ''}"></div></div>
+      <div class="row mt"><div class="f w"><label>Producto</label><input id="o-prod" list="o-prod-list" autocomplete="off" placeholder="Código o nombre…">
+        <datalist id="o-prod-list">${activos.map((p) => `<option value="${esc(p.codigo)} — ${esc(p.nombre)}"></option>`).join('')}</datalist></div>
+        <div class="f s"><label>Cantidad</label><input id="o-cant" type="number" min="1" step="1" inputmode="numeric"></div>
+        <div><button class="btn sec" id="o-add" type="button">Agregar</button></div></div>
+      <div id="o-lines" class="mt"></div>
+      <div class="f mt"><label>Observaciones para el proveedor</label><textarea id="o-obs" maxlength="2000">${esc(oc ? oc.observacion || '' : '')}</textarea></div>
+      <div class="form-actions"><button class="btn sec" data-close>Cancelar</button><button class="btn sec" id="o-save">Guardar borrador</button><button class="btn" id="o-conf">Guardar y confirmar</button></div>`, { wide: true });
+    const buscar = (txt) => { const c = txt.split(' — ')[0].trim().toUpperCase(); return activos.find((p) => p.codigo.toUpperCase() === c); };
+    const pintar = () => {
+      $('#o-lines', m).innerHTML = lineas.length ? `<div class="tbl-wrap"><table><thead><tr><th>Código</th><th>Producto</th><th class="num">Cantidad</th><th></th></tr></thead><tbody>
+        ${lineas.map((l, i) => { const p = pMap.get(l.producto_id); return `<tr><td class="code">${esc(p.codigo)}</td><td>${esc(p.nombre)} ${badgesAlerta(p)}</td>
+          <td class="num"><input type="number" min="1" step="1" value="${l.cantidad}" data-i="${i}" style="width:100px;text-align:right"></td><td class="num"><button class="btn ghost sm" data-del="${i}">✕</button></td></tr>`; }).join('')}
+        </tbody><tfoot><tr><td></td><td><b>${lineas.length} productos</b></td><td class="num tot">${fmtN(lineas.reduce((a, l) => a + l.cantidad, 0))}</td><td></td></tr></tfoot></table></div>` : '<p class="muted">Agregá los productos a pedir.</p>';
+      $$('#o-lines input[data-i]', m).forEach((inp) => inp.addEventListener('change', () => { lineas[inp.dataset.i].cantidad = Math.max(1, parseInt(inp.value, 10) || 1); pintar(); }));
+      $$('#o-lines [data-del]', m).forEach((b) => b.addEventListener('click', () => { lineas.splice(Number(b.dataset.del), 1); pintar(); }));
+    };
+    const agregar = () => {
+      const p = buscar($('#o-prod', m).value);
+      const c = parseInt($('#o-cant', m).value, 10);
+      if (!p) return toast('Elegí un producto de la lista', true);
+      if (!Number.isInteger(c) || c < 1) return toast('Ingresá una cantidad válida', true);
+      const ex = lineas.find((l) => l.producto_id === p.id);
+      if (ex) ex.cantidad += c; else lineas.push({ producto_id: p.id, cantidad: c });
+      $('#o-prod', m).value = ''; $('#o-cant', m).value = ''; $('#o-prod', m).focus();
+      pintar();
+    };
+    $('#o-add', m).onclick = agregar;
+    $('#o-prod', m).addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); $('#o-cant', m).focus(); } });
+    $('#o-cant', m).addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); agregar(); } });
+    const guardar = async (confirmar) => {
+      if (!lineas.length) return toast('Agregá al menos un producto', true);
+      if (confirmar && !confirm('Al confirmar, el pedido queda visible para el proveedor y ya no se puede editar. ¿Confirmar?')) return;
+      const body = { proveedor_id: $('#o-prov', m).value, almacen_id: $('#o-alm', m).value, fecha_entrega: $('#o-fecha', m).value || null, observacion: $('#o-obs', m).value, items: lineas };
+      try {
+        let id = oc && oc.id;
+        if (oc) {
+          await api('/api/oc/' + oc.id, { method: 'PUT', body });
+          if (confirmar) await api(`/api/oc/${oc.id}/confirmar`, { method: 'POST' });
+        } else {
+          id = (await api('/api/oc', { method: 'POST', body: { ...body, confirmar } })).id;
+        }
+        closeModal(); toast(confirmar ? `Pedido #${id} confirmado y enviado al proveedor` : `Borrador #${id} guardado`);
+        await onDone(); actualizarPill();
+        verOC(id, onDone);
+      } catch (err) { toast(err.message, true); }
+    };
+    $('#o-save', m).onclick = () => guardar(false);
+    $('#o-conf', m).onclick = () => guardar(true);
+    pintar();
+  }
+
+  async function descargarArchivo(ocId, a) {
+    try {
+      const res = await fetch(`/api/oc/${ocId}/archivos/${a.id}`, { headers: { Authorization: 'Bearer ' + S.token } });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || 'No se pudo descargar');
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url; link.download = a.nombre_archivo; link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 2000);
+    } catch (err) { toast(err.message, true); }
+  }
+
+  function leerArchivo(file) {
+    return new Promise((resolve, reject) => {
+      const r = new FileReader();
+      r.onload = () => resolve(String(r.result).split(',')[1] || '');
+      r.onerror = () => reject(new Error('No se pudo leer el archivo'));
+      r.readAsDataURL(file);
+    });
+  }
+
+  function imprimirOC(oc) {
+    const w = window.open('', '_blank');
+    if (!w) return toast('Habilitá las ventanas emergentes para imprimir', true);
+    w.document.write(`<!DOCTYPE html><html lang="es"><head><meta charset="utf-8"><title>Nota de pedido #${oc.id}</title>
+      <style>body{font-family:Arial,sans-serif;margin:32px;color:#111}h1{margin:0 0 4px;font-size:22px}table{width:100%;border-collapse:collapse;margin-top:18px}
+      th,td{border-bottom:1px solid #ccc;padding:7px;text-align:left;font-size:13px}th{background:#f3f3f3}.n{text-align:right}.m{color:#555;font-size:13px}.g{display:flex;justify-content:space-between;gap:20px;margin-top:14px}</style></head><body>
+      <h1>VINILO · Nota de pedido N° ${oc.id}</h1><div class="m">Estado: ${OC_EST[oc.estado]} · Emitida ${fmtFecha(oc.confirmado_en || oc.creado_en)}</div>
+      <div class="g"><div><b>Proveedor</b><br>${esc(oc.proveedor)}${oc.proveedor_cuit ? '<br>CUIT ' + esc(oc.proveedor_cuit) : ''}${oc.proveedor_email ? '<br>' + esc(oc.proveedor_email) : ''}</div>
+      <div><b>Entregar en</b><br>${esc(oc.almacen)}${oc.fecha_entrega ? '<br>Fecha prevista: ' + fmtDia(oc.fecha_entrega) : ''}</div></div>
+      <table><thead><tr><th>Código</th><th>Producto</th><th class="n">Cantidad</th><th class="n">Recibido</th></tr></thead><tbody>
+      ${oc.items.map((i) => `<tr><td>${esc(i.codigo)}</td><td>${esc(i.nombre)}</td><td class="n">${fmtN(i.cantidad)} ${esc(i.unidad)}</td><td class="n">${fmtN(i.cantidad_recibida)}</td></tr>`).join('')}
+      </tbody></table>${oc.observacion ? `<p class="m"><b>Observaciones:</b> ${esc(oc.observacion)}</p>` : ''}
+      <script>window.onload=()=>window.print()<\/script></body></html>`);
+    w.document.close();
+  }
+
+  async function verOC(id, onDone) {
+    let oc;
+    try { oc = await api('/api/oc/' + id); } catch (err) { return toast(err.message, true); }
+    const esProv = S.user.rol === 'PROVEEDOR';
+    const compras = puede('compras');
+    const r = oc.resumen;
+    const puedeSubir = ['CONFIRMADA', 'PARCIAL', 'RECIBIDA', 'CERRADA'].includes(oc.estado) && (esProv || compras || puede('recibir'));
+    const pct = r.pedido ? Math.min(100, Math.round(((r.recibido - r.excedente) / r.pedido) * 100)) : 0;
+    const m = modal(`
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><h2 style="margin:0">Pedido a proveedor #${oc.id}</h2><span class="badge oc-${oc.estado}">${OC_EST[oc.estado]}</span>
+        <span style="flex:1"></span><button class="btn sec sm" id="v-print">Imprimir</button></div>
+      <p class="muted" style="margin-top:8px"><b>${esc(oc.proveedor)}</b> → entregar en <b>${esc(oc.almacen)}</b>${oc.fecha_entrega ? ` · entrega prevista ${fmtDia(oc.fecha_entrega)}` : ''}<br>
+        Creado por ${esc(oc.creado_por_nombre)} ${fmtFecha(oc.creado_en)}${oc.confirmado_en ? ` · Confirmado por ${esc(oc.confirmado_por_nombre)} ${fmtFecha(oc.confirmado_en)}` : ''}
+        ${oc.cerrado_en ? `<br>${oc.estado === 'ANULADA' ? 'Anulado' : oc.estado === 'RECIBIDA' ? 'Completado' : 'Cerrado'} por ${esc(oc.cerrado_por_nombre || '')} ${fmtFecha(oc.cerrado_en)}${oc.motivo_cierre ? ' · ' + esc(oc.motivo_cierre) : ''}` : ''}</p>
+      ${oc.observacion ? `<p class="obs">📝 ${esc(oc.observacion)}</p>` : ''}
+
+      <h2 class="mt" style="font-size:1rem">Validación: pedido vs. recibido</h2>
+      ${oc.estado !== 'BORRADOR' ? `<div class="valbar"><div style="width:${pct}%"></div></div>
+        <p class="stock-hint" style="margin:4px 0 10px">${r.items_completos} de ${r.items_total} productos completos · Pedido ${fmtN(r.pedido)} · Recibido ${fmtN(r.recibido)} · <b class="${r.pendiente ? 'bad' : ''}">Pendiente ${fmtN(r.pendiente)}</b>${r.excedente ? ` · <b class="bad">Excedente ${fmtN(r.excedente)}</b>` : ''}</p>` : ''}
+      <div class="tbl-wrap"><table><thead><tr><th>Código</th><th>Producto</th><th class="num">Pedido</th><th class="num">Recibido</th><th class="num">Pendiente</th><th>Control</th></tr></thead><tbody>
+      ${oc.items.map((i) => `<tr><td class="code">${esc(i.codigo)}</td><td>${esc(i.nombre)} ${badgesAlerta(i)}</td><td class="num">${fmtN(i.cantidad)}</td><td class="num">${fmtN(i.cantidad_recibida)}</td>
+        <td class="num">${fmtN(i.pendiente)}</td><td>${oc.estado === 'BORRADOR' ? '' : estadoItem(i)}</td></tr>`).join('')}
+      </tbody></table></div>
+
+      ${oc.estado === 'BORRADOR' ? '' : `<h2 class="mt" style="font-size:1rem">Remitos y facturas</h2>
+      ${oc.archivos.length ? `<div class="tbl-wrap"><table><tbody>${oc.archivos.map((a) => `<tr><td><span class="badge b-rol">${a.tipo}</span> ${esc(a.numero || '')}</td>
+        <td>${esc(a.nombre_archivo)} <span class="muted">· ${fmtTam(a.tamano)}</span></td><td class="muted">${esc(a.subido_por_nombre)} · ${fmtFecha(a.subido_en)}</td>
+        <td class="num"><button class="btn ghost sm" data-dl="${a.id}">Descargar</button>${ocAbierta(oc) && (a.subido_por === S.user.id || compras) ? `<button class="btn ghost sm" data-rm="${a.id}" title="Eliminar">✕</button>` : ''}</td></tr>`).join('')}</tbody></table></div>`
+        : '<p class="muted">Todavía no se subieron documentos.</p>'}
+      ${puedeSubir ? `<div class="card mt" style="background:#faf8f5;margin-bottom:0"><div class="row">
+        <div class="f s" style="flex-basis:140px"><label>Tipo</label><select id="u-tipo"><option value="REMITO">Remito</option><option value="FACTURA">Factura</option><option value="OTRO">Otro</option></select></div>
+        <div class="f"><label>Número</label><input id="u-num" maxlength="60" placeholder="0001-00001234"></div>
+        <div class="f w"><label>Archivo (PDF, foto, Excel… máx. 8 MB)</label><input type="file" id="u-file" accept=".pdf,.jpg,.jpeg,.png,.webp,.heic,.xls,.xlsx,.doc,.docx,.csv,.txt"></div>
+        <div><button class="btn" id="u-up">Subir</button></div></div></div>` : ''}`}
+
+      ${oc.recepciones.length ? `<h2 class="mt" style="font-size:1rem">Recepciones</h2>${oc.recepciones.map((rc) => `<p class="obs" style="margin:4px 0"><b>${fmtFecha(rc.fecha)}</b> · ${esc(rc.usuario)} · ${esc(rc.referencia || '')}
+        <br>${rc.items.map((x) => `${esc(x.nombre)}: <b>${fmtN(x.cantidad)}</b>`).join(' · ')}${rc.observacion ? `<br>📝 ${esc(rc.observacion)}` : ''}</p>`).join('')}` : ''}
+
+      <div class="form-actions">
+        <button class="btn sec" data-close>Cerrar ventana</button>
+        ${compras && oc.estado === 'BORRADOR' ? '<button class="btn sec" id="a-edit">Editar</button>' : ''}
+        ${compras && (oc.estado === 'BORRADOR' || (oc.estado === 'CONFIRMADA' && r.recibido === 0)) ? '<button class="btn danger" id="a-anular">Anular</button>' : ''}
+        ${compras && ocAbierta(oc) ? '<button class="btn danger" id="a-cerrar">Cerrar con faltante</button>' : ''}
+        ${compras && oc.estado === 'BORRADOR' ? '<button class="btn" id="a-conf">Confirmar pedido</button>' : ''}
+        ${puede('recibir') && ocAbierta(oc) ? '<button class="btn ok" id="a-recibir">Recibir mercadería</button>' : ''}
+      </div>`, { wide: true });
+    const reabrir = async () => { await onDone(); actualizarPill(); verOC(id, onDone); };
+    const accion = async (path, body, msg) => {
+      try { await api(`/api/oc/${id}/${path}`, { method: 'POST', body }); toast(msg); await reabrir(); } catch (err) { toast(err.message, true); }
+    };
+    $('#v-print', m).onclick = () => imprimirOC(oc);
+    $$('[data-dl]', m).forEach((b) => b.addEventListener('click', () => descargarArchivo(id, oc.archivos.find((a) => a.id == b.dataset.dl))));
+    $$('[data-rm]', m).forEach((b) => b.addEventListener('click', async () => {
+      if (!confirm('¿Eliminar este archivo?')) return;
+      try { await api(`/api/oc/${id}/archivos/${b.dataset.rm}`, { method: 'DELETE' }); toast('Archivo eliminado'); await reabrir(); } catch (err) { toast(err.message, true); }
+    }));
+    if ($('#u-up', m)) $('#u-up', m).onclick = async () => {
+      const file = $('#u-file', m).files[0];
+      if (!file) return toast('Elegí un archivo', true);
+      if (file.size > 8 * 1024 * 1024) return toast('El archivo supera los 8 MB', true);
+      const btn = $('#u-up', m); btn.disabled = true; btn.textContent = 'Subiendo…';
+      try {
+        await api(`/api/oc/${id}/archivos`, { method: 'POST', body: { tipo: $('#u-tipo', m).value, numero: $('#u-num', m).value, nombre: file.name, data: await leerArchivo(file) } });
+        toast('Documento subido'); await reabrir();
+      } catch (err) { toast(err.message, true); btn.disabled = false; btn.textContent = 'Subir'; }
+    };
+    if ($('#a-edit', m)) $('#a-edit', m).onclick = () => formOC(oc, onDone);
+    if ($('#a-conf', m)) $('#a-conf', m).onclick = () => { if (confirm('Al confirmar, el pedido queda visible para el proveedor y ya no se puede editar. ¿Confirmar?')) accion('confirmar', {}, 'Pedido confirmado'); };
+    if ($('#a-anular', m)) $('#a-anular', m).onclick = () => { const mot = prompt('Motivo de la anulación (opcional):'); if (mot !== null) accion('anular', { motivo: mot }, 'Pedido anulado'); };
+    if ($('#a-cerrar', m)) $('#a-cerrar', m).onclick = () => { const mot = prompt(`Quedan ${r.pendiente} unidades pendientes. Motivo del cierre:`); if (mot) accion('cerrar', { motivo: mot }, 'Pedido cerrado'); };
+    if ($('#a-recibir', m)) $('#a-recibir', m).onclick = () => recibirOC(oc, reabrir);
+  }
+
+  function recibirOC(oc, onDone) {
+    const remitos = oc.archivos.filter((a) => a.tipo === 'REMITO' && a.numero);
+    const m = modal(`<h2>Recibir pedido #${oc.id} · ${esc(oc.proveedor)}</h2>
+      <p class="muted">Ingresa a <b>${esc(oc.almacen)}</b>. Cargá lo que llegó físicamente; el sistema lo compara con lo pedido. Si algo no vino, dejalo en 0 y queda pendiente.</p>
+      <div class="row"><div class="f"><label>Remito del proveedor</label><input id="r-ref" maxlength="90" value="${esc(remitos.length ? 'Remito ' + remitos[remitos.length - 1].numero : '')}" placeholder="N° de remito"></div></div>
+      <div class="tbl-wrap mt"><table><thead><tr><th>Producto</th><th class="num">Pedido</th><th class="num">Ya recibido</th><th class="num">Pendiente</th><th class="num">Recibido ahora</th><th>Resultado</th></tr></thead><tbody>
+      ${oc.items.map((i) => `<tr><td>${esc(i.nombre)} ${badgesAlerta(i)}</td><td class="num">${fmtN(i.cantidad)}</td><td class="num">${fmtN(i.cantidad_recibida)}</td><td class="num">${fmtN(i.pendiente)}</td>
+        <td class="num"><input type="number" min="0" step="1" data-item="${i.id}" value="${i.pendiente}" style="width:100px;text-align:right"></td><td data-res="${i.id}"></td></tr>`).join('')}
+      </tbody></table></div>
+      <div class="f mt"><label>Observaciones (estado de la mercadería, cadena de frío, etc.)</label><textarea id="r-obs"></textarea></div>
+      <div class="form-actions"><button class="btn sec" data-close>Volver</button><button class="btn sec" id="r-cero">Poner todo en 0</button><button class="btn ok" id="r-ok">Confirmar recepción</button></div>`, { wide: true });
+    const calc = () => {
+      for (const i of oc.items) {
+        const v = parseInt($(`[data-item="${i.id}"]`, m).value, 10) || 0;
+        const total = i.cantidad_recibida + v;
+        $(`[data-res="${i.id}"]`, m).innerHTML = total > i.cantidad ? `<span class="badge b-RECHAZADO">Excede ${fmtN(total - i.cantidad)}</span>`
+          : total === i.cantidad ? '<span class="badge b-COMPLETADO">Completo</span>'
+            : `<span class="badge b-PENDIENTE">Quedan ${fmtN(i.cantidad - total)}</span>`;
+      }
+    };
+    $$('[data-item]', m).forEach((inp) => inp.addEventListener('input', calc));
+    $('#r-cero', m).onclick = () => { $$('[data-item]', m).forEach((inp) => { inp.value = 0; }); calc(); };
+    const enviar = async (aceptar) => {
+      const items = $$('[data-item]', m).map((inp) => ({ item_id: Number(inp.dataset.item), cantidad: parseInt(inp.value, 10) || 0 }));
+      try {
+        const res = await api(`/api/oc/${oc.id}/recibir`, { method: 'POST', body: { items, referencia: $('#r-ref', m).value, observacion: $('#r-obs', m).value, aceptar_excedente: aceptar } });
+        closeModal();
+        toast(res.estado === 'RECIBIDA' ? `Pedido #${oc.id} recibido completo` : `Recepción registrada · quedan productos pendientes`);
+        onDone();
+      } catch (err) {
+        if (!aceptar && /más de lo pedido/.test(err.message)) {
+          if (confirm(err.message + '\n\n¿Aceptar el excedente e ingresarlo al stock?')) enviar(true);
+        } else toast(err.message, true);
+      }
+    };
+    $('#r-ok', m).onclick = () => enviar(false);
+    calc();
+  }
 
   boot();
 })();

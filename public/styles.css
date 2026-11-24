@@ -160,3 +160,15 @@ tr.inactive td { color: #a8a397; }
   .topbar button { background: none; border: 0; color: #fff; font-size: 1.4rem; cursor: pointer; }
   main { padding: 18px 14px 50px; }
 }
+
+/* Pedidos a proveedores */
+.oc-BORRADOR { background: #efede8; color: #57534b; }
+.oc-CONFIRMADA { background: #e8f1fb; color: var(--frio); }
+.oc-PARCIAL { background: #fdf3e1; color: var(--warn); }
+.oc-RECIBIDA { background: #e7f4ec; color: var(--ok); }
+.oc-CERRADA { background: #f4ecf8; color: var(--cuidado); }
+.oc-ANULADA { background: #fde8e6; color: var(--danger); }
+.valbar { height: 8px; border-radius: 99px; background: #efede8; overflow: hidden; }
+.valbar > div { height: 100%; background: var(--ok); }
+.stock-hint b.bad { color: var(--danger); }
+[hidden] { display: none !important; }

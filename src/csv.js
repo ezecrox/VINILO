@@ -43,6 +43,7 @@ function productosDesdeMaestro(text) {
       nombre: col(r, 'nombre').replace(/\s+/g, ' '),
       categoria: sub ? `${cat} / ${sub}` : cat,
       unidad: 'UN',
+      proveedor: col(r, 'proveedor').replace(/\s+/g, ' '),
       activo: activo === '' ? true : SI.includes(norm(activo).toUpperCase()),
     };
   }).filter((p) => p.codigo && p.nombre);

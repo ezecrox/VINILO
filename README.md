@@ -15,6 +15,9 @@ recepción de mercadería, transferencias entre depósitos, consumos, ajustes de
 | **RECEPTOR** | Recepción, transferencia entre depósitos, consumo, atender/rechazar notas de pedido, ver stock y movimientos |
 | **ENCARGADO** | Ver stock por almacén (con filtros y exportación CSV), movimientos y notas de pedido |
 | **REQUIRENTE** | Crear notas de pedido (solicitud de transferencia de un depósito a otro), ver y cancelar las propias |
+| **PROVEEDOR** | Vinculado a un proveedor. Solo ve **sus** pedidos ya confirmados (lo pedido, lo recibido y lo pendiente) y sube remitos / facturas |
+
+**Permiso de Compras:** el ADMIN lo puede sumar a cualquier usuario (ADMIN lo tiene siempre). Solo con este permiso se crean, confirman, cierran o anulan pedidos a proveedores.
 
 > El consumo quedó habilitado para ADMIN y RECEPTOR. Para cambiarlo, editar el objeto `PUEDE` al principio de `server.js`.
 
@@ -27,6 +30,7 @@ recepción de mercadería, transferencias entre depósitos, consumos, ajustes de
 - **Consumo:** baja de stock por uso, venta, merma o rotura.
 - **Ajuste de inventario (ADMIN):** se carga la cantidad contada y se registra la diferencia.
 - **Notas de pedido:** el requirente pide productos de un depósito a otro; el receptor/admin la atiende (con entregas parciales si falta stock) y se genera la transferencia automáticamente, o la rechaza con motivo.
+- **Pedidos a proveedores:** Compras arma la nota de pedido (proveedor, almacén de entrega, fecha prevista, productos) como borrador y la confirma; recién ahí el proveedor la ve. El proveedor sube el remito o la factura (PDF, foto, Excel, Word; máx. 8 MB, guardados en la base). El receptor registra lo que llegó y el sistema **valida contra lo pedido** ítem por ítem (completo / faltan N / excede N): admite entregas parciales, pide confirmación si llega más de lo pedido y genera la recepción de stock automáticamente. Estados: Borrador → Confirmada → Recepción parcial → Recibida, o Cerrada con faltante / Anulada. Se puede imprimir.
 - **Movimientos:** historial completo con filtros y detalle; exportación CSV.
 - Todas las operaciones son transaccionales: el stock nunca queda negativo.
 
@@ -95,7 +99,8 @@ SESSION_SECRET=algo-largo ADMIN_PASSWORD=admin123 node server.js
 server.js          API + servidor de archivos estáticos
 src/db.js          conexión, migración automática y usuario admin inicial
 src/auth.js        contraseñas (scrypt) y tokens de sesión firmados
-db/schema.sql      tablas: usuarios, almacenes, productos, stock, movimientos, pedidos
+db/schema.sql      tablas: usuarios, almacenes, productos, stock, movimientos, pedidos, proveedores, órdenes de compra
+src/compras.js     pedidos a proveedores, archivos y recepción validada
 public/            interfaz web (index.html, app.js, styles.css)
 render.yaml        Blueprint de Render
 ```
