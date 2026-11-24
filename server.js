@@ -140,12 +140,13 @@ async function registrarMovimiento(client, mov) {
     }
   }
   const ids = [...porProducto.keys()].sort((a, b) => a - b);
-  const { rows: prods } = await client.query('SELECT id, codigo, nombre, activo FROM productos WHERE id = ANY($1::int[])', [`{${ids.join(',')}}`]);
+  const { rows: prods } = await client.query('SELECT id, codigo, nombre, activo, gestion_stock FROM productos WHERE id = ANY($1::int[])', [`{${ids.join(',')}}`]);
   const prodMap = new Map(prods.map((p) => [Number(p.id), p]));
   for (const pid of ids) {
     const p = prodMap.get(pid);
     if (!p) fail(400, `Producto ${pid} inexistente`);
     if (!isTrue(p.activo) && tipo === 'RECEPCION') fail(400, `El producto ${p.nombre} está inactivo`);
+    if (!isTrue(p.gestion_stock)) fail(400, `"${p.nombre}" no tiene gestión de stock: activala en Productos para poder operarlo`);
   }
 
   const sumar = (almId, pid, cant) => client.query(
@@ -439,7 +440,7 @@ route('PUT', '/api/almacenes/:id', async ({ user, body, params }) => {
 
 // ---------- Productos ----------
 const PRODUCTO_COLS = `id, codigo, nombre, categoria, unidad, alerta_vencimiento, fecha_vencimiento,
-  alerta_cuidado, alerta_frio, nota_alerta, activo, fudo_id,
+  alerta_cuidado, alerta_frio, nota_alerta, activo, fudo_id, gestion_stock,
   CASE WHEN fecha_vencimiento IS NULL THEN NULL ELSE (fecha_vencimiento - CURRENT_DATE) END AS dias_venc`;
 
 function normalizarProducto(r) {
@@ -450,15 +451,29 @@ function normalizarProducto(r) {
     alerta_cuidado: isTrue(r.alerta_cuidado),
     alerta_frio: isTrue(r.alerta_frio),
     activo: isTrue(r.activo),
+    gestion_stock: r.gestion_stock === undefined ? true : isTrue(r.gestion_stock),
     fecha_vencimiento: r.fecha_vencimiento || null,
     dias_venc: r.dias_venc === null || r.dias_venc === '' || r.dias_venc === undefined ? null : Number(r.dias_venc),
   };
 }
 
-route('GET', '/api/productos', async ({ user }) => {
+// Por defecto solo productos con gestión de stock (para operar); ?todos=1 trae el maestro completo (Parametrización)
+route('GET', '/api/productos', async ({ user, url }) => {
   permitir(user, 'verProductos');
-  const { rows } = await query(`SELECT ${PRODUCTO_COLS} FROM productos ORDER BY nombre`);
+  const todos = url.searchParams.get('todos') === '1' && user.permisos.includes('productos');
+  const { rows } = await query(`SELECT ${PRODUCTO_COLS} FROM productos ${todos ? '' : 'WHERE gestion_stock'} ORDER BY nombre`);
   return rows.map(normalizarProducto);
+});
+
+// Cambio masivo de "gestión de stock"
+route('POST', '/api/productos/gestion-stock', async ({ user, body }) => {
+  permitir(user, 'productos');
+  const ids = (Array.isArray(body.ids) ? body.ids : []).map(toInt).filter(Number.isInteger);
+  if (!ids.length) fail(400, 'No hay productos seleccionados');
+  const { rows } = await query(
+    `UPDATE productos SET gestion_stock = $2, actualizado_en = now() WHERE id = ANY($1::int[]) AND gestion_stock <> $2 RETURNING id`,
+    [`{${ids.join(',')}}`, !!body.valor]);
+  return { cambiados: rows.length };
 });
 
 function datosProducto(body) {
@@ -469,6 +484,7 @@ function datosProducto(body) {
     codigo.toUpperCase(), nombre, str(body.categoria, 80), (str(body.unidad, 20) || 'UN').toUpperCase(),
     bool(body.alerta_vencimiento), fechaOk(body.fecha_vencimiento), bool(body.alerta_cuidado), bool(body.alerta_frio),
     str(body.nota_alerta, 500), body.activo === undefined ? true : bool(body.activo),
+    body.gestion_stock === undefined || body.gestion_stock === null || body.gestion_stock === '' ? null : bool(body.gestion_stock),
   ];
 }
 
@@ -476,8 +492,8 @@ route('POST', '/api/productos', async ({ user, body }) => {
   permitir(user, 'productos');
   try {
     const { rows } = await query(
-      `INSERT INTO productos (codigo, nombre, categoria, unidad, alerta_vencimiento, fecha_vencimiento, alerta_cuidado, alerta_frio, nota_alerta, activo)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id`, datosProducto(body));
+      `INSERT INTO productos (codigo, nombre, categoria, unidad, alerta_vencimiento, fecha_vencimiento, alerta_cuidado, alerta_frio, nota_alerta, activo, gestion_stock)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,coalesce($11::boolean, TRUE)) RETURNING id`, datosProducto(body));
     return { id: Number(rows[0].id) };
   } catch (e) {
     if (e.code === '23505' || /duplicate|unique/i.test(e.message)) fail(409, 'Ya existe un producto con ese código');
@@ -490,7 +506,7 @@ route('PUT', '/api/productos/:id', async ({ user, body, params }) => {
   try {
     await query(
       `UPDATE productos SET codigo=$2, nombre=$3, categoria=$4, unidad=$5, alerta_vencimiento=$6, fecha_vencimiento=$7,
-       alerta_cuidado=$8, alerta_frio=$9, nota_alerta=$10, activo=$11, actualizado_en=now() WHERE id=$1`,
+       alerta_cuidado=$8, alerta_frio=$9, nota_alerta=$10, activo=$11, gestion_stock=coalesce($12::boolean, gestion_stock), actualizado_en=now() WHERE id=$1`,
       [toInt(params.id), ...datosProducto(body)]);
   } catch (e) {
     if (e.code === '23505' || /duplicate|unique/i.test(e.message)) fail(409, 'Ya existe un producto con ese código');
@@ -511,12 +527,12 @@ route('POST', '/api/productos/importar', async ({ user, body }) => {
       let datos;
       try { datos = datosProducto(filas[i]); } catch (e) { errores.push(`Fila ${i + 2}: ${e.message}`); continue; }
       const { rows } = await client.query(
-        `INSERT INTO productos (codigo, nombre, categoria, unidad, alerta_vencimiento, fecha_vencimiento, alerta_cuidado, alerta_frio, nota_alerta, activo)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+        `INSERT INTO productos (codigo, nombre, categoria, unidad, alerta_vencimiento, fecha_vencimiento, alerta_cuidado, alerta_frio, nota_alerta, activo, gestion_stock)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,coalesce($11::boolean, TRUE))
          ON CONFLICT (codigo) DO UPDATE SET nombre=EXCLUDED.nombre, categoria=EXCLUDED.categoria, unidad=EXCLUDED.unidad,
            alerta_vencimiento=EXCLUDED.alerta_vencimiento, fecha_vencimiento=EXCLUDED.fecha_vencimiento,
            alerta_cuidado=EXCLUDED.alerta_cuidado, alerta_frio=EXCLUDED.alerta_frio, nota_alerta=EXCLUDED.nota_alerta,
-           activo=EXCLUDED.activo, actualizado_en=now()
+           activo=EXCLUDED.activo, gestion_stock=coalesce($11::boolean, productos.gestion_stock), actualizado_en=now()
          RETURNING (xmax = 0) AS insertado`, datos);
       if (isTrue(rows[0].insertado)) creados++; else actualizados++;
     }
@@ -529,7 +545,7 @@ route('GET', '/api/stock', async ({ user }) => {
   permitir(user, 'verStock');
   const [alm, prods, st, mins] = await Promise.all([
     query('SELECT id, nombre, activo FROM almacenes ORDER BY id'),
-    query(`SELECT ${PRODUCTO_COLS} FROM productos ORDER BY nombre`),
+    query(`SELECT ${PRODUCTO_COLS} FROM productos WHERE gestion_stock ORDER BY nombre`),
     query('SELECT almacen_id, producto_id, cantidad FROM stock WHERE cantidad <> 0'),
     query('SELECT almacen_id, producto_id, minimo FROM stock_minimos'),
   ]);
@@ -696,8 +712,9 @@ route('POST', '/api/pedidos', async ({ user, body }) => {
       [user.id, origenId, destinoId, str(body.observacion, 1000)]);
     const pedidoId = Number(rows[0].id);
     for (const [pid, cant] of consolidados) {
-      const { rows: p } = await client.query('SELECT activo FROM productos WHERE id = $1', [pid]);
+      const { rows: p } = await client.query('SELECT activo, gestion_stock, nombre FROM productos WHERE id = $1', [pid]);
       if (!p[0] || !isTrue(p[0].activo)) fail(400, 'Hay un producto inexistente o inactivo en el pedido');
+      if (!isTrue(p[0].gestion_stock)) fail(400, `"${p[0].nombre}" no tiene gestión de stock`);
       await client.query('INSERT INTO pedido_items (pedido_id, producto_id, cantidad) VALUES ($1, $2, $3)', [pedidoId, pid, cant]);
     }
     return { id: pedidoId };
@@ -825,7 +842,7 @@ route('GET', '/api/dashboard', async ({ user }) => {
       .filter((a) => veAlmacen(user, a.id));
     const { rows: alertas } = await query(
       `SELECT ${PRODUCTO_COLS}, (SELECT coalesce(sum(cantidad),0)::int FROM stock s WHERE s.producto_id = productos.id) AS total
-       FROM productos WHERE activo AND (alerta_vencimiento OR alerta_cuidado OR alerta_frio)
+       FROM productos WHERE activo AND gestion_stock AND (alerta_vencimiento OR alerta_cuidado OR alerta_frio)
        ORDER BY alerta_vencimiento DESC, fecha_vencimiento NULLS LAST, nombre`);
     res.alertas = alertas.map((a) => ({ ...normalizarProducto(a), total: Number(a.total) }));
     const { rows: ult } = await query(

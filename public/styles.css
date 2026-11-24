@@ -354,3 +354,6 @@ tbody tr:hover { background: #fffaf2; }
 .resumen a:not([href]) { cursor: default; }
 .rec-grid { display: grid; grid-template-columns: 1fr 1.3fr; gap: 16px; align-items: start; }
 @media (max-width: 700px) { .rec-grid { grid-template-columns: 1fr; } }
+.gs-tog { border: 1.5px solid #d9cdb9; background: #fff; color: #6b7a8c; border-radius: 999px; padding: 4px 10px; font: inherit; font-size: 0.8rem; font-weight: 600; cursor: pointer; white-space: nowrap; }
+.gs-tog.on { background: #e7f4ec; color: var(--ok); border-color: #b9dcc6; }
+.gs-tog:hover { border-color: var(--brand-blue); }

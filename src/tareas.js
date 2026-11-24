@@ -109,7 +109,7 @@ async function calcularTareas(user, { query, fudo, sqlAlm }) {
   if (p('verStock')) {
     const { rows: bajo } = await query(
       `SELECT m.almacen_id, a.nombre AS almacen, m.producto_id, pr.codigo, pr.nombre, m.minimo, coalesce(s.cantidad,0)::int AS cantidad
-       FROM stock_minimos m JOIN productos pr ON pr.id = m.producto_id AND pr.activo JOIN almacenes a ON a.id = m.almacen_id AND a.activo
+       FROM stock_minimos m JOIN productos pr ON pr.id = m.producto_id AND pr.activo AND pr.gestion_stock JOIN almacenes a ON a.id = m.almacen_id AND a.activo
        LEFT JOIN stock s ON s.almacen_id = m.almacen_id AND s.producto_id = m.producto_id
        WHERE coalesce(s.cantidad,0) < m.minimo ${sqlAlm(user, 'm.almacen_id')} ORDER BY (coalesce(s.cantidad,0) = 0) DESC, a.id, pr.nombre`);
     if (bajo.length) {
@@ -143,7 +143,7 @@ async function calcularTareas(user, { query, fudo, sqlAlm }) {
     const { rows: venc } = await query(
       `SELECT pr.id, pr.nombre, pr.fecha_vencimiento, (pr.fecha_vencimiento - CURRENT_DATE) AS dias,
               (SELECT coalesce(sum(cantidad),0)::int FROM stock s WHERE s.producto_id = pr.id ${sqlAlm(user, 's.almacen_id')}) AS total
-       FROM productos pr WHERE pr.activo AND pr.alerta_vencimiento AND pr.fecha_vencimiento IS NOT NULL AND pr.fecha_vencimiento <= CURRENT_DATE + 7
+       FROM productos pr WHERE pr.activo AND pr.gestion_stock AND pr.alerta_vencimiento AND pr.fecha_vencimiento IS NOT NULL AND pr.fecha_vencimiento <= CURRENT_DATE + 7
        ORDER BY pr.fecha_vencimiento`);
     const conStock = venc.filter((v) => n(v.total) > 0);
     add({ id: 'vencimientos', prioridad: conStock.some((v) => n(v.dias) <= 2) ? 'alta' : 'media', titulo: 'Productos por vencer', cantidad: conStock.length, link: '#/stock', accion: 'Ver stock',

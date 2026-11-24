@@ -272,3 +272,6 @@ DELETE FROM login_log WHERE fecha < now() - interval '400 days';
 
 ALTER TABLE movimientos ADD COLUMN IF NOT EXISTS proveedor_id INT REFERENCES proveedores(id);
 CREATE INDEX IF NOT EXISTS idx_mov_prov ON movimientos (proveedor_id);
+
+-- Gestión de stock: si es FALSE el producto solo existe en el maestro (no se transacciona)
+ALTER TABLE productos ADD COLUMN IF NOT EXISTS gestion_stock BOOLEAN NOT NULL DEFAULT TRUE;

@@ -90,7 +90,7 @@ module.exports = function registrarConsumos({ route, query, tx, fail, permitir, 
     if (!rows[0]) fail(404, 'Importación inexistente');
     const { rows: items } = await query(
       `SELECT x.id, x.fudo_product_id, x.producto_id, x.nombre_fudo, x.cantidad_vendida, x.cantidad, x.incluir,
-              p.codigo, p.nombre, p.categoria, p.unidad, p.alerta_vencimiento, p.alerta_cuidado, p.alerta_frio, p.fecha_vencimiento
+              p.codigo, p.nombre, p.categoria, p.unidad, p.alerta_vencimiento, p.alerta_cuidado, p.alerta_frio, p.fecha_vencimiento, p.gestion_stock
        FROM consumo_import_items x LEFT JOIN productos p ON p.id = x.producto_id
        WHERE x.importacion_id = $1 ORDER BY (x.producto_id IS NULL), p.categoria NULLS LAST, coalesce(p.nombre, x.nombre_fudo)`, [id]);
     const { rows: st } = await query('SELECT almacen_id, producto_id, cantidad FROM stock WHERE cantidad > 0');
@@ -100,7 +100,7 @@ module.exports = function registrarConsumos({ route, query, tx, fail, permitir, 
       ...rows[0], id: Number(rows[0].id), almacen_id: rows[0].almacen_id ? Number(rows[0].almacen_id) : null,
       items: items.map((i) => ({
         ...i, id: Number(i.id), producto_id: i.producto_id ? Number(i.producto_id) : null, cantidad: Number(i.cantidad),
-        cantidad_vendida: Number(i.cantidad_vendida), incluir: isTrue(i.incluir),
+        cantidad_vendida: Number(i.cantidad_vendida), incluir: isTrue(i.incluir), gestion_stock: i.producto_id ? isTrue(i.gestion_stock) : false,
         alerta_vencimiento: isTrue(i.alerta_vencimiento), alerta_cuidado: isTrue(i.alerta_cuidado), alerta_frio: isTrue(i.alerta_frio), dias_venc: null,
         stock: i.producto_id ? stock[Number(i.producto_id)] || {} : {},
       })),
@@ -152,13 +152,14 @@ module.exports = function registrarConsumos({ route, query, tx, fail, permitir, 
       const impId = Number(rows[0].id);
       let sinVincular = 0;
       for (const [fid, v] of porProducto) {
-        const { rows: p } = await client.query('SELECT id, nombre FROM productos WHERE fudo_id = $1', [fid]);
+        const { rows: p } = await client.query('SELECT id, nombre, gestion_stock FROM productos WHERE fudo_id = $1', [fid]);
         const prod = p[0];
         if (!prod) sinVincular++;
+        const gestiona = prod && isTrue(prod.gestion_stock);
         await client.query(
           `INSERT INTO consumo_import_items (importacion_id, fudo_product_id, producto_id, nombre_fudo, cantidad_vendida, cantidad, incluir)
            VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-          [impId, fid, prod ? Number(prod.id) : null, (prod ? prod.nombre : v.nombre) || `Producto Fudo ${fid}`, v.cantidad, Math.round(v.cantidad), !!prod]);
+          [impId, fid, prod ? Number(prod.id) : null, (prod ? prod.nombre : v.nombre) || `Producto Fudo ${fid}`, v.cantidad, Math.round(v.cantidad), !!gestiona]);
       }
       return { id: impId, productos: porProducto.size, sin_vincular: sinVincular, items_leidos: leido.items.length, cancelados };
     });
@@ -183,7 +184,8 @@ module.exports = function registrarConsumos({ route, query, tx, fail, permitir, 
       for (const l of Array.isArray(body.items) ? body.items : []) {
         const cant = toInt(l.cantidad);
         if (!Number.isInteger(cant) || cant < 0) fail(400, 'Las cantidades deben ser enteros mayores o iguales a 0');
-        await client.query('UPDATE consumo_import_items SET cantidad = $3, incluir = $4 WHERE id = $1 AND importacion_id = $2 AND producto_id IS NOT NULL',
+        await client.query(`UPDATE consumo_import_items SET cantidad = $3, incluir = $4 WHERE id = $1 AND importacion_id = $2
+           AND producto_id IN (SELECT id FROM productos WHERE gestion_stock)`,
           [toInt(l.id), id, cant, !!l.incluir]);
       }
       return { ok: true };
@@ -201,7 +203,7 @@ module.exports = function registrarConsumos({ route, query, tx, fail, permitir, 
       const alm = await almacenActivo(client, almId, 'consumo');
       const { rows: lineas } = await client.query(
         `SELECT x.producto_id, x.cantidad, p.nombre FROM consumo_import_items x JOIN productos p ON p.id = x.producto_id
-         WHERE x.importacion_id = $1 AND x.incluir AND x.cantidad > 0`, [id]);
+         WHERE x.importacion_id = $1 AND x.incluir AND x.cantidad > 0 AND p.gestion_stock`, [id]);
       if (!lineas.length) fail(400, 'No hay líneas para consumir: incluí al menos un producto con cantidad mayor a 0');
       const items = [];
       const faltantes = [];

@@ -29,6 +29,7 @@ recepción de mercadería, transferencias entre depósitos, consumos, ajustes de
 - **Stock mínimo por almacén:** ADMIN y ENCARGADO lo cargan desde Stock por almacén (✎). Las celdas bajo mínimo se marcan en rojo y hay un filtro "Solo bajo mínimo".
 
 - **Stock por almacén:** tabla con una columna por depósito y total, búsqueda, filtros por almacén / categoría / alerta, exportación CSV.
+- **Gestión de stock por producto:** si está activada, el producto se opera en la app (recepción, transferencias, consumos, ajustes, notas de pedido, pedidos a proveedores, consumos de Fudo) y aparece en Stock, el panel y Vinilito. Si está desactivada, el producto solo figura en **Productos** (p. ej. tragos o platos de la carta). Se cambia desde la ficha, tocando la etiqueta en la lista o en forma masiva sobre los productos filtrados (por categoría). Columna opcional `gestion_stock` en el CSV del maestro.
 - **Alertas por producto** (definidas por el ADMIN): ⏳ vencimiento próximo (con fecha opcional), ⚠ producto de cuidado, ❄ cadena de frío, y una nota libre. Se muestran en el stock, en los formularios de movimientos y en el panel.
 - **Recepción:** ingreso a un almacén con referencia (remito / proveedor).
 - **Transferencia:** valida stock disponible en el origen.

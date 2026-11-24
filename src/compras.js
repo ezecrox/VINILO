@@ -149,8 +149,9 @@ module.exports = function registrarCompras({ route, query, tx, fail, permitir, r
     }
     await client.query('DELETE FROM oc_items WHERE oc_id = $1', [ocId]);
     for (const [pid, cant] of consolidados) {
-      const { rows } = await client.query('SELECT activo FROM productos WHERE id = $1', [pid]);
+      const { rows } = await client.query('SELECT activo, gestion_stock, nombre FROM productos WHERE id = $1', [pid]);
       if (!rows[0] || !isTrue(rows[0].activo)) fail(400, 'Hay un producto inexistente o inactivo en el pedido');
+      if (!isTrue(rows[0].gestion_stock)) fail(400, `"${rows[0].nombre}" no tiene gestión de stock`);
       await client.query('INSERT INTO oc_items (oc_id, producto_id, cantidad) VALUES ($1, $2, $3)', [ocId, pid, cant]);
     }
   }

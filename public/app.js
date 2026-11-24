@@ -612,31 +612,34 @@
       const a = almSel();
       let unidades = 0, faltan = 0, incl = 0;
       $('#cf-body', m).innerHTML = lineas.map((l, i) => {
-        const vinc = !!l.producto_id;
+        const vinc = !!l.producto_id && l.gestion_stock !== false;
+        const sinGestion = !!l.producto_id && l.gestion_stock === false;
         const disp = a && vinc ? (l.stock[a] || 0) : null;
         const falta = vinc && l.incluir && disp !== null && l.cantidad > disp;
         if (vinc && l.incluir) { unidades += l.cantidad; incl++; if (falta) faltan++; }
         return `<tr class="${!vinc || !l.incluir ? 'inactive' : ''}">
           <td>${editable && vinc ? `<input type="checkbox" data-inc="${i}" ${l.incluir ? 'checked' : ''}>` : ''}</td>
-          <td>${vinc ? `<span class="code">${esc(l.codigo)}</span> ${esc(l.nombre)} ${badgesAlerta(l)}` : `${esc(l.nombre_fudo)} <span class="badge b-RECHAZADO" title="Producto de Fudo ${esc(l.fudo_product_id)} que no está en la app">No está en la app</span>`}</td>
+          <td>${vinc ? `<span class="code">${esc(l.codigo)}</span> ${esc(l.nombre)} ${badgesAlerta(l)}` : sinGestion ? `<span class="code">${esc(l.codigo)}</span> ${esc(l.nombre)} <span class="badge b-CANCELADO" title="El producto no tiene gestión de stock">Sin gestión de stock</span>` : `${esc(l.nombre_fudo)} <span class="badge b-RECHAZADO" title="Producto de Fudo ${esc(l.fudo_product_id)} que no está en la app">No está en la app</span>`}</td>
           <td class="muted">${esc(l.categoria || '')}</td><td class="num">${fmtN(l.cantidad_vendida)}</td>
           <td class="num">${editable && vinc ? `<input type="number" min="0" step="1" data-cant="${i}" value="${l.cantidad}" style="width:90px;text-align:right">` : fmtN(vinc && l.incluir ? l.cantidad : 0)}</td>
           <td class="num">${disp === null ? '—' : fmtN(disp)}</td><td>${falta ? `<span class="badge b-PENDIENTE">Faltan ${fmtN(l.cantidad - disp)}</span>` : ''}</td></tr>`;
       }).join('');
-      $('#cf-res', m).innerHTML = `${incl} productos incluidos · <b>${fmtN(unidades)} unidades</b> a consumir${a ? '' : ' · <b class="bad">elegí el almacén</b>'}${faltan ? ` · <b class="bad">${faltan} con stock insuficiente</b>` : ''}${lineas.some((l) => !l.producto_id) ? ` · ${lineas.filter((l) => !l.producto_id).length} productos de Fudo no están en la app (sincronizá productos)` : ''}`;
+      const nSinG = lineas.filter((l) => l.producto_id && l.gestion_stock === false).length;
+      $('#cf-res', m).innerHTML = `${incl} productos incluidos${nSinG ? ` · ${nSinG} sin gestión de stock (no se consumen)` : ''} · <b>${fmtN(unidades)} unidades</b> a consumir${a ? '' : ' · <b class="bad">elegí el almacén</b>'}${faltan ? ` · <b class="bad">${faltan} con stock insuficiente</b>` : ''}${lineas.some((l) => !l.producto_id) ? ` · ${lineas.filter((l) => !l.producto_id).length} productos de Fudo no están en la app (sincronizá productos)` : ''}`;
       $$('[data-inc]', m).forEach((c) => c.addEventListener('change', () => { lineas[c.dataset.inc].incluir = c.checked; pintar(); }));
       $$('[data-cant]', m).forEach((c) => c.addEventListener('change', () => { lineas[c.dataset.cant].cantidad = Math.max(0, parseInt(c.value, 10) || 0); pintar(); }));
     };
     $('#cf-alm', m).addEventListener('change', pintar);
     if (editable) {
-      $('#cf-all', m).checked = lineas.filter((l) => l.producto_id).every((l) => l.incluir);
-      $('#cf-all', m).addEventListener('change', (e) => { lineas.forEach((l) => { if (l.producto_id) l.incluir = e.target.checked; }); pintar(); });
+      const operables = () => lineas.filter((l) => l.producto_id && l.gestion_stock !== false);
+      $('#cf-all', m).checked = operables().every((l) => l.incluir);
+      $('#cf-all', m).addEventListener('change', (e) => { operables().forEach((l) => { l.incluir = e.target.checked; }); pintar(); });
       $('#cf-excl', m).onclick = () => {
         const c = $('#cf-cat', m).value; if (!c) return;
-        lineas.forEach((l) => { if (l.producto_id && (l.categoria || 'Sin categoría') === c) l.incluir = false; }); pintar();
+        operables().forEach((l) => { if ((l.categoria || 'Sin categoría') === c) l.incluir = false; }); pintar();
       };
       const guardar = () => api('/api/consumos-fudo/' + id, { method: 'PUT', body: {
-        almacen_id: almSel(), observacion: $('#cf-obs', m).value, items: lineas.filter((l) => l.producto_id).map((l) => ({ id: l.id, cantidad: l.cantidad, incluir: l.incluir })) } });
+        almacen_id: almSel(), observacion: $('#cf-obs', m).value, items: operables().map((l) => ({ id: l.id, cantidad: l.cantidad, incluir: l.incluir })) } });
       $('#cf-save', m).onclick = async () => { try { await guardar(); toast('Borrador guardado'); closeModal(); router(); } catch (err) { toast(err.message, true); } };
       $('#cf-anular', m).onclick = async () => {
         if (!confirm('¿Anular esta importación? El período queda libre para volver a importarlo.')) return;
@@ -826,7 +829,7 @@
 
   // ---------- Productos (ADMIN) ----------
   VIEWS.productos = async (main) => {
-    const [productos, fe] = await Promise.all([api('/api/productos'), api('/api/fudo/estado').catch(() => null)]);
+    const [productos, fe] = await Promise.all([api('/api/productos?todos=1'), api('/api/fudo/estado').catch(() => null)]);
     const u = fe && fe.ultimo_productos;
     const fudoHtml = !fe ? '' : !fe.configurado
       ? `<div class="card" style="background:#faf8f5">🔌 <b>Fudo:</b> sincronización no configurada. Cargá <span class="code">FUDO_API_KEY</span> y <span class="code">FUDO_API_SECRET</span> en Render para traer los productos automáticamente.</div>`
@@ -841,6 +844,8 @@
       ${fudoHtml}
       <div class="toolbar">
         <div class="grow"><label>Buscar</label><input id="pr-q" placeholder="Código, nombre o categoría…"></div>
+        <div class="f"><label>Categoría</label><select id="pr-cat"><option value="">Todas</option>${[...new Set(productos.map((p) => p.categoria).filter(Boolean))].sort().map((c) => `<option>${esc(c)}</option>`).join('')}</select></div>
+        <div class="f"><label>Gestión de stock</label><select id="pr-gs"><option value="">Todos</option><option value="si">Con gestión de stock</option><option value="no">Solo maestro (sin gestión)</option></select></div>
         <div class="f"><label>Alerta</label><select id="pr-al"><option value="">Todas</option><option value="any">Con alguna alerta</option><option value="venc">Vencimiento próximo</option><option value="cuid">De cuidado</option><option value="frio">Cadena de frío</option></select></div>
         <label class="check" style="margin-bottom:10px"><input type="checkbox" id="pr-inac"> Ver inactivos</label>
         <div class="spacer"></div>
@@ -850,16 +855,33 @@
       const q = $('#pr-q').value.trim().toLowerCase();
       const al = $('#pr-al').value;
       const inac = $('#pr-inac').checked;
+      const cat = $('#pr-cat').value;
+      const gs = $('#pr-gs').value;
       const rows = productos.filter((p) => (inac || p.activo)
+        && (!cat || p.categoria === cat) && (!gs || (gs === 'si' ? p.gestion_stock : !p.gestion_stock))
         && (!q || `${p.codigo} ${p.nombre} ${p.categoria || ''}`.toLowerCase().includes(q))
         && (!al || (al === 'any' && tieneAlerta(p)) || (al === 'venc' && p.alerta_vencimiento) || (al === 'cuid' && p.alerta_cuidado) || (al === 'frio' && p.alerta_frio)));
-      $('#pr-tbl').innerHTML = rows.length ? `<div class="tbl-wrap"><table><thead><tr><th>Código</th><th>Nombre</th><th>Categoría</th><th>Unidad</th><th>Alertas</th><th>Nota</th><th></th></tr></thead><tbody>
+      $('#pr-tbl').innerHTML = rows.length ? `<div class="tbl-wrap"><table><thead><tr><th>Código</th><th>Nombre</th><th>Categoría</th><th>Unidad</th><th>Stock</th><th>Alertas</th><th>Nota</th><th></th></tr></thead><tbody>
         ${rows.map((p) => `<tr class="${p.activo ? '' : 'inactive'}"><td class="code">${esc(p.codigo)}</td><td>${esc(p.nombre)}${p.fudo_id ? ' <span class="badge b-rol" title="Sincronizado desde Fudo">Fudo</span>' : ''}${p.activo ? '' : ' (inactivo)'}</td><td>${esc(p.categoria || '')}</td><td>${esc(p.unidad)}</td>
+          <td><button class="gs-tog ${p.gestion_stock ? 'on' : ''}" data-gs="${p.id}" title="${p.gestion_stock ? 'Se opera en la app (recepción, consumo, transferencias…). Tocá para pasarlo a solo maestro.' : 'Solo maestro: no se opera. Tocá para activar la gestión de stock.'}">${p.gestion_stock ? '✓ Gestiona' : 'Solo maestro'}</button></td>
           <td>${badgesAlerta(p)}</td><td class="muted">${esc(p.nota_alerta || '')}</td><td class="num"><button class="btn ghost sm" data-ed="${p.id}">Editar</button></td></tr>`).join('')}
-        </tbody></table></div><p class="muted">${rows.length} de ${productos.length} productos</p>` : `<div class="card empty">${productos.length ? 'Sin resultados.' : 'Todavía no hay productos. Cargalos uno a uno o importá el maestro en CSV.'}</div>`;
+        </tbody></table></div><div class="row" style="justify-content:space-between;align-items:center;margin-top:10px"><p class="muted" style="margin:0">${rows.length} de ${productos.length} productos · ${productos.filter((p) => p.gestion_stock).length} con gestión de stock</p>
+          <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn sec sm" id="pr-gs-on">Activar gestión a los ${rows.length} filtrados</button><button class="btn sec sm" id="pr-gs-off">Pasar los ${rows.length} filtrados a solo maestro</button></div></div>` : `<div class="card empty">${productos.length ? 'Sin resultados.' : 'Todavía no hay productos. Cargalos uno a uno o importá el maestro en CSV.'}</div>`;
+      const cambiarGestion = async (ids, valor, desc) => {
+        if (!ids.length) return;
+        if (ids.length > 1 && !confirm(`${valor ? 'Activar la gestión de stock' : 'Pasar a solo maestro'} ${desc}?${valor ? '' : '\n\nDejarán de aparecer en stock, recepción, consumos, transferencias y pedidos. El stock que tengan queda guardado y vuelve a verse si reactivás la gestión.'}`)) return;
+        try {
+          const r = await api('/api/productos/gestion-stock', { method: 'POST', body: { ids, valor } });
+          productos.forEach((p) => { if (ids.includes(p.id)) p.gestion_stock = valor; });
+          toast(`${r.cambiados} ${r.cambiados === 1 ? 'producto actualizado' : 'productos actualizados'}`); pintar();
+        } catch (err) { toast(err.message, true); }
+      };
+      $$('[data-gs]').forEach((b) => b.addEventListener('click', () => { const p = productos.find((x) => x.id == b.dataset.gs); cambiarGestion([p.id], !p.gestion_stock, ''); }));
+      if ($('#pr-gs-on')) $('#pr-gs-on').onclick = () => cambiarGestion(rows.filter((p) => !p.gestion_stock).map((p) => p.id), true, `a ${rows.filter((p) => !p.gestion_stock).length} productos filtrados`);
+      if ($('#pr-gs-off')) $('#pr-gs-off').onclick = () => cambiarGestion(rows.filter((p) => p.gestion_stock).map((p) => p.id), false, `${rows.filter((p) => p.gestion_stock).length} productos filtrados`);
       $$('[data-ed]').forEach((b) => b.addEventListener('click', () => editarProducto(productos.find((p) => p.id == b.dataset.ed))));
     };
-    ['#pr-q', '#pr-al', '#pr-inac'].forEach((s) => $(s).addEventListener('input', pintar));
+    ['#pr-q', '#pr-al', '#pr-inac', '#pr-cat', '#pr-gs'].forEach((s) => $(s).addEventListener('input', pintar));
     $('#pr-new').onclick = () => editarProducto(null);
     if ($('#pr-sync')) $('#pr-sync').onclick = async () => {
       const b = $('#pr-sync'); b.disabled = true; b.textContent = 'Sincronizando…';
@@ -871,17 +893,17 @@
     };
     $('#pr-imp').onclick = importarMaestro;
     $('#pr-tpl').onclick = () => descargarCSV('plantilla_productos.csv', [
-      ['codigo', 'nombre', 'categoria', 'unidad', 'vencimiento_proximo', 'fecha_vencimiento', 'cuidado', 'cadena_frio', 'nota_alerta', 'activo'],
-      ['BEB001', 'Cerveza rubia lata 473ml', 'Bebidas', 'UN', '', '', '', 'SI', 'Mantener refrigerada', 'SI'],
-      ['ALI010', 'Queso cheddar feteado 1kg', 'Alimentos', 'UN', 'SI', '2026-12-15', '', 'SI', '', 'SI'],
-      ['LIM003', 'Lavandina 5L', 'Limpieza', 'UN', '', '', 'SI', '', 'Producto corrosivo', 'SI'],
+      ['codigo', 'nombre', 'categoria', 'unidad', 'vencimiento_proximo', 'fecha_vencimiento', 'cuidado', 'cadena_frio', 'nota_alerta', 'activo', 'gestion_stock'],
+      ['BEB001', 'Cerveza rubia lata 473ml', 'Bebidas', 'UN', '', '', '', 'SI', 'Mantener refrigerada', 'SI', 'SI'],
+      ['ALI010', 'Queso cheddar feteado 1kg', 'Alimentos', 'UN', 'SI', '2026-12-15', '', 'SI', '', 'SI', 'SI'],
+      ['TRA001', 'Negroni (trago de carta)', 'Tragos', 'UN', '', '', '', '', '', 'SI', 'NO'],
     ]);
     pintar();
   };
 
   function editarProducto(p) {
     const n = !p;
-    p = p || { codigo: '', nombre: '', categoria: '', unidad: 'UN', alerta_vencimiento: false, fecha_vencimiento: '', alerta_cuidado: false, alerta_frio: false, nota_alerta: '', activo: true };
+    p = p || { codigo: '', nombre: '', categoria: '', unidad: 'UN', alerta_vencimiento: false, fecha_vencimiento: '', alerta_cuidado: false, alerta_frio: false, nota_alerta: '', activo: true, gestion_stock: true };
     const m = modal(`<h2>${n ? 'Nuevo producto' : 'Editar producto'}</h2>
       ${p.fudo_id ? `<p class="obs" style="margin-top:-6px">🔄 Vinculado a Fudo (ID ${esc(p.fudo_id)}): nombre, categoría y estado se actualizan desde Fudo. Unidad y alertas son solo de esta app.</p>` : ''}
       <form id="f-prod">
@@ -897,6 +919,10 @@
             <label class="check"><input type="checkbox" name="alerta_frio" ${p.alerta_frio ? 'checked' : ''}> ❄ Cadena de frío</label></div>
           <div class="f mt"><label>Nota de la alerta</label><input name="nota_alerta" value="${esc(p.nota_alerta || '')}" maxlength="500" placeholder="Ej.: conservar entre 2 °C y 8 °C"></div>
         </div>
+        <div class="card mt" style="background:#eaf2fa;border-color:#c9d6e3">
+          <label class="check"><input type="checkbox" name="gestion_stock" ${p.gestion_stock ? 'checked' : ''}> <b>Gestión de stock</b></label>
+          <p class="stock-hint" style="margin:6px 0 0 26px">Tildado: se opera en la app (recepción, transferencias, consumos, pedidos) y aparece en Stock, el panel y Vinilito. Destildado: solo figura en este maestro (p. ej. tragos o platos de la carta).</p>
+        </div>
         <label class="check mt"><input type="checkbox" name="activo" ${p.activo ? 'checked' : ''}> Activo</label>
         <div class="form-actions"><button type="button" class="btn sec" data-close>Cancelar</button><button class="btn">Guardar</button></div>
       </form>`);
@@ -906,7 +932,7 @@
       const body = {
         codigo: f.codigo.value, nombre: f.nombre.value, categoria: f.categoria.value, unidad: f.unidad.value,
         alerta_vencimiento: f.alerta_vencimiento.checked, fecha_vencimiento: f.fecha_vencimiento.value || null,
-        alerta_cuidado: f.alerta_cuidado.checked, alerta_frio: f.alerta_frio.checked, nota_alerta: f.nota_alerta.value, activo: f.activo.checked,
+        alerta_cuidado: f.alerta_cuidado.checked, alerta_frio: f.alerta_frio.checked, nota_alerta: f.nota_alerta.value, activo: f.activo.checked, gestion_stock: f.gestion_stock.checked,
       };
       try {
         await api(n ? '/api/productos' : '/api/productos/' + p.id, { method: n ? 'POST' : 'PUT', body });
@@ -926,7 +952,7 @@
     let filas = [];
     const ALIAS = { id: 'id', codigo: 'codigo', cod: 'codigo', sku: 'codigo', nombre: 'nombre', descripcion: 'nombre', producto: 'nombre', categoria: 'categoria', rubro: 'categoria', subcategoria: 'subcategoria', unidad: 'unidad',
       vencimiento_proximo: 'alerta_vencimiento', vencimiento: 'alerta_vencimiento', alerta_vencimiento: 'alerta_vencimiento', fecha_vencimiento: 'fecha_vencimiento', vence: 'fecha_vencimiento',
-      cuidado: 'alerta_cuidado', alerta_cuidado: 'alerta_cuidado', cadena_frio: 'alerta_frio', frio: 'alerta_frio', alerta_frio: 'alerta_frio', nota_alerta: 'nota_alerta', nota: 'nota_alerta', activo: 'activo' };
+      cuidado: 'alerta_cuidado', alerta_cuidado: 'alerta_cuidado', cadena_frio: 'alerta_frio', frio: 'alerta_frio', alerta_frio: 'alerta_frio', nota_alerta: 'nota_alerta', nota: 'nota_alerta', activo: 'activo', gestion_stock: 'gestion_stock', gestiona_stock: 'gestion_stock', stock: 'gestion_stock' };
     const norm = (h) => h.trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[\s-]+/g, '_');
     const fecha = (v) => { v = (v || '').trim(); const d = v.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/); return d ? `${d[3]}-${d[2].padStart(2, '0')}-${d[1].padStart(2, '0')}` : v; };
     $('#imp-file', m).addEventListener('change', async (e) => {
@@ -950,6 +976,7 @@
         o.alerta_frio = (o.alerta_frio || '').toUpperCase();
         o.activo = o.activo === undefined || o.activo === '' ? true : ['SI', 'S', 'X', '1', 'TRUE', 'SÍ'].includes(o.activo.trim().toUpperCase());
         o.fecha_vencimiento = fecha(o.fecha_vencimiento) || null;
+        if (o.gestion_stock !== undefined) o.gestion_stock = o.gestion_stock === '' ? null : ['SI', 'S', 'X', '1', 'TRUE', 'SÍ'].includes(String(o.gestion_stock).trim().toUpperCase());
         if (o.fecha_vencimiento && !o.alerta_vencimiento) o.alerta_vencimiento = '';
         ['alerta_vencimiento', 'alerta_cuidado', 'alerta_frio'].forEach((k) => { o[k] = ['SI', 'S', 'X', '1', 'TRUE', 'SÍ'].includes(o[k]); });
         return o;
