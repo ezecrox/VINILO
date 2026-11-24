@@ -1,0 +1,16 @@
+{
+  "name": "vinilo-almacen",
+  "version": "1.0.0",
+  "description": "Vinilo - Gestión de Almacén (recepción, transferencias, consumo y notas de pedido)",
+  "main": "server.js",
+  "private": true,
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "pg": "^8.13.0"
+  }
+}
