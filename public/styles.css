@@ -183,3 +183,7 @@ tr.inactive td { color: #a8a397; }
 .valbar > div { height: 100%; background: var(--ok); }
 .stock-hint b.bad { color: var(--danger); }
 [hidden] { display: none !important; }
+.cf-BORRADOR { background: #fdf3e1; color: var(--warn); }
+.cf-CONFIRMADA { background: #e7f4ec; color: var(--ok); }
+.cf-ANULADA { background: #efede8; color: #77726a; }
+.stock-hint b.bad, #cf-res b.bad { color: var(--danger); }

@@ -264,4 +264,4 @@ function iniciarSincronizacionAutomatica(pool) {
   }
 }
 
-module.exports = { configurado, sincronizarProveedores, sincronizarProductos, sincronizarTodo, iniciarSincronizacionAutomatica, direccionLegible };
+module.exports = { fudoGet, configurado, sincronizarProveedores, sincronizarProductos, sincronizarTodo, iniciarSincronizacionAutomatica, direccionLegible };

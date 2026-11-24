@@ -189,3 +189,34 @@ CREATE TABLE IF NOT EXISTS fudo_sync_log (
 ALTER TABLE productos ADD COLUMN IF NOT EXISTS fudo_id VARCHAR(20);
 ALTER TABLE productos ADD COLUMN IF NOT EXISTS fudo_sync_en TIMESTAMPTZ;
 CREATE UNIQUE INDEX IF NOT EXISTS idx_prod_fudo ON productos (fudo_id) WHERE fudo_id IS NOT NULL;
+
+-- ===== Consumos importados desde ventas de Fudo =====
+CREATE TABLE IF NOT EXISTS consumo_importaciones (
+  id             SERIAL PRIMARY KEY,
+  desde          TIMESTAMPTZ NOT NULL,
+  hasta          TIMESTAMPTZ NOT NULL,
+  estado         VARCHAR(20) NOT NULL DEFAULT 'BORRADOR' CHECK (estado IN ('BORRADOR','CONFIRMADA','ANULADA')),
+  almacen_id     INT REFERENCES almacenes(id),
+  items_leidos   INT NOT NULL DEFAULT 0,
+  items_cancelados INT NOT NULL DEFAULT 0,
+  observacion    TEXT,
+  movimiento_id  INT REFERENCES movimientos(id),
+  creado_por     INT NOT NULL REFERENCES usuarios(id),
+  creado_en      TIMESTAMPTZ NOT NULL DEFAULT now(),
+  confirmado_por INT REFERENCES usuarios(id),
+  confirmado_en  TIMESTAMPTZ,
+  CHECK (hasta > desde)
+);
+
+CREATE TABLE IF NOT EXISTS consumo_import_items (
+  id              SERIAL PRIMARY KEY,
+  importacion_id  INT NOT NULL REFERENCES consumo_importaciones(id) ON DELETE CASCADE,
+  fudo_product_id VARCHAR(20),
+  producto_id     INT REFERENCES productos(id),      -- NULL si el producto de Fudo no está en la app
+  nombre_fudo     VARCHAR(200),
+  cantidad_vendida NUMERIC(12,3) NOT NULL DEFAULT 0,
+  cantidad        INT NOT NULL DEFAULT 0 CHECK (cantidad >= 0),  -- a consumir (editable)
+  incluir         BOOLEAN NOT NULL DEFAULT TRUE
+);
+CREATE INDEX IF NOT EXISTS idx_cii_imp ON consumo_import_items (importacion_id);
+CREATE INDEX IF NOT EXISTS idx_ci_estado ON consumo_importaciones (estado, hasta);

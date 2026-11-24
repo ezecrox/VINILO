@@ -160,6 +160,7 @@
     productos: '<path d="M3 12.6V4.5A1.5 1.5 0 0 1 4.5 3h8.1a1.5 1.5 0 0 1 1 .4l7 7a1.5 1.5 0 0 1 0 2.1l-8.1 8.1a1.5 1.5 0 0 1-2.1 0l-7-7a1.5 1.5 0 0 1-.4-1Z"/><circle cx="8" cy="8" r="1.5"/>',
     almacenes: '<path d="M3 21V9l9-5 9 5v12"/><path d="M7 21v-8h10v8"/><path d="M7 17h10"/>',
     usuarios: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.6a3.5 3.5 0 0 1 0 6.8"/><path d="M18.5 14.5a6.5 6.5 0 0 1 3 5.5"/>',
+    'consumos-fudo': '<path d="M6 2h12v20l-3-2-3 2-3-2-3 2V2Z"/><path d="M9 7h6M9 11h6M9 15h4"/>',
     salir: '<path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3"/><path d="M10 16l-4-4 4-4"/><path d="M6 12h10"/>',
     clave: '<circle cx="8" cy="15" r="4"/><path d="m11 12 9-9"/><path d="m17 6 3 3"/>',
   };
@@ -178,6 +179,7 @@
     { id: 'recepcion', lbl: 'Recepción', ok: () => puede('recibir') },
     { id: 'transferencia', lbl: 'Transferencia', ok: () => puede('transferir') },
     { id: 'consumo', lbl: 'Consumo', ok: () => puede('consumir') },
+    { id: 'consumos-fudo', lbl: 'Consumos desde Fudo', ok: () => puede('consumir') || puede('verMovimientos'), pillCf: true },
     { id: 'ajuste', lbl: 'Ajuste de inventario', ok: () => puede('ajustar') },
     { id: 'movimientos', lbl: 'Movimientos', ok: () => puede('verMovimientos') },
     { sec: 'Parametrización', ok: () => puede('parametrizar') },
@@ -189,7 +191,7 @@
   function renderShell() {
     const links = NAV.filter((n) => !n.ok || n.ok()).map((n) => n.sec
       ? `<div class="sec">${n.sec}</div>`
-      : `<a class="nav" href="#/${n.id}" data-nav="${n.id}">${icono(n.id)}<span class="lbl">${n.lbl}</span>${n.pill ? '<span class="pill" id="pill-ped" hidden></span>' : ''}${n.pillOc ? '<span class="pill" id="pill-oc" hidden></span>' : ''}</a>`).join('');
+      : `<a class="nav" href="#/${n.id}" data-nav="${n.id}">${icono(n.id)}<span class="lbl">${n.lbl}</span>${n.pill ? '<span class="pill" id="pill-ped" hidden></span>' : ''}${n.pillOc ? '<span class="pill" id="pill-oc" hidden></span>' : ''}${n.pillCf ? '<span class="pill" id="pill-cf" hidden></span>' : ''}</a>`).join('');
     $('#app').innerHTML = `
       <div class="topbar"><button id="menu-btn" aria-label="Menú">☰</button><span class="logo-tile sm"><img src="/logo.png" alt=""></span><b>VINILO</b></div>
       <div class="layout">
@@ -213,6 +215,12 @@
         const pend = await api('/api/pedidos?estado=PENDIENTE');
         const pill = $('#pill-ped');
         if (pill) { pill.textContent = pend.length; pill.hidden = pend.length === 0; }
+      }
+      const pillCf = $('#pill-cf');
+      if (pillCf && puede('consumir')) {
+        const cf = await api('/api/consumos-fudo');
+        const n = cf.importaciones.filter((i) => i.estado === 'BORRADOR').length;
+        pillCf.textContent = n; pillCf.hidden = n === 0;
       }
       const pillOc = $('#pill-oc');
       if (pillOc) {
@@ -468,6 +476,135 @@
   VIEWS.transferencia = movimientoView('TRANSFERENCIA');
   VIEWS.consumo = movimientoView('CONSUMO');
   VIEWS.ajuste = movimientoView('AJUSTE');
+
+
+  // ---------- Consumos desde ventas de Fudo ----------
+  const aInputLocal = (d) => { const x = new Date(d); x.setMinutes(x.getMinutes() - x.getTimezoneOffset()); return x.toISOString().slice(0, 16); };
+  const CF_EST = { BORRADOR: 'Borrador', CONFIRMADA: 'Confirmada', ANULADA: 'Anulada' };
+
+  VIEWS['consumos-fudo'] = async (main) => {
+    const d = await api('/api/consumos-fudo');
+    const puedeImp = puede('consumir');
+    const ult = d.ultimo;
+    const ahora = new Date(); ahora.setSeconds(0, 0);
+    const desdeDef = ult ? new Date(ult.hasta) : (() => { const x = new Date(); x.setDate(x.getDate() - 1); x.setHours(6, 0, 0, 0); return x; })();
+    main.innerHTML = `
+      <h1>Consumos desde Fudo</h1>
+      <p class="sub">Trae las unidades vendidas en Fudo en un período y las deja en <b>borrador</b> para elegir el almacén, revisar y confirmar. Al confirmar se registra un <b>Consumo</b> y se descuenta el stock.</p>
+      ${!d.configurado ? '<div class="card" style="background:#faf8f5">🔌 La integración con Fudo no está configurada (FUDO_API_KEY / FUDO_API_SECRET en Render).</div>' : ''}
+      ${puedeImp && d.configurado ? `<div class="card">
+        <h2>Importar ventas</h2>
+        <p class="stock-hint" style="margin:-6px 0 12px">${ult ? `Último período importado: <b>${fmtFecha(ult.desde)} → ${fmtFecha(ult.hasta)}</b> (#${ult.id}, ${CF_EST[ult.estado].toLowerCase()}). Para no superponer, el nuevo período empieza ahí.` : 'Todavía no se importó ningún período.'}</p>
+        <div class="row">
+          <div class="f"><label>Desde</label><input type="datetime-local" id="cf-desde" value="${aInputLocal(desdeDef)}"></div>
+          <div class="f"><label>Hasta</label><input type="datetime-local" id="cf-hasta" value="${aInputLocal(ahora)}"></div>
+          <div><button class="btn" id="cf-imp">Importar</button></div>
+        </div>
+        <div class="row mt" style="gap:8px">
+          <span class="stock-hint">Atajos:</span>
+          ${ult ? '<button class="btn ghost sm" data-pre="ult">Desde el último hasta ahora</button>' : ''}
+          <button class="btn ghost sm" data-pre="jornada">Jornada de ayer (06:00 a 06:00)</button>
+          <button class="btn ghost sm" data-pre="semana">Últimos 7 días</button>
+        </div>
+      </div>` : ''}
+      <h2 class="mt">Importaciones</h2>
+      ${d.importaciones.length ? `<div class="tbl-wrap"><table><thead><tr><th>#</th><th>Período</th><th>Estado</th><th>Almacén</th><th class="num">Productos</th><th class="num">Unidades</th><th class="num">Sin vincular</th><th>Importó</th><th></th></tr></thead><tbody>
+        ${d.importaciones.map((i) => `<tr class="${i.estado === 'ANULADA' ? 'inactive' : ''}"><td><b>#${i.id}</b></td><td>${fmtFecha(i.desde)} → ${fmtFecha(i.hasta)}</td>
+          <td><span class="badge cf-${i.estado}">${CF_EST[i.estado]}</span></td><td>${esc(i.almacen || (i.estado === 'BORRADOR' ? '— a definir —' : ''))}</td>
+          <td class="num">${i.lineas}</td><td class="num">${fmtN(i.unidades)}</td><td class="num ${i.sin_vincular ? 'stock-hint bad' : ''}">${i.sin_vincular || ''}</td>
+          <td>${esc(i.creado_por)}</td><td class="num"><button class="btn ghost sm" data-ver="${i.id}">${i.estado === 'BORRADOR' && puedeImp ? 'Revisar' : 'Ver'}</button></td></tr>`).join('')}
+        </tbody></table></div>` : '<div class="card empty">Todavía no hay importaciones.</div>'}`;
+    $$('[data-ver]').forEach((b) => b.addEventListener('click', () => verConsumoFudo(Number(b.dataset.ver))));
+    $$('[data-pre]').forEach((b) => b.addEventListener('click', () => {
+      const h = new Date(); h.setSeconds(0, 0);
+      let de = new Date(h);
+      if (b.dataset.pre === 'ult') de = new Date(ult.hasta);
+      if (b.dataset.pre === 'jornada') { de.setDate(de.getDate() - 1); de.setHours(6, 0, 0, 0); h.setTime(de.getTime() + 24 * 3600 * 1000); }
+      if (b.dataset.pre === 'semana') de.setDate(de.getDate() - 7);
+      $('#cf-desde').value = aInputLocal(de); $('#cf-hasta').value = aInputLocal(h);
+    }));
+    if ($('#cf-imp')) $('#cf-imp').onclick = async () => {
+      const desde = $('#cf-desde').value, hasta = $('#cf-hasta').value;
+      if (!desde || !hasta) return toast('Completá desde y hasta', true);
+      const btn = $('#cf-imp'); btn.disabled = true; btn.textContent = 'Leyendo ventas de Fudo…';
+      try {
+        const r = await api('/api/consumos-fudo/importar', { method: 'POST', body: { desde: new Date(desde).toISOString(), hasta: new Date(hasta).toISOString() } });
+        toast(`Importación #${r.id}: ${r.productos} productos vendidos${r.sin_vincular ? ` (${r.sin_vincular} sin vincular)` : ''}`);
+        await router(); actualizarPill();
+        verConsumoFudo(r.id);
+      } catch (err) { toast(err.message, true); btn.disabled = false; btn.textContent = 'Importar'; }
+    };
+  };
+
+  async function verConsumoFudo(id) {
+    let imp;
+    try { imp = await api('/api/consumos-fudo/' + id); } catch (err) { return toast(err.message, true); }
+    const editable = imp.estado === 'BORRADOR' && puede('consumir');
+    const lineas = imp.items.map((i) => ({ ...i }));
+    const cats = [...new Set(lineas.filter((l) => l.producto_id).map((l) => l.categoria || 'Sin categoría'))].sort();
+    const m = modal(`
+      <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap"><h2 style="margin:0">Consumo desde Fudo #${imp.id}</h2><span class="badge cf-${imp.estado}">${CF_EST[imp.estado]}</span></div>
+      <p class="muted" style="margin-top:8px">Ventas del <b>${fmtFecha(imp.desde)}</b> al <b>${fmtFecha(imp.hasta)}</b> · ${fmtN(imp.items_leidos)} ítems leídos${imp.items_cancelados ? `, ${imp.items_cancelados} cancelados descartados` : ''}<br>
+        Importó ${esc(imp.creado_por_nombre)} ${fmtFecha(imp.creado_en)}${imp.confirmado_en ? ` · Confirmó ${esc(imp.confirmado_por_nombre)} ${fmtFecha(imp.confirmado_en)} · Movimiento #${imp.movimiento_id}` : ''}</p>
+      <div class="row">
+        <div class="f"><label>Almacén donde se consumió *</label><select id="cf-alm" ${editable ? '' : 'disabled'}>${optAlmacenes(imp.almacen_id || '', { vacio: 'Seleccionar…' })}</select></div>
+        ${editable ? `<div class="f"><label>Excluir una categoría completa</label><div style="display:flex;gap:6px"><select id="cf-cat"><option value="">Elegir…</option>${cats.map((c) => `<option>${esc(c)}</option>`).join('')}</select><button class="btn sec sm" id="cf-excl" type="button">Excluir</button></div></div>` : ''}
+      </div>
+      <p class="stock-hint" id="cf-res" style="margin:12px 0 6px"></p>
+      <div class="tbl-wrap" style="max-height:48vh;overflow:auto"><table><thead><tr><th>${editable ? '<input type="checkbox" id="cf-all" title="Todos">' : ''}</th><th>Producto</th><th>Categoría</th><th class="num">Vendido</th><th class="num">A consumir</th><th class="num">Stock en almacén</th><th></th></tr></thead><tbody id="cf-body"></tbody></table></div>
+      ${editable ? `<label class="check mt"><input type="checkbox" id="cf-lim"> Si falta stock, consumir solo lo disponible (la diferencia queda anotada en el movimiento)</label>` : ''}
+      <div class="f mt"><label>Observaciones</label><input id="cf-obs" maxlength="600" value="${esc(imp.observacion || '')}" ${editable ? '' : 'disabled'}></div>
+      <div class="form-actions"><button class="btn sec" data-close>Cerrar</button>
+        ${editable ? '<button class="btn danger" id="cf-anular">Anular</button><button class="btn sec" id="cf-save">Guardar borrador</button><button class="btn ok" id="cf-conf">Confirmar consumo</button>' : ''}</div>`, { wide: true });
+    const almSel = () => Number($('#cf-alm', m).value) || null;
+    const pintar = () => {
+      const a = almSel();
+      let unidades = 0, faltan = 0, incl = 0;
+      $('#cf-body', m).innerHTML = lineas.map((l, i) => {
+        const vinc = !!l.producto_id;
+        const disp = a && vinc ? (l.stock[a] || 0) : null;
+        const falta = vinc && l.incluir && disp !== null && l.cantidad > disp;
+        if (vinc && l.incluir) { unidades += l.cantidad; incl++; if (falta) faltan++; }
+        return `<tr class="${!vinc || !l.incluir ? 'inactive' : ''}">
+          <td>${editable && vinc ? `<input type="checkbox" data-inc="${i}" ${l.incluir ? 'checked' : ''}>` : ''}</td>
+          <td>${vinc ? `<span class="code">${esc(l.codigo)}</span> ${esc(l.nombre)} ${badgesAlerta(l)}` : `${esc(l.nombre_fudo)} <span class="badge b-RECHAZADO" title="Producto de Fudo ${esc(l.fudo_product_id)} que no está en la app">No está en la app</span>`}</td>
+          <td class="muted">${esc(l.categoria || '')}</td><td class="num">${fmtN(l.cantidad_vendida)}</td>
+          <td class="num">${editable && vinc ? `<input type="number" min="0" step="1" data-cant="${i}" value="${l.cantidad}" style="width:90px;text-align:right">` : fmtN(vinc && l.incluir ? l.cantidad : 0)}</td>
+          <td class="num">${disp === null ? '—' : fmtN(disp)}</td><td>${falta ? `<span class="badge b-PENDIENTE">Faltan ${fmtN(l.cantidad - disp)}</span>` : ''}</td></tr>`;
+      }).join('');
+      $('#cf-res', m).innerHTML = `${incl} productos incluidos · <b>${fmtN(unidades)} unidades</b> a consumir${a ? '' : ' · <b class="bad">elegí el almacén</b>'}${faltan ? ` · <b class="bad">${faltan} con stock insuficiente</b>` : ''}${lineas.some((l) => !l.producto_id) ? ` · ${lineas.filter((l) => !l.producto_id).length} productos de Fudo no están en la app (sincronizá productos)` : ''}`;
+      $$('[data-inc]', m).forEach((c) => c.addEventListener('change', () => { lineas[c.dataset.inc].incluir = c.checked; pintar(); }));
+      $$('[data-cant]', m).forEach((c) => c.addEventListener('change', () => { lineas[c.dataset.cant].cantidad = Math.max(0, parseInt(c.value, 10) || 0); pintar(); }));
+    };
+    $('#cf-alm', m).addEventListener('change', pintar);
+    if (editable) {
+      $('#cf-all', m).checked = lineas.filter((l) => l.producto_id).every((l) => l.incluir);
+      $('#cf-all', m).addEventListener('change', (e) => { lineas.forEach((l) => { if (l.producto_id) l.incluir = e.target.checked; }); pintar(); });
+      $('#cf-excl', m).onclick = () => {
+        const c = $('#cf-cat', m).value; if (!c) return;
+        lineas.forEach((l) => { if (l.producto_id && (l.categoria || 'Sin categoría') === c) l.incluir = false; }); pintar();
+      };
+      const guardar = () => api('/api/consumos-fudo/' + id, { method: 'PUT', body: {
+        almacen_id: almSel(), observacion: $('#cf-obs', m).value, items: lineas.filter((l) => l.producto_id).map((l) => ({ id: l.id, cantidad: l.cantidad, incluir: l.incluir })) } });
+      $('#cf-save', m).onclick = async () => { try { await guardar(); toast('Borrador guardado'); closeModal(); router(); } catch (err) { toast(err.message, true); } };
+      $('#cf-anular', m).onclick = async () => {
+        if (!confirm('¿Anular esta importación? El período queda libre para volver a importarlo.')) return;
+        try { await api(`/api/consumos-fudo/${id}/anular`, { method: 'POST' }); toast('Importación anulada'); closeModal(); router(); actualizarPill(); } catch (err) { toast(err.message, true); }
+      };
+      $('#cf-conf', m).onclick = async () => {
+        if (!almSel()) return toast('Elegí el almacén donde se consumió', true);
+        const nombre = S.almacenes.find((a) => a.id === almSel()).nombre;
+        if (!confirm(`Se descontarán del stock de ${nombre} las cantidades incluidas. ¿Confirmar?`)) return;
+        try {
+          await guardar();
+          const r = await api(`/api/consumos-fudo/${id}/confirmar`, { method: 'POST', body: { almacen_id: almSel(), limitar_a_stock: $('#cf-lim', m).checked } });
+          toast(`Consumo registrado (movimiento #${r.movimiento_id})${r.faltantes.length ? ` · ${r.faltantes.length} productos sin stock suficiente` : ''}`);
+          closeModal(); router(); actualizarPill();
+        } catch (err) { toast(err.message, true); }
+      };
+    }
+    pintar();
+  }
 
   // ---------- Movimientos ----------
   VIEWS.movimientos = async (main) => {

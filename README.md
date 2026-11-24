@@ -100,6 +100,16 @@ Se sincroniza al arrancar, cada `FUDO_SYNC_MINUTES` minutos (30 por defecto; con
 
 La API de Fudo requiere plan Pro o superior y el usuario de la apiKey debe tener permiso para ver proveedores y productos (si no, Fudo responde 403).
 
+## Consumos desde las ventas de Fudo
+
+En **Operaciones → Consumos desde Fudo** (ADMIN y RECEPTOR) se elige un período (desde / hasta, con atajos como "jornada de ayer 06:00 a 06:00") y la app trae de Fudo los ítems vendidos, descarta los cancelados y suma las unidades por producto.
+
+- Se muestra el **último período importado** y el nuevo empieza ahí; si un período se superpone con otra importación (no anulada) se rechaza.
+- La importación queda en **borrador**: se elige el **almacén** donde se consumió, se ve el stock disponible, se pueden corregir cantidades, excluir productos o categorías enteras (p. ej. platos que no llevan stock) y guardar.
+- Al **confirmar** se registra un movimiento **Consumo** en ese almacén. Si falta stock, se puede optar por consumir solo lo disponible (la diferencia queda anotada).
+- Los productos vendidos que no están en la app aparecen como "No está en la app" y no se consumen; antes de importar se sincronizan los productos.
+- Un borrador se puede **anular** y el período queda libre para importarlo de nuevo.
+
 ## Ejecutar localmente
 
 ```bash

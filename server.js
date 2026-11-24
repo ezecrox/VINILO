@@ -632,6 +632,9 @@ route('POST', '/api/fudo/sincronizar', async ({ user, url }) => {
   try { return await fn(pool, 'MANUAL'); } catch (e) { fail(502, e.message); }
 });
 
+// ---------- Consumos desde ventas de Fudo ----------
+require('./src/consumos')({ route, query, tx, fail, permitir, registrarMovimiento, almacenActivo, isTrue, toInt, str, pool });
+
 // ---------- Panel ----------
 route('GET', '/api/dashboard', async ({ user }) => {
   const res = { rol: user.rol, pedidos_pendientes: 0 };
