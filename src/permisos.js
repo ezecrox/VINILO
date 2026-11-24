@@ -12,6 +12,7 @@ const CATALOGO = [
   { grupo: 'Operaciones', clave: 'transferir', menu: 'Transferencia', desc: 'Transferir entre almacenes' },
   { grupo: 'Operaciones', clave: 'consumir', menu: 'Consumo / Consumos desde Fudo', desc: 'Registrar consumos e importar ventas de Fudo' },
   { grupo: 'Operaciones', clave: 'ajustar', menu: 'Ajuste de inventario', desc: 'Ajustar stock por conteo físico' },
+  { grupo: 'Operaciones', clave: 'producir', menu: 'Producción', desc: 'Producir productos con receta (descuenta insumos y suma lo producido)' },
   { grupo: 'Operaciones', clave: 'verMovimientos', menu: 'Movimientos', desc: 'Ver el historial de movimientos' },
   { grupo: 'Parametrización', clave: 'productos', menu: 'Productos', desc: 'Maestro de productos, alertas e importación' },
   { grupo: 'Parametrización', clave: 'almacenes', menu: 'Almacenes', desc: 'Alta y edición de almacenes' },

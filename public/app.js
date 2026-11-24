@@ -12,7 +12,7 @@
   const fmtDia = (d) => (d ? d.split('-').reverse().join('/') : '');
   const puede = (p) => S.permisos.includes(p);
   const hoyISO = () => new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
-  const TIPO_LBL = { RECEPCION: 'Recepción', TRANSFERENCIA: 'Transferencia', CONSUMO: 'Consumo', AJUSTE: 'Ajuste' };
+  const TIPO_LBL = { RECEPCION: 'Recepción', TRANSFERENCIA: 'Transferencia', CONSUMO: 'Consumo', AJUSTE: 'Ajuste', PRODUCCION: 'Producción' };
   const ROL_LBL = { ADMIN: 'Administrador', RECEPTOR: 'Receptor', ENCARGADO: 'Encargado', REQUIRENTE: 'Requirente', PROVEEDOR: 'Proveedor' };
   const OC_EST = { BORRADOR: 'Borrador', CONFIRMADA: 'Confirmada', PARCIAL: 'Recepción parcial', RECIBIDA: 'Recibida', CERRADA: 'Cerrada', ANULADA: 'Anulada' };
 
@@ -171,6 +171,7 @@
     almacenes: '<path d="M3 21V9l9-5 9 5v12"/><path d="M7 21v-8h10v8"/><path d="M7 17h10"/>',
     usuarios: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.6a3.5 3.5 0 0 1 0 6.8"/><path d="M18.5 14.5a6.5 6.5 0 0 1 3 5.5"/>',
     'consumos-fudo': '<path d="M6 2h12v20l-3-2-3 2-3-2-3 2V2Z"/><path d="M9 7h6M9 11h6M9 15h4"/>',
+    produccion: '<path d="M6 13h12v6a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2v-6Z"/><path d="M4 13h16"/><path d="M8 9c0-2 1.5-2 1.5-4M12 9c0-2 1.5-2 1.5-4M16 9c0-2 1.5-2 1.5-4"/>',
     salir: '<path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3"/><path d="M10 16l-4-4 4-4"/><path d="M6 12h10"/>',
     clave: '<circle cx="8" cy="15" r="4"/><path d="m11 12 9-9"/><path d="m17 6 3 3"/>',
   };
@@ -185,11 +186,12 @@
     { sec: 'Compras', ok: () => puede('compras') || puede('verCompras') || puede('proveedores') },
     { id: 'compras', lbl: 'Pedidos a proveedores', ok: () => puede('compras') || puede('verCompras'), pillOc: true },
     { id: 'proveedores', lbl: 'Proveedores', ok: () => puede('proveedores') },
-    { sec: 'Operaciones', ok: () => ['recibir', 'transferir', 'consumir', 'ajustar', 'verMovimientos'].some(puede) },
+    { sec: 'Operaciones', ok: () => ['recibir', 'transferir', 'consumir', 'ajustar', 'producir', 'verMovimientos'].some(puede) },
     { id: 'recepcion', lbl: 'Recepción', ok: () => puede('recibir') },
     { id: 'transferencia', lbl: 'Transferencia', ok: () => puede('transferir') },
     { id: 'consumo', lbl: 'Consumo', ok: () => puede('consumir') },
     { id: 'consumos-fudo', lbl: 'Consumos desde Fudo', ok: () => puede('consumir') || puede('verMovimientos'), pillCf: true },
+    { id: 'produccion', lbl: 'Producción', ok: () => puede('producir') },
     { id: 'ajuste', lbl: 'Ajuste de inventario', ok: () => puede('ajustar') },
     { id: 'movimientos', lbl: 'Movimientos', ok: () => puede('verMovimientos') },
     { sec: 'Parametrización', ok: () => puede('productos') || puede('almacenes') || puede('usuarios') },
@@ -660,6 +662,117 @@
     pintar();
   }
 
+
+  // ---------- Receta (insumos por tanda) ----------
+  async function editarReceta(prod, productos, nuevo = false) {
+    const rec = await api('/api/recetas/' + prod.id);
+    const insumosPosibles = productos.filter((x) => x.gestion_stock && x.activo && x.id !== prod.id);
+    const lineas = rec.insumos.map((i) => ({ insumo_id: i.insumo_id, cantidad: i.cantidad, nombre: i.nombre, codigo: i.codigo, unidad: i.unidad }));
+    const m = modal(`<h2>Receta · ${esc(prod.nombre)}</h2>
+      ${nuevo ? '<p class="obs" style="margin-top:-6px">Activaste la gestión de producción: cargá la receta para poder producirlo.</p>' : ''}
+      <div class="row"><div class="f s" style="flex-basis:200px"><label>Rinde por tanda (unidades de ${esc(prod.nombre)}) *</label><input type="number" id="rc-rend" min="1" step="1" value="${rec.rendimiento || 1}"></div></div>
+      <h2 class="mt" style="font-size:1rem">Insumos por tanda</h2>
+      <div class="row"><div class="f w"><label>Insumo (productos con gestión de stock)</label><input id="rc-prod" list="rc-list" autocomplete="off" placeholder="Buscá el insumo…">
+        <datalist id="rc-list">${insumosPosibles.map((x) => `<option value="${esc(x.codigo)} — ${esc(x.nombre)}"></option>`).join('')}</datalist></div>
+        <div class="f s"><label>Cantidad</label><input id="rc-cant" type="number" min="1" step="1"></div>
+        <div><button class="btn sec" id="rc-add" type="button">Agregar</button></div></div>
+      <div id="rc-lines" class="mt"></div>
+      <div class="f mt"><label>Instrucciones (opcional)</label><textarea id="rc-ins" maxlength="2000" placeholder="Pasos, tiempos, temperatura…">${esc(rec.instrucciones || '')}</textarea></div>
+      <div class="form-actions"><button class="btn sec" data-close>Cancelar</button><button class="btn" id="rc-ok">Guardar receta</button></div>`, { wide: true });
+    const buscar = (t) => { const c = t.split(' — ')[0].trim().toUpperCase(); return insumosPosibles.find((x) => x.codigo.toUpperCase() === c); };
+    const pintar = () => {
+      $('#rc-lines', m).innerHTML = lineas.length ? `<div class="tbl-wrap"><table><thead><tr><th>Insumo</th><th class="num" style="width:140px">Por tanda</th><th></th></tr></thead><tbody>
+        ${lineas.map((l, i) => `<tr><td><span class="code">${esc(l.codigo)}</span> ${esc(l.nombre)}</td><td class="num"><input type="number" min="1" step="1" value="${l.cantidad}" data-i="${i}" style="width:100px;text-align:right"></td>
+          <td class="num"><button class="btn ghost sm" data-del="${i}">✕</button></td></tr>`).join('')}</tbody></table></div>` : '<p class="muted">Agregá los insumos que lleva una tanda.</p>';
+      $$('#rc-lines [data-i]', m).forEach((inp) => inp.addEventListener('change', () => { lineas[inp.dataset.i].cantidad = Math.max(1, parseInt(inp.value, 10) || 1); }));
+      $$('#rc-lines [data-del]', m).forEach((b) => b.addEventListener('click', () => { lineas.splice(Number(b.dataset.del), 1); pintar(); }));
+    };
+    const agregar = () => {
+      const x = buscar($('#rc-prod', m).value); const c = parseInt($('#rc-cant', m).value, 10);
+      if (!x) return toast('Elegí un insumo de la lista', true);
+      if (!Number.isInteger(c) || c < 1) return toast('Ingresá una cantidad válida', true);
+      const ex = lineas.find((l) => l.insumo_id === x.id);
+      if (ex) ex.cantidad += c; else lineas.push({ insumo_id: x.id, cantidad: c, nombre: x.nombre, codigo: x.codigo, unidad: x.unidad });
+      $('#rc-prod', m).value = ''; $('#rc-cant', m).value = ''; $('#rc-prod', m).focus(); pintar();
+    };
+    $('#rc-add', m).onclick = agregar;
+    $('#rc-prod', m).addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); $('#rc-cant', m).focus(); } });
+    $('#rc-cant', m).addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); agregar(); } });
+    $('#rc-ok', m).onclick = async () => {
+      try {
+        await api('/api/recetas/' + prod.id, { method: 'PUT', body: { rendimiento: parseInt($('#rc-rend', m).value, 10), instrucciones: $('#rc-ins', m).value,
+          insumos: lineas.map((l) => ({ insumo_id: l.insumo_id, cantidad: l.cantidad })) } });
+        closeModal(); toast('Receta guardada'); router();
+      } catch (err) { toast(err.message, true); }
+    };
+    pintar();
+  }
+
+  // ---------- Producción ----------
+  VIEWS.produccion = async (main) => {
+    const d = await api('/api/produccion');
+    const listos = d.productos.filter((p) => p.receta && p.receta.insumos.length);
+    const sinReceta = d.productos.filter((p) => !p.receta || !p.receta.insumos.length);
+    main.innerHTML = `<h1>Producción</h1>
+      <p class="sub">Elaborá productos a partir de su receta: se descuentan los insumos y se suma lo producido en el mismo almacén.</p>
+      ${!d.productos.length ? `<div class="card empty">No hay productos con <b>Gestión de producción</b>.${puede('productos') ? ' Activala en Productos (ficha del producto) y cargale la receta.' : ''}</div>` : `
+      <div class="card">
+        <div class="row">
+          <div class="f w"><label>Producto a producir *</label><select id="pd-prod"><option value="">Seleccionar…</option>${listos.map((p) => `<option value="${p.id}">${esc(p.nombre)} — rinde ${fmtN(p.receta.rendimiento)} por tanda</option>`).join('')}</select></div>
+          <div class="f"><label>Almacén *</label><select id="pd-alm">${optAlmacenes(S.almacenes.length === 1 ? S.almacenes[0].id : '', { vacio: 'Seleccionar…' })}</select></div>
+          <div class="f s"><label>Tandas *</label><input type="number" id="pd-tandas" min="1" step="1" value="1"></div>
+        </div>
+        ${sinReceta.length ? `<p class="stock-hint mt">Sin receta (no se pueden producir todavía): ${sinReceta.map((p) => esc(p.nombre)).join(', ')}.</p>` : ''}
+        <div id="pd-det" class="mt"></div>
+      </div>`}
+      ${d.ultimas.length ? `<h2 class="mt">Últimas producciones</h2><div class="tbl-wrap"><table><thead><tr><th>Fecha</th><th>Producto</th><th class="num">Producido</th><th>Almacén</th><th>Usuario</th><th></th></tr></thead><tbody>
+        ${d.ultimas.map((u) => `<tr><td>${fmtFecha(u.fecha)}</td><td>${esc(u.producto || '')}</td><td class="num">+${fmtN(u.producido)}</td><td>${esc(u.almacen)}</td><td>${esc(u.usuario)}</td>
+          <td class="num"><button class="btn ghost sm" data-ver="${u.id}">Ver</button></td></tr>`).join('')}</tbody></table></div>` : ''}`;
+    $$('[data-ver]').forEach((b) => b.addEventListener('click', () => verMovimiento(b.dataset.ver)));
+    if (!listos.length) return;
+    let reales = {};
+    const pintar = () => {
+      const p = listos.find((x) => String(x.id) === $('#pd-prod').value);
+      const alm = Number($('#pd-alm').value) || null;
+      const tandas = Math.max(0, parseInt($('#pd-tandas').value, 10) || 0);
+      if (!p) { $('#pd-det').innerHTML = '<p class="muted">Elegí qué producir.</p>'; return; }
+      let falta = false;
+      const filas = p.receta.insumos.map((i) => {
+        const teorico = i.cantidad * tandas;
+        const real = reales[i.insumo_id] ?? teorico;
+        const disp = alm ? ((d.stock[i.insumo_id] || {})[alm] || 0) : null;
+        const f = disp !== null && real > disp; if (f) falta = true;
+        return `<tr><td><span class="code">${esc(i.codigo)}</span> ${esc(i.nombre)}</td><td class="num">${fmtN(i.cantidad)}</td><td class="num">${fmtN(teorico)}</td>
+          <td class="num"><input type="number" min="0" step="1" data-real="${i.insumo_id}" value="${real}" style="width:100px;text-align:right"></td>
+          <td class="num ${f ? 'stock-hint bad' : ''}">${disp === null ? '—' : fmtN(disp)}</td><td>${f ? `<span class="badge b-RECHAZADO">Faltan ${fmtN(real - disp)}</span>` : disp !== null ? '<span class="badge b-COMPLETADO">OK</span>' : ''}</td></tr>`;
+      }).join('');
+      const producir = tandas * p.receta.rendimiento;
+      $('#pd-det').innerHTML = `
+        <div class="pd-res"><span>Vas a producir</span><b>${fmtN(producir)}</b><span>${esc(p.unidad)} de ${esc(p.nombre)}</span>
+          <label style="margin-left:auto">Cantidad real obtenida <input type="number" id="pd-real" min="1" step="1" value="${producir}" style="width:110px;display:inline-block;margin-left:6px"></label></div>
+        <div class="tbl-wrap mt"><table><thead><tr><th>Insumo</th><th class="num">Por tanda</th><th class="num">Según receta</th><th class="num">Consumo real</th><th class="num">Stock ${alm ? 'en almacén' : ''}</th><th></th></tr></thead><tbody>${filas}</tbody></table></div>
+        ${p.receta.instrucciones ? `<p class="obs mt">📋 ${esc(p.receta.instrucciones)}</p>` : ''}
+        <div class="f mt"><label>Observaciones</label><input id="pd-obs" maxlength="1000" placeholder="Ej.: lote de la mañana, merma por…"></div>
+        <div class="form-actions"><button class="btn ok" id="pd-ok" ${!alm || !tandas || falta ? 'disabled' : ''}>Producir</button></div>
+        ${!alm ? '<p class="stock-hint" style="text-align:right">Elegí el almacén.</p>' : falta ? '<p class="stock-hint bad" style="text-align:right">No alcanzan los insumos en ese almacén.</p>' : ''}`;
+      $$('[data-real]').forEach((inp) => inp.addEventListener('change', () => { reales[inp.dataset.real] = Math.max(0, parseInt(inp.value, 10) || 0); pintar(); }));
+      $('#pd-ok').onclick = async () => {
+        const cant = parseInt($('#pd-real').value, 10);
+        if (!confirm(`Producir ${fmtN(cant)} ${p.unidad} de ${p.nombre} en ${S.almacenes.find((a) => a.id === alm).nombre}?`)) return;
+        $('#pd-ok').disabled = true;
+        try {
+          const r = await api('/api/produccion', { method: 'POST', body: { producto_id: p.id, almacen_id: alm, tandas, cantidad_producida: cant, observacion: $('#pd-obs').value,
+            insumos: p.receta.insumos.map((i) => ({ insumo_id: i.insumo_id, cantidad: reales[i.insumo_id] ?? i.cantidad * tandas })) } });
+          toast(`Producción registrada: +${fmtN(r.producido)} ${p.nombre}`); router();
+        } catch (err) { toast(err.message, true); $('#pd-ok').disabled = false; }
+      };
+    };
+    $('#pd-prod').addEventListener('change', () => { reales = {}; pintar(); });
+    $('#pd-tandas').addEventListener('input', () => { reales = {}; pintar(); });
+    $('#pd-alm').addEventListener('change', pintar);
+    pintar();
+  };
+
   // ---------- Movimientos ----------
   VIEWS.movimientos = async (main) => {
     main.innerHTML = `
@@ -678,7 +791,7 @@
       rows = await api('/api/movimientos?' + qs);
       $('#v-tbl').innerHTML = rows.length ? `<div class="tbl-wrap"><table><thead><tr><th>#</th><th>Fecha</th><th>Tipo</th><th>Desde</th><th>Hacia</th><th>Proveedor / referencia</th><th class="num">Ítems</th><th class="num">Unidades</th><th>Usuario</th><th></th></tr></thead><tbody>
         ${rows.map((m) => `<tr><td>${m.id}</td><td>${fmtFecha(m.fecha)}</td><td><span class="badge b-${m.tipo}">${TIPO_LBL[m.tipo]}</span></td><td>${esc(m.origen || '—')}</td><td>${esc(m.destino || (m.tipo === 'AJUSTE' ? '' : '—'))}</td>
-          <td>${m.proveedor ? `<b>${esc(m.proveedor)}</b>${m.referencia ? '<br>' : ''}` : ''}<span class="${m.proveedor ? 'muted' : ''}">${esc(m.referencia || '')}</span></td><td class="num">${m.items}</td><td class="num">${m.tipo === 'AJUSTE' && m.unidades > 0 ? '+' : ''}${fmtN(m.unidades)}</td><td>${esc(m.usuario)}</td>
+          <td>${m.proveedor ? `<b>${esc(m.proveedor)}</b>${m.referencia ? '<br>' : ''}` : ''}<span class="${m.proveedor ? 'muted' : ''}">${esc(m.referencia || '')}</span></td><td class="num">${m.items}</td><td class="num">${(m.tipo === 'AJUSTE' || m.tipo === 'PRODUCCION') && m.unidades > 0 ? '+' : ''}${fmtN(m.unidades)}</td><td>${esc(m.usuario)}</td>
           <td><button class="btn ghost sm" data-ver="${m.id}">Ver</button></td></tr>`).join('')}</tbody></table></div>` : '<div class="card empty">Sin movimientos para el filtro.</div>';
       $$('[data-ver]').forEach((b) => b.addEventListener('click', () => verMovimiento(b.dataset.ver)));
     };
@@ -697,7 +810,7 @@
         <p class="muted">${fmtFecha(m.fecha)} · ${esc(m.usuario)}${m.origen ? ` · Desde <b>${esc(m.origen)}</b>` : ''}${m.destino ? ` · Hacia <b>${esc(m.destino)}</b>` : ''}</p>
         ${m.proveedor ? `<p><b>Proveedor:</b> ${esc(m.proveedor)}</p>` : ''}${m.referencia ? `<p><b>Referencia:</b> ${esc(m.referencia)}</p>` : ''}${m.pedido_id ? `<p><b>Nota de pedido:</b> #${m.pedido_id}</p>` : ''}
         <div class="tbl-wrap"><table><thead><tr><th>Código</th><th>Producto</th><th class="num">Cantidad</th></tr></thead><tbody>
-        ${m.items.map((i) => `<tr><td class="code">${esc(i.codigo)}</td><td>${esc(i.nombre)}</td><td class="num">${m.tipo === 'AJUSTE' && i.cantidad > 0 ? '+' : ''}${fmtN(i.cantidad)} ${esc(i.unidad)}</td></tr>`).join('')}
+        ${m.items.map((i) => `<tr><td class="code">${esc(i.codigo)}</td><td>${esc(i.nombre)}</td><td class="num ${m.tipo === 'PRODUCCION' && i.cantidad < 0 ? 'muted' : ''}">${(m.tipo === 'AJUSTE' || m.tipo === 'PRODUCCION') && i.cantidad > 0 ? '+' : ''}${fmtN(i.cantidad)} ${esc(i.unidad)}${m.tipo === 'PRODUCCION' ? (i.cantidad > 0 ? ' · producido' : ' · insumo') : ''}</td></tr>`).join('')}
         </tbody></table></div>${m.observacion ? `<p class="obs mt">${esc(m.observacion)}</p>` : ''}
         <div class="form-actions"><button class="btn sec" data-close>Cerrar</button></div>`, { wide: true });
     } catch (err) { toast(err.message, true); }
@@ -845,7 +958,7 @@
       <div class="toolbar">
         <div class="grow"><label>Buscar</label><input id="pr-q" placeholder="Código, nombre o categoría…"></div>
         <div class="f"><label>Categoría</label><select id="pr-cat"><option value="">Todas</option>${[...new Set(productos.map((p) => p.categoria).filter(Boolean))].sort().map((c) => `<option>${esc(c)}</option>`).join('')}</select></div>
-        <div class="f"><label>Gestión de stock</label><select id="pr-gs"><option value="">Todos</option><option value="si">Con gestión de stock</option><option value="no">Solo maestro (sin gestión)</option></select></div>
+        <div class="f"><label>Gestión de stock</label><select id="pr-gs"><option value="">Todos</option><option value="si">Con gestión de stock</option><option value="no">Solo maestro (sin gestión)</option><option value="prod">Con gestión de producción</option></select></div>
         <div class="f"><label>Alerta</label><select id="pr-al"><option value="">Todas</option><option value="any">Con alguna alerta</option><option value="venc">Vencimiento próximo</option><option value="cuid">De cuidado</option><option value="frio">Cadena de frío</option></select></div>
         <label class="check" style="margin-bottom:10px"><input type="checkbox" id="pr-inac"> Ver inactivos</label>
         <div class="spacer"></div>
@@ -858,12 +971,12 @@
       const cat = $('#pr-cat').value;
       const gs = $('#pr-gs').value;
       const rows = productos.filter((p) => (inac || p.activo)
-        && (!cat || p.categoria === cat) && (!gs || (gs === 'si' ? p.gestion_stock : !p.gestion_stock))
+        && (!cat || p.categoria === cat) && (!gs || (gs === 'prod' ? p.gestion_produccion : gs === 'si' ? p.gestion_stock : !p.gestion_stock))
         && (!q || `${p.codigo} ${p.nombre} ${p.categoria || ''}`.toLowerCase().includes(q))
         && (!al || (al === 'any' && tieneAlerta(p)) || (al === 'venc' && p.alerta_vencimiento) || (al === 'cuid' && p.alerta_cuidado) || (al === 'frio' && p.alerta_frio)));
       $('#pr-tbl').innerHTML = rows.length ? `<div class="tbl-wrap"><table><thead><tr><th>Código</th><th>Nombre</th><th>Categoría</th><th>Unidad</th><th>Stock</th><th>Alertas</th><th>Nota</th><th></th></tr></thead><tbody>
         ${rows.map((p) => `<tr class="${p.activo ? '' : 'inactive'}"><td class="code">${esc(p.codigo)}</td><td>${esc(p.nombre)}${p.fudo_id ? ' <span class="badge b-rol" title="Sincronizado desde Fudo">Fudo</span>' : ''}${p.activo ? '' : ' (inactivo)'}</td><td>${esc(p.categoria || '')}</td><td>${esc(p.unidad)}</td>
-          <td><button class="gs-tog ${p.gestion_stock ? 'on' : ''}" data-gs="${p.id}" title="${p.gestion_stock ? 'Se opera en la app (recepción, consumo, transferencias…). Tocá para pasarlo a solo maestro.' : 'Solo maestro: no se opera. Tocá para activar la gestión de stock.'}">${p.gestion_stock ? '✓ Gestiona' : 'Solo maestro'}</button></td>
+          <td>${p.gestion_produccion ? `<button class="gs-tog prod" data-receta="${p.id}" title="Producto que se produce: tocá para ver o editar la receta">🍳 Receta</button> ` : ''}<button class="gs-tog ${p.gestion_stock ? 'on' : ''}" data-gs="${p.id}" title="${p.gestion_stock ? 'Se opera en la app (recepción, consumo, transferencias…). Tocá para pasarlo a solo maestro.' : 'Solo maestro: no se opera. Tocá para activar la gestión de stock.'}">${p.gestion_stock ? '✓ Gestiona' : 'Solo maestro'}</button></td>
           <td>${badgesAlerta(p)}</td><td class="muted">${esc(p.nota_alerta || '')}</td><td class="num"><button class="btn ghost sm" data-ed="${p.id}">Editar</button></td></tr>`).join('')}
         </tbody></table></div><div class="row" style="justify-content:space-between;align-items:center;margin-top:10px"><p class="muted" style="margin:0">${rows.length} de ${productos.length} productos · ${productos.filter((p) => p.gestion_stock).length} con gestión de stock</p>
           <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn sec sm" id="pr-gs-on">Activar gestión a los ${rows.length} filtrados</button><button class="btn sec sm" id="pr-gs-off">Pasar los ${rows.length} filtrados a solo maestro</button></div></div>` : `<div class="card empty">${productos.length ? 'Sin resultados.' : 'Todavía no hay productos. Cargalos uno a uno o importá el maestro en CSV.'}</div>`;
@@ -876,6 +989,7 @@
           toast(`${r.cambiados} ${r.cambiados === 1 ? 'producto actualizado' : 'productos actualizados'}`); pintar();
         } catch (err) { toast(err.message, true); }
       };
+      $$('[data-receta]').forEach((b) => b.addEventListener('click', () => editarReceta(productos.find((x) => x.id == b.dataset.receta), productos)));
       $$('[data-gs]').forEach((b) => b.addEventListener('click', () => { const p = productos.find((x) => x.id == b.dataset.gs); cambiarGestion([p.id], !p.gestion_stock, ''); }));
       if ($('#pr-gs-on')) $('#pr-gs-on').onclick = () => cambiarGestion(rows.filter((p) => !p.gestion_stock).map((p) => p.id), true, `a ${rows.filter((p) => !p.gestion_stock).length} productos filtrados`);
       if ($('#pr-gs-off')) $('#pr-gs-off').onclick = () => cambiarGestion(rows.filter((p) => p.gestion_stock).map((p) => p.id), false, `${rows.filter((p) => p.gestion_stock).length} productos filtrados`);
@@ -903,7 +1017,7 @@
 
   function editarProducto(p) {
     const n = !p;
-    p = p || { codigo: '', nombre: '', categoria: '', unidad: 'UN', alerta_vencimiento: false, fecha_vencimiento: '', alerta_cuidado: false, alerta_frio: false, nota_alerta: '', activo: true, gestion_stock: true };
+    p = p || { codigo: '', nombre: '', categoria: '', unidad: 'UN', alerta_vencimiento: false, fecha_vencimiento: '', alerta_cuidado: false, alerta_frio: false, nota_alerta: '', activo: true, gestion_stock: true, gestion_produccion: false };
     const m = modal(`<h2>${n ? 'Nuevo producto' : 'Editar producto'}</h2>
       ${p.fudo_id ? `<p class="obs" style="margin-top:-6px">🔄 Vinculado a Fudo (ID ${esc(p.fudo_id)}): nombre, categoría y estado se actualizan desde Fudo. Unidad y alertas son solo de esta app.</p>` : ''}
       <form id="f-prod">
@@ -922,21 +1036,34 @@
         <div class="card mt" style="background:#eaf2fa;border-color:#c9d6e3">
           <label class="check"><input type="checkbox" name="gestion_stock" ${p.gestion_stock ? 'checked' : ''}> <b>Gestión de stock</b></label>
           <p class="stock-hint" style="margin:6px 0 0 26px">Tildado: se opera en la app (recepción, transferencias, consumos, pedidos) y aparece en Stock, el panel y Vinilito. Destildado: solo figura en este maestro (p. ej. tragos o platos de la carta).</p>
+          <label class="check mt"><input type="checkbox" name="gestion_produccion" ${p.gestion_produccion ? 'checked' : ''}> <b>Gestión de producción</b></label>
+          <p class="stock-hint" style="margin:6px 0 0 26px">Se elabora en el local a partir de insumos (p. ej. masa, salsa, empanadas). Requiere una receta y activa la gestión de stock. ${p.id && p.gestion_produccion ? '<a href="#" id="pr-ir-receta">Ver / editar receta →</a>' : ''}</p>
         </div>
         <label class="check mt"><input type="checkbox" name="activo" ${p.activo ? 'checked' : ''}> Activo</label>
         <div class="form-actions"><button type="button" class="btn sec" data-close>Cancelar</button><button class="btn">Guardar</button></div>
       </form>`);
+    const fp = $('#f-prod', m);
+    fp.gestion_produccion.addEventListener('change', () => { if (fp.gestion_produccion.checked) fp.gestion_stock.checked = true; });
+    fp.gestion_stock.addEventListener('change', () => { if (!fp.gestion_stock.checked) fp.gestion_produccion.checked = false; });
+    if ($('#pr-ir-receta', m)) $('#pr-ir-receta', m).onclick = async (e) => { e.preventDefault(); editarReceta(p, await api('/api/productos?todos=1')); };
     $('#f-prod', m).addEventListener('submit', async (e) => {
       e.preventDefault();
       const f = e.target;
       const body = {
         codigo: f.codigo.value, nombre: f.nombre.value, categoria: f.categoria.value, unidad: f.unidad.value,
         alerta_vencimiento: f.alerta_vencimiento.checked, fecha_vencimiento: f.fecha_vencimiento.value || null,
-        alerta_cuidado: f.alerta_cuidado.checked, alerta_frio: f.alerta_frio.checked, nota_alerta: f.nota_alerta.value, activo: f.activo.checked, gestion_stock: f.gestion_stock.checked,
+        alerta_cuidado: f.alerta_cuidado.checked, alerta_frio: f.alerta_frio.checked, nota_alerta: f.nota_alerta.value, activo: f.activo.checked,
+        gestion_stock: f.gestion_stock.checked || f.gestion_produccion.checked, gestion_produccion: f.gestion_produccion.checked,
       };
       try {
-        await api(n ? '/api/productos' : '/api/productos/' + p.id, { method: n ? 'POST' : 'PUT', body });
-        closeModal(); toast('Producto guardado'); router();
+        const r = await api(n ? '/api/productos' : '/api/productos/' + p.id, { method: n ? 'POST' : 'PUT', body });
+        closeModal(); toast('Producto guardado');
+        if (body.gestion_produccion && !p.gestion_produccion) {
+          const todos = await api('/api/productos?todos=1');
+          const prod = todos.find((x) => x.id === (n ? r.id : p.id));
+          if (prod) return editarReceta(prod, todos, true);
+        }
+        router();
       } catch (err) { toast(err.message, true); }
     });
   }

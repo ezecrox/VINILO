@@ -440,7 +440,7 @@ route('PUT', '/api/almacenes/:id', async ({ user, body, params }) => {
 
 // ---------- Productos ----------
 const PRODUCTO_COLS = `id, codigo, nombre, categoria, unidad, alerta_vencimiento, fecha_vencimiento,
-  alerta_cuidado, alerta_frio, nota_alerta, activo, fudo_id, gestion_stock,
+  alerta_cuidado, alerta_frio, nota_alerta, activo, fudo_id, gestion_stock, gestion_produccion,
   CASE WHEN fecha_vencimiento IS NULL THEN NULL ELSE (fecha_vencimiento - CURRENT_DATE) END AS dias_venc`;
 
 function normalizarProducto(r) {
@@ -452,6 +452,7 @@ function normalizarProducto(r) {
     alerta_frio: isTrue(r.alerta_frio),
     activo: isTrue(r.activo),
     gestion_stock: r.gestion_stock === undefined ? true : isTrue(r.gestion_stock),
+    gestion_produccion: isTrue(r.gestion_produccion),
     fecha_vencimiento: r.fecha_vencimiento || null,
     dias_venc: r.dias_venc === null || r.dias_venc === '' || r.dias_venc === undefined ? null : Number(r.dias_venc),
   };
@@ -471,7 +472,8 @@ route('POST', '/api/productos/gestion-stock', async ({ user, body }) => {
   const ids = (Array.isArray(body.ids) ? body.ids : []).map(toInt).filter(Number.isInteger);
   if (!ids.length) fail(400, 'No hay productos seleccionados');
   const { rows } = await query(
-    `UPDATE productos SET gestion_stock = $2, actualizado_en = now() WHERE id = ANY($1::int[]) AND gestion_stock <> $2 RETURNING id`,
+    `UPDATE productos SET gestion_stock = $2, gestion_produccion = CASE WHEN $2 THEN gestion_produccion ELSE FALSE END, actualizado_en = now()
+     WHERE id = ANY($1::int[]) AND gestion_stock <> $2 RETURNING id`,
     [`{${ids.join(',')}}`, !!body.valor]);
   return { cambiados: rows.length };
 });
@@ -484,7 +486,8 @@ function datosProducto(body) {
     codigo.toUpperCase(), nombre, str(body.categoria, 80), (str(body.unidad, 20) || 'UN').toUpperCase(),
     bool(body.alerta_vencimiento), fechaOk(body.fecha_vencimiento), bool(body.alerta_cuidado), bool(body.alerta_frio),
     str(body.nota_alerta, 500), body.activo === undefined ? true : bool(body.activo),
-    body.gestion_stock === undefined || body.gestion_stock === null || body.gestion_stock === '' ? null : bool(body.gestion_stock),
+    bool(body.gestion_produccion) ? true : (body.gestion_stock === undefined || body.gestion_stock === null || body.gestion_stock === '' ? null : bool(body.gestion_stock)),
+    body.gestion_produccion === undefined || body.gestion_produccion === null || body.gestion_produccion === '' ? null : bool(body.gestion_produccion),
   ];
 }
 
@@ -492,8 +495,8 @@ route('POST', '/api/productos', async ({ user, body }) => {
   permitir(user, 'productos');
   try {
     const { rows } = await query(
-      `INSERT INTO productos (codigo, nombre, categoria, unidad, alerta_vencimiento, fecha_vencimiento, alerta_cuidado, alerta_frio, nota_alerta, activo, gestion_stock)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,coalesce($11::boolean, TRUE)) RETURNING id`, datosProducto(body));
+      `INSERT INTO productos (codigo, nombre, categoria, unidad, alerta_vencimiento, fecha_vencimiento, alerta_cuidado, alerta_frio, nota_alerta, activo, gestion_stock, gestion_produccion)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,coalesce($11::boolean, TRUE),coalesce($12::boolean, FALSE)) RETURNING id`, datosProducto(body));
     return { id: Number(rows[0].id) };
   } catch (e) {
     if (e.code === '23505' || /duplicate|unique/i.test(e.message)) fail(409, 'Ya existe un producto con ese código');
@@ -506,7 +509,8 @@ route('PUT', '/api/productos/:id', async ({ user, body, params }) => {
   try {
     await query(
       `UPDATE productos SET codigo=$2, nombre=$3, categoria=$4, unidad=$5, alerta_vencimiento=$6, fecha_vencimiento=$7,
-       alerta_cuidado=$8, alerta_frio=$9, nota_alerta=$10, activo=$11, gestion_stock=coalesce($12::boolean, gestion_stock), actualizado_en=now() WHERE id=$1`,
+       alerta_cuidado=$8, alerta_frio=$9, nota_alerta=$10, activo=$11, gestion_stock=coalesce($12::boolean, gestion_stock),
+       gestion_produccion=CASE WHEN coalesce($12::boolean, gestion_stock) = FALSE THEN FALSE ELSE coalesce($13::boolean, gestion_produccion) END, actualizado_en=now() WHERE id=$1`,
       [toInt(params.id), ...datosProducto(body)]);
   } catch (e) {
     if (e.code === '23505' || /duplicate|unique/i.test(e.message)) fail(409, 'Ya existe un producto con ese código');
@@ -527,12 +531,13 @@ route('POST', '/api/productos/importar', async ({ user, body }) => {
       let datos;
       try { datos = datosProducto(filas[i]); } catch (e) { errores.push(`Fila ${i + 2}: ${e.message}`); continue; }
       const { rows } = await client.query(
-        `INSERT INTO productos (codigo, nombre, categoria, unidad, alerta_vencimiento, fecha_vencimiento, alerta_cuidado, alerta_frio, nota_alerta, activo, gestion_stock)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,coalesce($11::boolean, TRUE))
+        `INSERT INTO productos (codigo, nombre, categoria, unidad, alerta_vencimiento, fecha_vencimiento, alerta_cuidado, alerta_frio, nota_alerta, activo, gestion_stock, gestion_produccion)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,coalesce($11::boolean, TRUE),coalesce($12::boolean, FALSE))
          ON CONFLICT (codigo) DO UPDATE SET nombre=EXCLUDED.nombre, categoria=EXCLUDED.categoria, unidad=EXCLUDED.unidad,
            alerta_vencimiento=EXCLUDED.alerta_vencimiento, fecha_vencimiento=EXCLUDED.fecha_vencimiento,
            alerta_cuidado=EXCLUDED.alerta_cuidado, alerta_frio=EXCLUDED.alerta_frio, nota_alerta=EXCLUDED.nota_alerta,
-           activo=EXCLUDED.activo, gestion_stock=coalesce($11::boolean, productos.gestion_stock), actualizado_en=now()
+           activo=EXCLUDED.activo, gestion_stock=coalesce($11::boolean, productos.gestion_stock),
+           gestion_produccion=coalesce($12::boolean, productos.gestion_produccion), actualizado_en=now()
          RETURNING (xmax = 0) AS insertado`, datos);
       if (isTrue(rows[0].insertado)) creados++; else actualizados++;
     }
@@ -625,7 +630,7 @@ route('GET', '/api/movimientos', async ({ user, url }) => {
     `SELECT m.id, m.tipo, m.fecha, m.referencia, m.observacion, m.pedido_id,
             o.nombre AS origen, d.nombre AS destino, u.nombre AS usuario, pv.nombre AS proveedor,
             (SELECT count(*)::int FROM movimiento_items i WHERE i.movimiento_id = m.id) AS items,
-            (SELECT coalesce(sum(i.cantidad),0)::int FROM movimiento_items i WHERE i.movimiento_id = m.id) AS unidades
+            (SELECT coalesce(sum(CASE WHEN m.tipo = 'PRODUCCION' THEN GREATEST(i.cantidad, 0) ELSE i.cantidad END),0)::int FROM movimiento_items i WHERE i.movimiento_id = m.id) AS unidades
      FROM movimientos m
      LEFT JOIN almacenes o ON o.id = m.origen_id
      LEFT JOIN almacenes d ON d.id = m.destino_id
@@ -814,6 +819,9 @@ const { calcularTareas } = require('./src/tareas');
 
 // ---------- Vinilito (asistente) ----------
 require('./src/vinilito/agente')({ route, query, fail, calcularTareas, fudo, sqlAlm });
+
+// ---------- Producción ----------
+require('./src/produccion')({ route, query, tx, fail, permitir, permitirAlguno, almacenActivo, exigirAlmacen, isTrue, toInt, str, veAlmacen });
 
 // ---------- Panel ----------
 route('GET', '/api/dashboard', async ({ user }) => {

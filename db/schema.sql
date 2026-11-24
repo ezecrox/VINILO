@@ -275,3 +275,21 @@ CREATE INDEX IF NOT EXISTS idx_mov_prov ON movimientos (proveedor_id);
 
 -- Gestión de stock: si es FALSE el producto solo existe en el maestro (no se transacciona)
 ALTER TABLE productos ADD COLUMN IF NOT EXISTS gestion_stock BOOLEAN NOT NULL DEFAULT TRUE;
+
+-- ===== Producción =====
+ALTER TABLE productos ADD COLUMN IF NOT EXISTS gestion_produccion BOOLEAN NOT NULL DEFAULT FALSE;
+CREATE TABLE IF NOT EXISTS recetas (
+  producto_id  INT PRIMARY KEY REFERENCES productos(id) ON DELETE CASCADE,
+  rendimiento  INT NOT NULL DEFAULT 1 CHECK (rendimiento > 0),   -- unidades que rinde una tanda
+  instrucciones TEXT,
+  actualizado_en TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS receta_insumos (
+  producto_id INT NOT NULL REFERENCES recetas(producto_id) ON DELETE CASCADE,
+  insumo_id   INT NOT NULL REFERENCES productos(id),
+  cantidad    INT NOT NULL CHECK (cantidad > 0),                  -- por tanda
+  PRIMARY KEY (producto_id, insumo_id),
+  CHECK (producto_id <> insumo_id)
+);
+ALTER TABLE movimientos DROP CONSTRAINT IF EXISTS movimientos_tipo_check;
+ALTER TABLE movimientos ADD CONSTRAINT movimientos_tipo_check CHECK (tipo IN ('RECEPCION','TRANSFERENCIA','CONSUMO','AJUSTE','PRODUCCION'));
