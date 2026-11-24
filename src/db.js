@@ -19,6 +19,7 @@ const pool = new pg.Pool({
   connectionString,
   ssl: needsSsl ? { rejectUnauthorized: false } : false,
   max: 10,
+  connectionTimeoutMillis: 15000,
 });
 
 const query = (text, params) => pool.query(text, params);
@@ -40,7 +41,16 @@ async function tx(fn) {
 
 async function migrate() {
   const sql = fs.readFileSync(path.join(__dirname, '..', 'db', 'schema.sql'), 'utf8');
-  await pool.query(sql);
+  console.log('Actualizando estructura de la base…');
+  // Si otra instancia bloquea una tabla, fallar en 20 s en vez de quedar colgado
+  const client = await pool.connect();
+  try {
+    await client.query("SET lock_timeout = '20s'");
+    await client.query(sql);
+  } finally {
+    client.release();
+  }
+  console.log('Estructura de la base OK');
 
   // Usuario ADMIN inicial si no hay ninguno
   const { rows } = await pool.query("SELECT count(*)::int AS n FROM usuarios WHERE rol = 'ADMIN'");

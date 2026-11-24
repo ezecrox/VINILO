@@ -682,6 +682,7 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
+console.log(`Iniciando Vinilo Almacén (Node ${process.version})…`);
 migrate()
-  .then(() => server.listen(PORT, () => console.log(`Vinilo Almacén escuchando en puerto ${PORT}`)))
-  .catch((err) => { console.error('Error al inicializar la base de datos:', err); process.exit(1); });
+  .then(() => server.listen(PORT, '0.0.0.0', () => console.log(`Vinilo Almacén escuchando en puerto ${PORT}`)))
+  .catch((err) => { console.error('Error al inicializar la base de datos:', err.message || err); process.exit(1); });
