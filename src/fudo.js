@@ -34,6 +34,10 @@ async function fudoGet(path, params, reintento = true) {
     signal: AbortSignal.timeout(30000),
   });
   if (res.status === 401 && reintento) { tokenCache = null; return fudoGet(path, params, false); }
+  if (res.status === 403) {
+    throw new Error('Fudo denegó el acceso (403): el usuario de Fudo dueño de la apiKey no tiene permiso para ver Proveedores. '
+      + 'En Fudo, asignale un rol con acceso a Proveedores (por ejemplo Administrador) y volvé a sincronizar.');
+  }
   if (!res.ok) {
     const txt = await res.text().catch(() => '');
     throw new Error(`Fudo respondió HTTP ${res.status} en ${path}: ${txt.slice(0, 200)}`);
