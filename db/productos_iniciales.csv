@@ -1,0 +1,204 @@
+ID,Categoría,Subcategoría,Código,Nombre,Descripción,Precio,Costo,Proveedor,Activo
+6,Bebidas,Bebidas sin Alcohol,11,Agua Mineral,,4000,"953,85",,Si
+43,Bebidas,Bebidas sin Alcohol,,Agua Mineral Gasificada,,4000,"923,08",,Si
+88,Bebidas,Bebidas sin Alcohol,,Agua Saborizada de Pera,,4000,"1096,15",,Si
+42,Bebidas,Bebidas sin Alcohol,,Agua Saborizada Manzana,,4000,"1048,95",,Si
+41,Bebidas,Bebidas sin Alcohol,,Agua Saborizada Naranja,,4000,"1048,95",,Si
+40,Bebidas,Bebidas sin Alcohol,,Agua Saborizada Pomelo,,4000,"1048,95",,Si
+1,Bebidas,Bebidas sin Alcohol,10,Coca-Cola,,4000,1480,,Si
+74,Bebidas,Bebidas sin Alcohol,,Coca Cola Zero,,4000,1580,,Si
+193,Bebidas,Bebidas sin Alcohol,,Fanta Cero,,4000,,,Si
+38,Bebidas,Bebidas sin Alcohol,,Fanta Naranja,,4000,1580,,Si
+39,Bebidas,Bebidas sin Alcohol,,Sprite,,4000,1580,,Si
+87,Bebidas,Bebidas sin Alcohol,,Sprite Zero,,4000,"1714,17",,Si
+106,Bebidas,Bebidas sin Alcohol,,Tonica Schweppes,,4000,"1622,08",,Si
+163,Bebidas,Café,,Descaffeinato,,4000,1500,,Si
+161,Bebidas,Café,,Finezzo,,4000,1500,,Si
+162,Bebidas,Café,,Forte,,4000,1500,,Si
+164,Bebidas,Café,,Guatemala,,4000,1500,,Si
+49,Bebidas,CAVA,,YACOCHUYA 2023,"Yacochuya es la expresión de la potencia extrema del norte. Es un vino de altura, con una concentración de color y sabor impresionante, donde la fruta negra se mezcla con especias y notas intensas de chocolate por su larga crianza. Es un ejemplar con mucho más cuerpo y alcohol, que exige una comida contundente y, preferiblemente, un tiempo de decantación para brillar.",90000,72000,,Si
+227,Bebidas,Cervezas,,1 de Mayo,,7000,,,Si
+34,Bebidas,Cervezas,,Cerveza Heineken 1Lt,,12500,"4852,62",,No
+168,Bebidas,Cervezas,,Cerveza Heineken 1 Lt,,13500,"4808,86",,Si
+36,Bebidas,Cervezas,,Cerveza Imperial Cream Stout LATA,,6000,"1357,9",,Si
+37,Bebidas,Cervezas,,Cerveza Imperial Roja LATA,,6000,"1755,88",,Si
+207,Bebidas,Cervezas,,Grolsch Rubia,,12500,"4394,49",,Si
+35,Bebidas,Cervezas,,Heineken Porron,,7500,"2297,03",,Si
+86,Bebidas,Cervezas,,Heineken Porron s/Alcohol,,7000,"2158,74",,Si
+53,Bebidas,Cervezas,,IMPERIAL Golden 1Lt.,,10000,"2208,33",,Si
+89,Bebidas,Cervezas,,LATA Imperial IPA,,6000,"1357,9",,Si
+229,Bebidas,Cervezas,,Lata NEIPA Capitán Nelson,,14000,7000,,Si
+230,Bebidas,Cervezas,,Lata NEIPA Citra a Ciegas,,14000,7000,,Si
+231,Bebidas,Cervezas,,Lata NEPA Fruta 40,,14000,5500,,Si
+232,Bebidas,Cervezas,,Lata NEPA Manos Frescas,,14000,5500,,Si
+174,Bebidas,Cervezas,,Michelob,,7000,1275,,Si
+54,Bebidas,Cervezas,,MILLER 1Lt.,,11000,"3419,55",,Si
+216,Bebidas,Cervezas,,Peroni,,8500,"2589,84",Goldline distribuciones ,Si
+228,Bebidas,Cervezas,,Porron STELLA,,7500,,,Si
+206,Bebidas,Cervezas,,Stella Artois 1L,,12500,,,Si
+104,Bebidas,Cervezas,,Veo Doble,,9000,3150,,No
+170,Bebidas,Cervezas,,Veo Doble.,,10000,3450,Beerdier,Si
+205,Bebidas,Tragos,,Absolut,,10000,,,Si
+82,Bebidas,Tragos,,Amargo obrero,,5000,"991,33365",,Si
+67,Bebidas,Tragos,,Americano,,5500,"675,8614",,Si
+63,Bebidas,Tragos,,Aperol Spritz,,9000,"810,1276",,Si
+172,Bebidas,Tragos,,Ballantines Finest,,10000,"1986,51",,Si
+173,Bebidas,Tragos,,Ballantines Jhon Lennon,,10000,"2342,86",,Si
+91,Bebidas,Tragos,,Benchmark N 8,,12000,2782,,Si
+167,Bebidas,Tragos,,Black label,,15500,3772,,Si
+115,Bebidas,Tragos,,Bloody Mary,,10000,"745,626",,Si
+158,Bebidas,Tragos,,Boulevardier,,11000,"2110,8907",,Si
+159,Bebidas,Tragos,,Bramble del Galpon,,13000,"2272,609",,Si
+81,Bebidas,Tragos,,Caipirinha,,10000,"1418,53628",,Si
+190,Bebidas,Tragos,,Caipiroska,,10000,"979,2824",,Si
+61,Bebidas,Tragos,,Campari Tonic,,7000,"1496,9998",,Si
+166,Bebidas,Tragos,,Chivas Regal 12 años,,17200,3024,,Si
+187,Bebidas,Tragos,,Cinzano Pomelo,,6500,"1233,8392",,Si
+64,Bebidas,Tragos,,Cinzano Rosso,,4500,"1003,4452",,Si
+184,Bebidas,Tragos,,Cinzano Segundo Malbec,,6000,"1112,3696",,Si
+175,Bebidas,Tragos,,Cinzano Tonic,,6500,"631,8112",,Si
+191,Bebidas,Tragos,,Clasico fuera de carta,,10000,,,Si
+59,Bebidas,Tragos,,Collins del Galpón,Clasico Tom Collins con un cordial de Pomelo Rosado,13000,"1619,371",,Si
+80,Bebidas,Tragos,,CUBA LIBRE,,7500,"2389,124",,Si
+77,Bebidas,Tragos,,CYNAR JULEP,,7000,1969,,Si
+78,Bebidas,Tragos,,CYNAR POMELO,,6000,"1388,90105",,Si
+192,Bebidas,Tragos,,De autor fuera de carta,,12000,,,Si
+56,Bebidas,Tragos,,El Espresso esta Encantador,"Coctel de Cafe y Ron, una reversion del Clasico Expresso Martini",12000,3600,,Si
+93,Bebidas,Tragos,,Espresso Martini,,13000,"2862,95818",,Si
+60,Bebidas,Tragos,,Fernet,,8500,"1727,2",,Si
+55,Bebidas,Tragos,,FUNGI Sour,"Whisky Sour con Hongos de pino, miel y miso",13000,"5506,489",,Si
+76,Bebidas,Tragos,,GANCIA BATIDO,,5000,"1015,385",,Si
+75,Bebidas,Tragos,,Gancia con Sprite,,6000,"1555,5",,Si
+212,Bebidas,Tragos,,Gancia Sin Alcohol,,7000,,,Si
+62,Bebidas,Tragos,,Garibaldi,,7000,"1271,9998",,Si
+203,Bebidas,Tragos,,Gin Tonic Beefeater,,9500,"1317,1",,Si
+202,Bebidas,Tragos,,Gin Tonic Bombay,,9500,"2929,1",,Si
+73,Bebidas,Tragos,,Gin Tonic Bulldog,,8500,"1892,192",,Si
+171,Bebidas,Tragos,,Glen Moray,,19500,"5190,1152",,Si
+222,Bebidas,Tragos,,Grey goose (medida),,12500,,,Si
+217,Bebidas,Tragos,,Hendricks Gin,,12500,,,Si
+107,Bebidas,Tragos,,Hesperidina,,8000,"1219,6",,Si
+83,Bebidas,Tragos,,Jack Daniels,,15500,"3010,4",,Si
+90,Bebidas,Tragos,,Jack Daniels Gentleman,,17900,"4628,1072",,Si
+85,Bebidas,Tragos,,Jameson,,11500,1980,,Si
+79,Bebidas,Tragos,,LIMONADA,,5000,"561,18",,Si
+220,Bebidas,Tragos,,Macallan 12 años,,30000,13568,,Si
+211,Bebidas,Tragos,,Makers Mark,,17000,,,Si
+116,Bebidas,Tragos,,Margarita cocktail,,13000,"4507,6084",,Si
+118,Bebidas,Tragos,,Margot Pepper,,13000,"3584,3388",,Si
+105,Bebidas,Tragos,,Martini,,10000,"3035,9654",,Si
+188,Bebidas,Tragos,,Martini Pomelo,,6500,"1147,4004",,Si
+185,Bebidas,Tragos,,Martini Rosso,,5000,"900,5774",,Si
+186,Bebidas,Tragos,,Martini Tonic,,6500,"1353,4004",,Si
+235,Bebidas,Tragos,,Medida Glenfidich 12 años,,22000,8056,Goldline distribuciones ,Si
+236,Bebidas,Tragos,,Medida Monkey Shoulder,,19500,"4767,84",,Si
+100,Bebidas,Tragos,,MOJITO,,11000,"2469,9672",,Si
+65,Bebidas,Tragos,,Negroni,,8000,"1451,27025",,Si
+66,Bebidas,Tragos,,Negroni Sbagliato,,8000,"930,6083",,Si
+189,Bebidas,Tragos,,Old Fashioned,,12000,"3372,5668",,Si
+117,Bebidas,Tragos,,Paloma,,13000,2957,,Si
+58,Bebidas,Tragos,,Pelusa,El Negroni del Diego,13000,"1303,9678",,Si
+92,Bebidas,Tragos,,Penicillin,,13000,"2385,385",,Si
+160,Bebidas,Tragos,,PISCO SOUR,,11000,"1362,59",,Si
+57,Bebidas,Tragos,,POP Star Martini,"Martini, durazno y Vainilla",13000,"2331,5032",,Si
+208,Bebidas,Tragos,,Ramazzotti tonic,,6500,,,Si
+103,Bebidas,Tragos,,Sin alcohol,,6000,,,Si
+221,Bebidas,Tragos,,Talisker 10 años,,19500,,,Si
+218,Bebidas,Tragos,,Tanqueray Gin,,9500,,,Si
+219,Bebidas,Tragos,,Tanqueray Sevilla,,10500,,,Si
+94,Bebidas,Tragos,,Te de cazador,,13000,"4477,51",,Si
+68,Bebidas,Tragos,,Tom Collins,,11000,"2087,32825",,Si
+165,Bebidas,Tragos,,Vermut Tonic,,5500,,,No
+84,Bebidas,Tragos,,Wild Turkey,,12000,"2956,5648",,Si
+213,Bebidas,Vinos,,Andeluna 1300 Torrontes Dulce,,17000,7500,4ta Generación Bodega - Martino Lucas y Diego,Si
+51,Bebidas,Vinos,,CAFAYATE Terroir de Altura Dulce Tardio Torrontes,"Cafayate Terroir de Altura Torrontés Dulce Tardío, elaborado por Bodegas Etchart en Salta, es un vino blanco de postre que destaca por su intensidad y equilibrio, resultado de uvas cosechadas tardíamente a más de 1.750 metros sobre el nivel del mar.",15000,,,Si
+44,Bebidas,Vinos,,CASA BOHER Espumante Rose,"El espumante Rosell Boher Rosé ofrece una experiencia compleja y estructurada. Su color es un rosado más intenso con reflejos rubí, acompañado de una burbuja fina y constante. Sus aromas combinan los frutos rojos con notas típicas de la guarda, como pan tostado y levadura, mientras que en boca se siente elegante, cremoso y con una acidez perfectamente integrada.",50000,39500,,Si
+46,Bebidas,Vinos,,CINCO SENTIDOS cabernet,"Cinco Sentidos Reserva Malbec es un tinto argentino de Palmira, Mendoza, de color rojo granate intenso y brillante. Destaca por aromas a ciruelas maduras, cerezas, vainilla y cuero. En boca es sedoso, con sabor a frutas rojas y un dejo de caramelo, con una crianza que le aporta estructura.",22000,"8156,25",,Si
+178,Bebidas,Vinos,,Cono Sur Reserva Especial Carmenere,"Proveniente del reconocido Valle de Cachapoal, nuestro Reserva Especial Carmenere en parte se define por su profundo y oscuro morado rojizo, y en parte por sus intensos y concentrados sabores y aromas. Notas frutales a guinda negra con toques de café, pimienta y suave tostado. Sus taninos sedosos y maduros aportan al vino una estructura firme, junto a una textura rica y llena.",32500,"16899,36",ALVES,Si
+179,Bebidas,Vinos,,Cono Sur Reserva Especial Pinot Noir,"Cono Sur Reserva Especial Pinot Noir  Origen: Valle de San Antonio, Chile. Color: Rojo-morado claro, profundo y brillante. Aromas: Intensos aromas frutales, destacando frambuesas, guindas y frutillas, complementados con toques de café y cacao. Sabor: Agradable, expresivo, con taninos suaves y un final persistente. Maridaje: Ideal para acompañar carnes blancas, verduras y quesos maduros. Crianza: 80% en barricas y 20% en tanques de acero inoxidable durante 11 meses. Temperatura de servicio: 15 a 17°C.",32500,"16899,36",ALVES,Si
+72,Bebidas,Vinos,,Copa de Vino,"El Malbec de Ángeles (Viña 1924) es un tinto de Luján de Cuyo reconocido por su elegancia y frescura, presentando un color rojo rubí intenso con reflejos violáceos. En nariz destacan frutos rojos frescos (ciruela, cereza) y violetas, con un sutil aporte de roble francés (vainilla/tostado). En boca es suave, concentrado, con taninos aterciopelados y gran persistencia.",6000,,,Si
+183,Bebidas,Vinos,,Coquena Rosado,"El Coquena Rosado es un vino fresco, expresivo y con la marcada impronta de altura de los Valles Calchaquíes, elaborado por la reconocida bodega San Pedro de Yacochuya en Cafayate, Salta. Dependiendo de la edición de la bodega, se presenta principalmente como un varietal 100% Malbec o como un particular blend (de Cabernet Franc y Sauvignon Blanc).",19800,8800,,Si
+204,Bebidas,Vinos,,Coquena Torrontes,,19800,,,Si
+98,Bebidas,Vinos,,Don Silvestre Chardonay,,17000,6800,,Si
+96,Bebidas,Vinos,,Don Silvestre Malbec,"El Don Silvestre Malbec es la línea de vinos jóvenes, frescos y de consumo cotidiano elaborada por la Bodega Hinojosa. Sus uvas provienen de viñedos de unos 25 años de antigüedad implantados en Agua Amarga, Tunuyán (Valle de Uco), Mendoza.",17000,"6539,44",,Si
+177,Bebidas,Vinos,,DV Catena Pinot  noir,"El D.V. Catena Pinot Noir (frecuentemente llamado Pinot-Pinot) es un vino elegante, complejo y de alta gama elaborado por la reconocida Bodega Catena Zapata en Mendoza, Argentina. Se caracteriza por ser un bivarietal de la misma uva (100% Pinot Noir) que combina uvas cosechadas en dos viñedos de diferentes altitudes en el Valle de Uco: el Viñedo ""Domingo"" (Villa Bastías) y el Viñedo ""Adrianna"" (Gualtallary).",23000,,,Si
+97,Bebidas,Vinos,,Hinojosa Malbec gran reserva,,36000,20440,,Si
+99,Bebidas,Vinos,,Hinojosa Malbec Reserva,"El Hinojosa Reserva Malbec es un distinguido vino tinto de alta gama elaborado por la tradicional Bodega Hinojosa, elaborado al 100% con uvas provenientes de viñedos viejos (de más de 40 años de antigüedad) situados en Agua Amarga, Tunuyán, dentro del prestigioso Valle de Uco en Mendoza, a unos 1150 metros sobre el nivel del mar.",22000,10800,,Si
+45,Bebidas,Vinos,,MARA de Uco Pinot Noir,"El Mara de Uco Pinot Noir (Ernesto Catena Vineyards) es un vino tinto orgánico y biodinámico del Valle de Uco, conocido por ser elegante, ligero y sutil. Presenta un color rojo rubí claro y ofrece aromas frutales a cerezas y frambuesas, con toques florales y terrosos, destacando por una acidez equilibrada y taninos suaves.",27000,17500,,Si
+198,Bebidas,Vinos,,Numina Malbec,,28500,"12920,01",,Si
+199,Bebidas,Vinos,,Numina Pinot Noir,,23972,"14279,98",,Si
+176,Bebidas,Vinos,,Piano piano Malbec,"El Piano Piano Malbec es un vino tinto de autor de partida limitada producido por la Bodega Filoso, cuyas uvas provienen de la prestigiosa zona de Tupungato, en el Valle de Uco (Mendoza, Argentina). El concepto detrás de su nombre (""Piano Piano"", que en italiano significa despacio, despacio) rinde homenaje a los procesos artesanales y al tiempo necesario que requiere la elaboración de un gran vino de calidad.",19800,,,Si
+209,Bebidas,Vinos,,Raíces malbec,,19000,5825,,Si
+226,Bebidas,Vinos,,Salentein,,26800,,,Si
+214,Bebidas,Vinos,,Salentein Barrel Blend malb/cabern,,19800,"6302,35",,Si
+215,Bebidas,Vinos,,Salentein Barrel Blend malb/petit,,19800,"7214,72",,Si
+201,Bebidas,Vinos,,Salentein Primus Chardonnay,,50000,0,,Si
+200,Bebidas,Vinos,,Salentein Primus Pinot Noir,,65500,47265,,Si
+194,Bebidas,Vinos,,Salentein Reserva Cabernet,,26800,"10327,4",,Si
+195,Bebidas,Vinos,,Salentein Reserva Merlot,,26800,"9247,5",,Si
+196,Bebidas,Vinos,,Salentein Reserva Pinot Noir,,26800,"9652,5",,Si
+197,Bebidas,Vinos,,Salentein Reserva Sauvignon Blanc,,26800,0,,Si
+114,Bebidas,Vinos,,TRIVENTO BRUT NATURE,"El Trivento Cuvée Exceptionnelle Brut Nature es un espumante elegante, sofisticado y de perfil seco elaborado por la Bodega Trivento con uvas de altura de Tupungato (Valle de Uco), Mendoza. Posee un corte bivarietal clásico de Chardonnay y Pinot Noir, potenciado con un innovador toque de Malbec en su licor de expedición.",36000,,,Si
+210,Bebidas,Vinos,,Trivento Cono Sur Pinot 21,,32500,"28217,28",,Si
+180,Bebidas,Vinos,,Trivento Golden reserve cabernet franc,"El Trivento Golden Reserve Cabernet Franc es un vino tinto de alta gama elaborado al 100% con uvas de la variedad Cabernet Franc, provenientes principalmente de viñedos seleccionados en el Valle de Uco (como Paraje Altamira) y de zonas tradicionales de Luján de Cuyo en Mendoza, Argentina. Es reconocido por su gran equilibrio entre la tipicidad de la uva y la complejidad que le aporta su crianza en madera.",31500,"16899,36",ALVES,Si
+47,Bebidas,Vinos,,TRIVENTO Golden Reserve Malbec,"Trivento Golden Reserve Malbec es un tinto de Luján de Cuyo, Mendoza, que destaca por su color rojo profundo con tintes violáceos. Ofrece aromas intensos a frutas rojas frescas (frutillas, frambuesas) y negras (ciruela, mora) con notas de violetas, vainilla y chocolate por su crianza de 12 meses en barricas de roble. En boca es jugoso, con taninos sedosos, estructura redonda y un final largo y elegante.",29800,"16899,36",,Si
+112,Bebidas,Vinos,,TRIVENTO RESERVE CAB SAUV,"El Trivento Reserve Cabernet Sauvignon es un vino tinto estructurado y con gran presencia elaborado al 100% con uvas seleccionadas de Mendoza, Argentina (principalmente del Valle de Uco y zonas tradicionales). Destaca por su excelente relación precio-calidad dentro del segmento de reserva.",18500,2250,ALVES,Si
+48,Bebidas,Vinos,,TRIVENTO RESERVE MALBEC,"El Trivento Reserve Malbec es un vino que se caracteriza por ser equilibrado, con una marcada presencia de frutas rojas y un paso por boca sedoso.",18500,3375,,Si
+181,Bebidas,Vinos,,Trivento reserve malbec white,"El Trivento Reserve White Malbec es un vino blanco innovador elaborado por la Bodega Trivento en Mendoza con uvas tintas Malbec 100%. Se prensa de inmediato sin dejar macerar las pieles para evitar el color rojo. El resultado es un vino cristalino con reflejos plateados, notas a frutos rojos ácidos y manzana verde, de cuerpo liviano y muy fresco.",18500,"7018,14",ALVES,Si
+113,Bebidas,Vinos,,TRIVENTO RESERVE RED BLEND,"El Trivento Reserve Maximum Red Blend es un vino tinto argentino de perfil moderno e innovador elaborado por la Bodega Trivento en Mendoza, combinando en partes iguales las uvas Malbec (50%) y Cabernet Sauvignon (50%). Las uvas utilizadas para este corte provienen de viñedos seleccionados del Valle de Uco y Luján de Cuyo.",22500,450,ALVES,Si
+52,Bebidas,Vinos,,TRUMPETER Mallbec,"El clásico tinto de Rutini Wines. Ofrece un color rojo violáceo intenso. Presenta aromas a frutos rojos y negros (guindas, moras) entremezclados con dejos de canela, cacao y tabaco provenientes de su paso por barricas. En boca es concentrado, frutoso, de taninos suaves y final persistente.",19500,"6024,81",,Si
+50,Bebidas,Vinos,,TRUMPETER Reserve Chardonnay,"El Trumpeter Reserve Chardonnay de la bodega Rutini Wines se caracteriza por ser un blanco elegante y ágil que representa un estilo moderno de la variedad, con uvas provenientes del Valle de Uco, Mendoza.",24000,"6024,81",,Si
+151,Bebidas,Vinos,,TRUMPETER suav blanc,"El Trumpeter Sauvignon Blanc es un vino blanco joven, fresco y muy expresivo elaborado por la prestigiosa bodega Rutini Wines con uvas provenientes de viñedos seleccionados en el Valle de Uco",18000,,,Si
+95,Bebidas,Vinos,,Zuccardi malbec,"El Malbec de Zuccardi es un vino elegante, fluido y de gran estructura. En boca se destaca por sus taninos firmes y sedosos con una acidez jugosa, mientras que en nariz ofrece aromas intensos a frutas negras frescas, violetas y notas minerales calcáreas.",24000,9366,,Si
+13,Empanadas,,,Carne,,4200,578,,Si
+14,Empanadas,,,Carne Picante,,4200,578,,Si
+18,Empanadas,,,Chorizo Pomarola y Muzza,,4500,555,,Si
+111,Empanadas,,,Empanada SIN TACC,,6000,,,Si
+17,Empanadas,,,Humita,,4200,475,,Si
+15,Empanadas,,,Jamon y Queso,,4500,740,,Si
+16,Empanadas,,,Verdura y Queso,,4200,410,,Si
+12,Entrantes,,,Lesme,"Masa, carne molida condimentada, ensalada de verdes,tomate, hierbas y ali-oli",6500,833,,Si
+11,Entrantes,,,Paté de Pollo y Hongos,Pate campero con pan de pizza,9500,1800,,Si
+10,Entrantes,,,Picada Vermutera,"Picada Vermutera:
+Salame, queso artesanal, berenjena en escabeche y olivas marinadas.",14500,3359,,Si
+223,Eventos,,,Entradas evento x,,15000,,,Si
+102,Panchos,,,Pancho,,9500,,,Si
+225,Pizzas,,,Cena,,60500,,,Si
+31,Pizzas,,,Fainá (Porcion),Fainá,3500,694,,Si
+109,Pizzas,,,Pizza Napolitana SIN TACC,,22500,,,Si
+29,Pizzas,Pizzas al Molde,,Fuggazeta Rellena,"Queso, masa, mix cebollas, olivas verdes y orégano",28000,5685,,Si
+30,Pizzas,Pizzas al Molde,,Jamón y Morrones,"Muzza, salsa de tomate, jamón, morrones y olivas verdes",34500,7862,,Si
+28,Pizzas,Pizzas al Molde,,Muzzarella,"Muzza, salsa de tomate, olivas y orégano",29000,5300,,Si
+70,Pizzas,Pizzas al Molde,,Porcion de Fugazzeta,,6000,850,,Si
+71,Pizzas,Pizzas al Molde,,Porcion de Jamon y Morrones,,5200,982,,Si
+69,Pizzas,Pizzas al Molde,,Porcion de Pizza Muzzarella,,4500,665,,Si
+23,Pizzas,Pizzas Napolitanas,,Anchoas,"Salsa de tomate, anchoas, chips de ajo y oliva extra virgen",24500,4000,,Si
+21,Pizzas,Pizzas Napolitanas,,Griega,"Queso fresco, pesto de brócoli y espinaca, espinaca, tomate cherries
+confitados, queso crema cítrico y olivas negras",28500,5100,,Si
+19,Pizzas,Pizzas Napolitanas,,Hongos,"Queso fresco, salsa de tomate, hongos, olivas negras y aceite trufado",30000,5900,,Si
+24,Pizzas,Pizzas Napolitanas,,Jamón y Pimientos Asados,"Muzza, salsa de tomate, jamón natural, morrones, orégano y olivas verdes",26000,5800,,Si
+2,Pizzas,Pizzas Napolitanas,,Margherita,"Muzza, salsa de tomate, albahaca fresca y oliva extra virgen",21000,3066,,Si
+25,Pizzas,Pizzas Napolitanas,,Mortadela con Pistachos,"Queso fresco, mortadela, stracciatella y pesto de albahaca",27000,5100,,Si
+8,Pizzas,Pizzas Napolitanas,5,Muzza Argenta,"Muzza, salsa de tomate,orégano, olivas verdes y oliva extra virgen",22000,3810,,Si
+22,Pizzas,Pizzas Napolitanas,,Napolitana con Ajo,"Muzza, salsa de tomate, tomate natural, orégano,olivas verdes y aceite de ajo",23500,3670,,Si
+101,Pizzas,Pizzas Napolitanas,,Peperoni,,26000,,,Si
+110,Pizzas,Pizzas Napolitanas,,Pizza 4 quesos SIN TACC,,26000,,,Si
+108,Pizzas,Pizzas Napolitanas,,Pizza JyQ SIN TACC,,23500,,,Si
+26,Pizzas,Pizzas Napolitanas,,Provolone,"Salsa de tomate, queso fresco, provolone, orégano, ají molido picante,olivas verdes y negras",26000,4828,,No
+169,Pizzas,Pizzas Napolitanas,,Provolone.,,28500,4827,,Si
+27,Pizzas,Pizzas Napolitanas,,Queso Azul,"Muzza, salsa de tomate, queso azul, nueces garrapiñadas y miel trufada",28500,6200,,Si
+9,Pizzas,Pizzas Napolitanas,22,Rúcula y Jamón Serrano,"Queso fresco, salsa de tomate, rúcula fresca, jamón serrano, aceto
+balsámico, queso sardo y oliva extra virgen",28500,5900,,Si
+20,Pizzas,Pizzas Napolitanas,,Vegana,"Muzzapapa, salsa de tomate, papa, olivas verdes, orégano, rúcula,
+tomates frescos y oliva extra virgen",22500,3000,,Si
+182,Postres,,,Don Pedro,,13500,,,Si
+234,Postres,,,Duraznos con crema,,9000,,,Si
+32,Postres,,,Flan,Flan con Dulce de Leche y Crema,8500,475,,Si
+33,Postres,,,Marquise de Chocolate y Naranja,Marquise de Chocolate y Naranja,9500,1100,,Si
+155,Postres,,,MOUSSE CHOCOLATE BL,,10000,4500,,Si
+154,Postres,,,MOUSSE CHOCOLATE NEG,,10000,4500,,Si
+233,Postres,,,Peras al Malbec,,12000,,,Si
+7,Postres,,40,Tiramisú,,8500,838,,Si
+152,Varios,,,Cumpleañito reserva,,560000,,,Si
+157,Varios,,,Franco de Aji Picante,,48800,,,Si
+224,Varios,,,Item corrección de errores de cobro,,194100,,,Si

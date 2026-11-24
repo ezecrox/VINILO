@@ -2,6 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const pg = require('pg');
 const { hashPassword } = require('./auth');
+const { productosDesdeMaestro } = require('./csv');
 
 // DATE como texto 'YYYY-MM-DD' (evita corrimientos por zona horaria)
 pg.types.setTypeParser(1082, (v) => v);
@@ -55,6 +56,21 @@ async function migrate() {
     if (!process.env.ADMIN_PASSWORD) {
       console.warn('ATENCION: se usó la contraseña por defecto "admin123". Cambiala apenas ingreses.');
     }
+  }
+
+  // Carga inicial del maestro de productos (solo si la tabla está vacía)
+  const maestro = path.join(__dirname, '..', 'db', 'productos_iniciales.csv');
+  const { rows: cnt } = await pool.query('SELECT count(*)::int AS n FROM productos');
+  if (Number(cnt[0].n) === 0 && fs.existsSync(maestro)) {
+    const productos = productosDesdeMaestro(fs.readFileSync(maestro, 'utf8'));
+    for (const p of productos) {
+      await pool.query(
+        `INSERT INTO productos (codigo, nombre, categoria, unidad, activo) VALUES ($1, $2, $3, $4, $5)
+         ON CONFLICT (codigo) DO NOTHING`,
+        [p.codigo, p.nombre.slice(0, 200), p.categoria ? p.categoria.slice(0, 80) : null, p.unidad, p.activo]
+      );
+    }
+    console.log(`Maestro inicial cargado: ${productos.length} productos`);
   }
 }
 

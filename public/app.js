@@ -673,7 +673,7 @@
       <div id="imp-prev" class="mt"></div>
       <div class="form-actions"><button class="btn sec" data-close>Cancelar</button><button class="btn" id="imp-ok" disabled>Importar</button></div>`, { wide: true });
     let filas = [];
-    const ALIAS = { codigo: 'codigo', cod: 'codigo', sku: 'codigo', nombre: 'nombre', descripcion: 'nombre', producto: 'nombre', categoria: 'categoria', rubro: 'categoria', unidad: 'unidad',
+    const ALIAS = { id: 'id', codigo: 'codigo', cod: 'codigo', sku: 'codigo', nombre: 'nombre', descripcion: 'nombre', producto: 'nombre', categoria: 'categoria', rubro: 'categoria', subcategoria: 'subcategoria', unidad: 'unidad',
       vencimiento_proximo: 'alerta_vencimiento', vencimiento: 'alerta_vencimiento', alerta_vencimiento: 'alerta_vencimiento', fecha_vencimiento: 'fecha_vencimiento', vence: 'fecha_vencimiento',
       cuidado: 'alerta_cuidado', alerta_cuidado: 'alerta_cuidado', cadena_frio: 'alerta_frio', frio: 'alerta_frio', alerta_frio: 'alerta_frio', nota_alerta: 'nota_alerta', nota: 'nota_alerta', activo: 'activo' };
     const norm = (h) => h.trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[\s-]+/g, '_');
@@ -684,14 +684,20 @@
       const rows = parseCSV(await file.text());
       if (rows.length < 2) { $('#imp-prev', m).innerHTML = '<p class="stock-hint bad">El archivo no tiene filas de datos.</p>'; return; }
       const head = rows[0].map((h) => ALIAS[norm(h)] || null);
+      // Si una columna destino aparece dos veces (ej. Nombre y Descripción), vale la primera
+      head.forEach((k, i) => { if (k && head.indexOf(k) !== i) head[i] = null; });
+      if (head.includes('id')) { const ic = head.indexOf('codigo'); if (ic >= 0) head[ic] = null; head[head.indexOf('id')] = 'codigo'; }
       if (!head.includes('codigo') || !head.includes('nombre')) { $('#imp-prev', m).innerHTML = '<p class="stock-hint bad">Faltan las columnas "codigo" y/o "nombre".</p>'; return; }
       filas = rows.slice(1).map((r) => {
         const o = {};
         head.forEach((k, i) => { if (k) o[k] = (r[i] || '').trim(); });
+        if (o.subcategoria) o.categoria = o.categoria ? `${o.categoria} / ${o.subcategoria}` : o.subcategoria;
+        delete o.subcategoria;
+        if (o.nombre) o.nombre = o.nombre.replace(/\s+/g, ' ');
         o.alerta_vencimiento = (o.alerta_vencimiento || '').toUpperCase();
         o.alerta_cuidado = (o.alerta_cuidado || '').toUpperCase();
         o.alerta_frio = (o.alerta_frio || '').toUpperCase();
-        o.activo = o.activo === undefined || o.activo === '' ? true : ['SI', 'S', 'X', '1', 'TRUE', 'SÍ'].includes(o.activo.toUpperCase());
+        o.activo = o.activo === undefined || o.activo === '' ? true : ['SI', 'S', 'X', '1', 'TRUE', 'SÍ'].includes(o.activo.trim().toUpperCase());
         o.fecha_vencimiento = fecha(o.fecha_vencimiento) || null;
         if (o.fecha_vencimiento && !o.alerta_vencimiento) o.alerta_vencimiento = '';
         ['alerta_vencimiento', 'alerta_cuidado', 'alerta_frio'].forEach((k) => { o[k] = ['SI', 'S', 'X', '1', 'TRUE', 'SÍ'].includes(o[k]); });

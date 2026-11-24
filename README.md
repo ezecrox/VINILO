@@ -59,6 +59,10 @@ Las tablas y los 3 almacenes se crean solos en el primer arranque.
 
 ## Cargar el maestro de productos
 
+El archivo `db/productos_iniciales.csv` (exportado del sistema de ventas) se carga automáticamente al arrancar **si la tabla de productos está vacía**. El código de cada producto es el **ID** del maestro y la categoría queda como `Categoría / Subcategoría`.
+
+El importador de la pantalla acepta tanto ese mismo formato (ID, Categoría, Subcategoría, Código, Nombre, …, Activo) como la plantilla propia:
+
 **Productos → Importar maestro** acepta un CSV (separado por `;` o `,`) con encabezado. Descargá la plantilla desde el botón **Plantilla CSV**.
 
 | Columna | Obligatoria | Ejemplo |
