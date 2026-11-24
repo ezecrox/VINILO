@@ -326,7 +326,7 @@ route('PUT', '/api/almacenes/:id', async ({ user, body, params }) => {
 
 // ---------- Productos ----------
 const PRODUCTO_COLS = `id, codigo, nombre, categoria, unidad, alerta_vencimiento, fecha_vencimiento,
-  alerta_cuidado, alerta_frio, nota_alerta, activo,
+  alerta_cuidado, alerta_frio, nota_alerta, activo, fudo_id,
   CASE WHEN fecha_vencimiento IS NULL THEN NULL ELSE (fecha_vencimiento - CURRENT_DATE) END AS dias_venc`;
 
 function normalizarProducto(r) {
@@ -611,14 +611,25 @@ const fudo = require('./src/fudo');
 const { pool } = require('./src/db');
 route('GET', '/api/fudo/estado', async ({ user }) => {
   if (!user.permisos.includes('compras') && !user.permisos.includes('parametrizar')) fail(403, 'No tenés permiso para esta operación');
-  const { rows } = await query("SELECT * FROM fudo_sync_log WHERE entidad = 'proveedores' ORDER BY id DESC LIMIT 1");
-  const { rows: v } = await query('SELECT count(*)::int AS n FROM proveedores WHERE fudo_id IS NOT NULL');
-  return { configurado: fudo.configurado(), minutos: Number(process.env.FUDO_SYNC_MINUTES ?? 30), ultimo: rows[0] || null, vinculados: Number(v[0].n) };
+  const ultimo = {};
+  for (const e of ['proveedores', 'productos']) {
+    const { rows } = await query('SELECT * FROM fudo_sync_log WHERE entidad = $1 ORDER BY id DESC LIMIT 1', [e]);
+    ultimo[e] = rows[0] || null;
+  }
+  const { rows: v } = await query(`SELECT (SELECT count(*)::int FROM proveedores WHERE fudo_id IS NOT NULL) AS prov,
+    (SELECT count(*)::int FROM productos WHERE fudo_id IS NOT NULL) AS prod`);
+  return {
+    configurado: fudo.configurado(), minutos: Number(process.env.FUDO_SYNC_MINUTES ?? 30),
+    ultimo: ultimo.proveedores, ultimo_productos: ultimo.productos, ultimos: ultimo,
+    vinculados: Number(v[0].prov), vinculados_productos: Number(v[0].prod),
+  };
 });
-route('POST', '/api/fudo/sincronizar', async ({ user }) => {
+route('POST', '/api/fudo/sincronizar', async ({ user, url }) => {
   if (!user.permisos.includes('compras') && !user.permisos.includes('parametrizar')) fail(403, 'No tenés permiso para esta operación');
   if (!fudo.configurado()) fail(400, 'La integración con Fudo no está configurada: cargá FUDO_API_KEY y FUDO_API_SECRET en Render.');
-  try { return await fudo.sincronizarProveedores(pool, 'MANUAL'); } catch (e) { fail(502, e.message); }
+  const entidad = url.searchParams.get('entidad') || 'proveedores';
+  const fn = entidad === 'productos' ? fudo.sincronizarProductos : fudo.sincronizarProveedores;
+  try { return await fn(pool, 'MANUAL'); } catch (e) { fail(502, e.message); }
 });
 
 // ---------- Panel ----------

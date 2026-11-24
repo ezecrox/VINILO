@@ -1,4 +1,4 @@
-// Integración con Fudo (https://dev.fu.do/api/): sincroniza proveedores Fudo -> Vinilo.
+// Integración con Fudo (https://dev.fu.do/api/): sincroniza proveedores y productos Fudo -> Vinilo.
 // Variables de entorno: FUDO_API_KEY, FUDO_API_SECRET (obligatorias para activar),
 // FUDO_SYNC_MINUTES (default 30, 0 = solo manual), FUDO_AUTH_URL y FUDO_API_URL (opcionales).
 const AUTH_URL = process.env.FUDO_AUTH_URL || 'https://auth.fu.do/api';
@@ -8,7 +8,7 @@ const PAGE_SIZE = 100;
 const configurado = () => !!(process.env.FUDO_API_KEY && process.env.FUDO_API_SECRET);
 
 let tokenCache = null; // { token, exp }
-let enCurso = null;
+const enCurso = {};
 
 async function obtenerToken() {
   const ahora = Math.floor(Date.now() / 1000);
@@ -35,8 +35,9 @@ async function fudoGet(path, params, reintento = true) {
   });
   if (res.status === 401 && reintento) { tokenCache = null; return fudoGet(path, params, false); }
   if (res.status === 403) {
-    throw new Error('Fudo denegó el acceso (403): el usuario de Fudo dueño de la apiKey no tiene permiso para ver Proveedores. '
-      + 'En Fudo, asignale un rol con acceso a Proveedores (por ejemplo Administrador) y volvé a sincronizar.');
+    const que = path.includes('provider') ? 'Proveedores' : 'Productos';
+    throw new Error(`Fudo denegó el acceso (403): el usuario de Fudo dueño de la apiKey no tiene permiso para ver ${que}. `
+      + `En Fudo, asignale un rol con acceso a ${que} (por ejemplo Administrador) y volvé a sincronizar.`);
   }
   if (!res.ok) {
     const txt = await res.text().catch(() => '');
@@ -45,16 +46,17 @@ async function fudoGet(path, params, reintento = true) {
   return res.json();
 }
 
-async function listarProveedoresFudo() {
+async function listarTodo(path, extra = {}) {
   const todos = [];
-  for (let page = 1; page <= 200; page++) {
-    const data = await fudoGet('/providers', { 'page[size]': PAGE_SIZE, 'page[number]': page, sort: 'id' });
+  for (let page = 1; page <= 500; page++) {
+    const data = await fudoGet(path, { 'page[size]': PAGE_SIZE, 'page[number]': page, sort: 'id', ...extra });
     const lote = Array.isArray(data.data) ? data.data : [];
     todos.push(...lote);
     if (lote.length < PAGE_SIZE) break;
   }
   return todos;
 }
+const listarProveedoresFudo = () => listarTodo('/providers');
 
 // Fudo guarda la dirección como JSON ["calle","número","piso","ciudad"] o como texto
 function direccionLegible(v) {
@@ -76,8 +78,8 @@ const IGNORAR = new Set(['cash_count', 'proveedor ejemplo']); // registros técn
 /** Sincroniza proveedores. Devuelve el resumen y lo registra en fudo_sync_log. */
 async function sincronizarProveedores(pool, origen = 'MANUAL') {
   if (!configurado()) throw new Error('La integración con Fudo no está configurada (faltan FUDO_API_KEY y FUDO_API_SECRET en Render).');
-  if (enCurso) return enCurso; // evita dos sincronizaciones simultáneas
-  enCurso = (async () => {
+  if (enCurso.proveedores) return enCurso.proveedores; // evita dos sincronizaciones simultáneas
+  enCurso.proveedores = (async () => {
     const { rows: lg } = await pool.query("INSERT INTO fudo_sync_log (entidad, origen) VALUES ('proveedores', $1) RETURNING id", [origen]);
     const logId = lg[0].id;
     const r = { leidos: 0, creados: 0, actualizados: 0, desactivados: 0, avisos: [] };
@@ -150,17 +152,116 @@ async function sincronizarProveedores(pool, origen = 'MANUAL') {
       throw e;
     }
   })();
-  try { return await enCurso; } finally { enCurso = null; }
+  try { return await enCurso.proveedores; } finally { enCurso.proveedores = null; }
+}
+
+// ---------- Productos ----------
+async function categoriasFudo() {
+  const cats = await listarTodo('/product-categories');
+  const porId = new Map(cats.map((c) => [String(c.id), {
+    nombre: limpio(c.attributes && c.attributes.name, 90),
+    padre: c.relationships && c.relationships.parentCategory && c.relationships.parentCategory.data ? String(c.relationships.parentCategory.data.id) : null,
+  }]));
+  const etiqueta = (id) => {
+    const c = porId.get(String(id));
+    if (!c) return null;
+    const padre = c.padre && porId.get(c.padre);
+    return (padre && padre.nombre ? `${padre.nombre} / ${c.nombre}` : c.nombre || '').slice(0, 80) || null;
+  };
+  return etiqueta;
+}
+
+/** Sincroniza productos Fudo -> Vinilo: nombre, categoría y activo. No toca stock, unidad ni alertas. */
+async function sincronizarProductos(pool, origen = 'MANUAL') {
+  if (!configurado()) throw new Error('La integración con Fudo no está configurada (faltan FUDO_API_KEY y FUDO_API_SECRET en Render).');
+  if (enCurso.productos) return enCurso.productos;
+  enCurso.productos = (async () => {
+    const { rows: lg } = await pool.query("INSERT INTO fudo_sync_log (entidad, origen) VALUES ('productos', $1) RETURNING id", [origen]);
+    const logId = lg[0].id;
+    const r = { leidos: 0, creados: 0, actualizados: 0, desactivados: 0, avisos: [] };
+    try {
+      let etiqueta = () => null;
+      try { etiqueta = await categoriasFudo(); } catch (e) { r.avisos.push(`Categorías no disponibles: ${e.message}`); }
+      const remotos = await listarTodo('/products');
+      r.leidos = remotos.length;
+      const vistos = new Set();
+      for (const item of remotos) {
+        const fid = String(item.id);
+        const a = item.attributes || {};
+        const nombre = limpio(a.name, 200);
+        if (!nombre) continue;
+        vistos.add(fid);
+        const rel = item.relationships && item.relationships.productCategory && item.relationships.productCategory.data;
+        const categoria = rel ? etiqueta(rel.id) : null;
+        const activo = a.active !== false;
+        // 1) por fudo_id  2) producto sin vínculo cuyo código es el ID de Fudo
+        let { rows } = await pool.query('SELECT * FROM productos WHERE fudo_id = $1', [fid]);
+        if (!rows.length) ({ rows } = await pool.query('SELECT * FROM productos WHERE fudo_id IS NULL AND codigo = $1', [fid]));
+        if (rows.length) {
+          const p = rows[0];
+          const nuevaCat = categoria || p.categoria; // si Fudo no informa categoría, se conserva
+          const cambia = p.fudo_id !== fid || p.nombre !== nombre || (p.categoria || null) !== (nuevaCat || null)
+            || (p.activo === true || p.activo === 't') !== activo;
+          if (cambia) {
+            await pool.query('UPDATE productos SET fudo_id=$2, nombre=$3, categoria=$4, activo=$5, fudo_sync_en=now(), actualizado_en=now() WHERE id=$1',
+              [p.id, fid, nombre, nuevaCat, activo]);
+            r.actualizados++;
+          }
+        } else {
+          // Código interno = ID de Fudo (como el maestro inicial); si está ocupado por un producto propio, se usa F<ID>
+          const { rows: ocupado } = await pool.query('SELECT 1 FROM productos WHERE codigo = $1', [fid]);
+          const codigo = ocupado.length ? `F${fid}` : fid;
+          try {
+            await pool.query(
+              `INSERT INTO productos (codigo, nombre, categoria, unidad, activo, fudo_id, fudo_sync_en) VALUES ($1,$2,$3,'UN',$4,$5,now())`,
+              [codigo, nombre, categoria, activo, fid]);
+            r.creados++;
+          } catch (e) {
+            if (e.code === '23505' || /duplicate|unique/i.test(e.message)) r.avisos.push(`"${nombre}" (Fudo ${fid}): código ${codigo} en uso`);
+            else throw e;
+          }
+        }
+      }
+      if (remotos.length) {
+        const { rows: locales } = await pool.query('SELECT id, fudo_id FROM productos WHERE fudo_id IS NOT NULL AND activo');
+        for (const p of locales) {
+          if (!vistos.has(String(p.fudo_id))) {
+            await pool.query('UPDATE productos SET activo = FALSE, fudo_sync_en = now(), actualizado_en = now() WHERE id = $1', [p.id]);
+            r.desactivados++;
+          }
+        }
+      }
+      await pool.query(
+        'UPDATE fudo_sync_log SET fin=now(), ok=TRUE, leidos=$2, creados=$3, actualizados=$4, desactivados=$5, detalle=$6 WHERE id=$1',
+        [logId, r.leidos, r.creados, r.actualizados, r.desactivados, r.avisos.join('\n') || null]);
+      console.log(`Fudo productos (${origen}): ${r.leidos} leídos, ${r.creados} nuevos, ${r.actualizados} actualizados, ${r.desactivados} desactivados`);
+      return r;
+    } catch (e) {
+      await pool.query('UPDATE fudo_sync_log SET fin=now(), ok=FALSE, detalle=$2 WHERE id=$1', [logId, String(e.message).slice(0, 1000)]).catch(() => {});
+      console.error('Error sincronizando productos con Fudo:', e.message);
+      throw e;
+    }
+  })();
+  try { return await enCurso.productos; } finally { enCurso.productos = null; }
+}
+
+/** Sincroniza ambas entidades; un error en una no frena la otra. */
+async function sincronizarTodo(pool, origen = 'MANUAL') {
+  const out = {};
+  for (const [k, fn] of [['proveedores', sincronizarProveedores], ['productos', sincronizarProductos]]) {
+    try { out[k] = await fn(pool, origen); } catch (e) { out[k] = { error: e.message }; }
+  }
+  return out;
 }
 
 function iniciarSincronizacionAutomatica(pool) {
   if (!configurado()) { console.log('Fudo: integración no configurada (sin FUDO_API_KEY/FUDO_API_SECRET)'); return; }
   const minutos = Number(process.env.FUDO_SYNC_MINUTES ?? 30);
-  setTimeout(() => sincronizarProveedores(pool, 'ARRANQUE').catch(() => {}), 5000);
+  setTimeout(() => sincronizarTodo(pool, 'ARRANQUE'), 5000);
   if (minutos > 0) {
-    setInterval(() => sincronizarProveedores(pool, 'AUTO').catch(() => {}), minutos * 60 * 1000).unref();
-    console.log(`Fudo: sincronización de proveedores cada ${minutos} min`);
+    setInterval(() => sincronizarTodo(pool, 'AUTO'), minutos * 60 * 1000).unref();
+    console.log(`Fudo: sincronización de proveedores y productos cada ${minutos} min`);
   }
 }
 
-module.exports = { configurado, sincronizarProveedores, iniciarSincronizacionAutomatica, direccionLegible };
+module.exports = { configurado, sincronizarProveedores, sincronizarProductos, sincronizarTodo, iniciarSincronizacionAutomatica, direccionLegible };

@@ -185,3 +185,7 @@ CREATE TABLE IF NOT EXISTS fudo_sync_log (
   desactivados  INT DEFAULT 0,
   detalle       TEXT
 );
+
+ALTER TABLE productos ADD COLUMN IF NOT EXISTS fudo_id VARCHAR(20);
+ALTER TABLE productos ADD COLUMN IF NOT EXISTS fudo_sync_en TIMESTAMPTZ;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_prod_fudo ON productos (fudo_id) WHERE fudo_id IS NOT NULL;

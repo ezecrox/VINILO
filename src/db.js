@@ -123,6 +123,20 @@ async function migrate() {
     console.log(`Maestro de proveedores: ${creados} creados, ${completados} existentes completados`);
   }
 
+  // Vincular productos con Fudo: el maestro inicial es un export de Fudo y su código es el ID de Fudo
+  const { rows: hecho3 } = await pool.query("SELECT 1 FROM app_config WHERE clave = 'vinculo_fudo_productos_v1'");
+  if (!hecho3.length && fs.existsSync(maestro)) {
+    const ids = productosDesdeMaestro(fs.readFileSync(maestro, 'utf8')).map((p) => p.codigo).filter((c) => /^\d+$/.test(c));
+    if (ids.length) {
+      await pool.query(
+        `UPDATE productos SET fudo_id = codigo WHERE fudo_id IS NULL AND codigo = ANY($1::text[])
+           AND NOT EXISTS (SELECT 1 FROM productos x WHERE x.fudo_id = productos.codigo)`, [`{${ids.join(',')}}`]);
+    }
+    const { rows: c } = await pool.query('SELECT count(*)::int AS n FROM productos WHERE fudo_id IS NOT NULL');
+    await pool.query("INSERT INTO app_config (clave, valor) VALUES ('vinculo_fudo_productos_v1', $1) ON CONFLICT (clave) DO NOTHING", [`vinculados ${c[0].n}`]);
+    console.log(`Productos vinculados a Fudo por ID: ${c[0].n}`);
+  }
+
   // Vincular con Fudo: la planilla exportada de Fudo trae su Id (columna id_origen)
   const { rows: hecho2 } = await pool.query("SELECT 1 FROM app_config WHERE clave = 'vinculo_fudo_v1'");
   if (!hecho2.length && fs.existsSync(archProv)) {

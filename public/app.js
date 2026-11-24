@@ -638,9 +638,19 @@
 
   // ---------- Productos (ADMIN) ----------
   VIEWS.productos = async (main) => {
-    const productos = await api('/api/productos');
+    const [productos, fe] = await Promise.all([api('/api/productos'), api('/api/fudo/estado').catch(() => null)]);
+    const u = fe && fe.ultimo_productos;
+    const fudoHtml = !fe ? '' : !fe.configurado
+      ? `<div class="card" style="background:#faf8f5">🔌 <b>Fudo:</b> sincronización no configurada. Cargá <span class="code">FUDO_API_KEY</span> y <span class="code">FUDO_API_SECRET</span> en Render para traer los productos automáticamente.</div>`
+      : `<div class="card" style="background:#faf8f5;display:flex;gap:14px;align-items:center;flex-wrap:wrap">
+          <div style="flex:1;min-width:260px">🔄 <b>Sincronizado con Fudo</b>${fe.minutos ? ` cada ${fe.minutos} min` : ''} · ${fe.vinculados_productos} productos vinculados<br>
+          <span class="stock-hint">${u ? `Última: ${fmtFecha(u.fin || u.inicio)} · ${u.ok === false ? `<b class="bad">Error: ${esc(u.detalle || '')}</b>` : u.ok ? `${u.leidos} leídos, ${u.creados} nuevos, ${u.actualizados} actualizados, ${u.desactivados} desactivados` : 'en curso…'}` : 'Todavía no se sincronizó.'}
+          ${u && u.ok && u.detalle ? `<br>⚠ ${esc(u.detalle).replace(/\n/g, '<br>⚠ ')}` : ''}</span><br>
+          <span class="stock-hint">De Fudo se toman nombre, categoría y estado. Stock, unidad y alertas se manejan solo en esta app.</span></div>
+          <button class="btn sec" id="pr-sync">Sincronizar con Fudo</button></div>`;
     main.innerHTML = `
       <h1>Productos</h1><p class="sub">Maestro de productos y alertas (vencimiento próximo, producto de cuidado, cadena de frío).</p>
+      ${fudoHtml}
       <div class="toolbar">
         <div class="grow"><label>Buscar</label><input id="pr-q" placeholder="Código, nombre o categoría…"></div>
         <div class="f"><label>Alerta</label><select id="pr-al"><option value="">Todas</option><option value="any">Con alguna alerta</option><option value="venc">Vencimiento próximo</option><option value="cuid">De cuidado</option><option value="frio">Cadena de frío</option></select></div>
@@ -656,13 +666,21 @@
         && (!q || `${p.codigo} ${p.nombre} ${p.categoria || ''}`.toLowerCase().includes(q))
         && (!al || (al === 'any' && tieneAlerta(p)) || (al === 'venc' && p.alerta_vencimiento) || (al === 'cuid' && p.alerta_cuidado) || (al === 'frio' && p.alerta_frio)));
       $('#pr-tbl').innerHTML = rows.length ? `<div class="tbl-wrap"><table><thead><tr><th>Código</th><th>Nombre</th><th>Categoría</th><th>Unidad</th><th>Alertas</th><th>Nota</th><th></th></tr></thead><tbody>
-        ${rows.map((p) => `<tr class="${p.activo ? '' : 'inactive'}"><td class="code">${esc(p.codigo)}</td><td>${esc(p.nombre)}${p.activo ? '' : ' (inactivo)'}</td><td>${esc(p.categoria || '')}</td><td>${esc(p.unidad)}</td>
+        ${rows.map((p) => `<tr class="${p.activo ? '' : 'inactive'}"><td class="code">${esc(p.codigo)}</td><td>${esc(p.nombre)}${p.fudo_id ? ' <span class="badge b-rol" title="Sincronizado desde Fudo">Fudo</span>' : ''}${p.activo ? '' : ' (inactivo)'}</td><td>${esc(p.categoria || '')}</td><td>${esc(p.unidad)}</td>
           <td>${badgesAlerta(p)}</td><td class="muted">${esc(p.nota_alerta || '')}</td><td class="num"><button class="btn ghost sm" data-ed="${p.id}">Editar</button></td></tr>`).join('')}
         </tbody></table></div><p class="muted">${rows.length} de ${productos.length} productos</p>` : `<div class="card empty">${productos.length ? 'Sin resultados.' : 'Todavía no hay productos. Cargalos uno a uno o importá el maestro en CSV.'}</div>`;
       $$('[data-ed]').forEach((b) => b.addEventListener('click', () => editarProducto(productos.find((p) => p.id == b.dataset.ed))));
     };
     ['#pr-q', '#pr-al', '#pr-inac'].forEach((s) => $(s).addEventListener('input', pintar));
     $('#pr-new').onclick = () => editarProducto(null);
+    if ($('#pr-sync')) $('#pr-sync').onclick = async () => {
+      const b = $('#pr-sync'); b.disabled = true; b.textContent = 'Sincronizando…';
+      try {
+        const r = await api('/api/fudo/sincronizar?entidad=productos', { method: 'POST' });
+        toast(`Fudo: ${r.creados} nuevos, ${r.actualizados} actualizados, ${r.desactivados} desactivados`);
+        router();
+      } catch (err) { toast(err.message, true); b.disabled = false; b.textContent = 'Sincronizar con Fudo'; }
+    };
     $('#pr-imp').onclick = importarMaestro;
     $('#pr-tpl').onclick = () => descargarCSV('plantilla_productos.csv', [
       ['codigo', 'nombre', 'categoria', 'unidad', 'vencimiento_proximo', 'fecha_vencimiento', 'cuidado', 'cadena_frio', 'nota_alerta', 'activo'],
@@ -677,6 +695,7 @@
     const n = !p;
     p = p || { codigo: '', nombre: '', categoria: '', unidad: 'UN', alerta_vencimiento: false, fecha_vencimiento: '', alerta_cuidado: false, alerta_frio: false, nota_alerta: '', activo: true };
     const m = modal(`<h2>${n ? 'Nuevo producto' : 'Editar producto'}</h2>
+      ${p.fudo_id ? `<p class="obs" style="margin-top:-6px">🔄 Vinculado a Fudo (ID ${esc(p.fudo_id)}): nombre, categoría y estado se actualizan desde Fudo. Unidad y alertas son solo de esta app.</p>` : ''}
       <form id="f-prod">
         <div class="row"><div class="f s"><label>Código *</label><input name="codigo" value="${esc(p.codigo)}" required maxlength="40"></div>
           <div class="f w"><label>Nombre *</label><input name="nombre" value="${esc(p.nombre)}" required maxlength="200"></div></div>
