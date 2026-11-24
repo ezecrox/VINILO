@@ -6,7 +6,7 @@ CREATE TABLE IF NOT EXISTS usuarios (
   username      VARCHAR(60)  NOT NULL UNIQUE,
   nombre        VARCHAR(120) NOT NULL,
   password_hash TEXT         NOT NULL,
-  rol           VARCHAR(20)  NOT NULL CHECK (rol IN ('ADMIN','RECEPTOR','ENCARGADO','REQUIRENTE')),
+  rol           VARCHAR(30)  NOT NULL,
   activo        BOOLEAN      NOT NULL DEFAULT TRUE,
   creado_en     TIMESTAMPTZ  NOT NULL DEFAULT now()
 );
@@ -107,9 +107,7 @@ CREATE TABLE IF NOT EXISTS proveedores (
 
 ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS permiso_compras BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS proveedor_id INT REFERENCES proveedores(id);
-ALTER TABLE usuarios DROP CONSTRAINT IF EXISTS usuarios_rol_check;
-ALTER TABLE usuarios ADD CONSTRAINT usuarios_rol_check
-  CHECK (rol IN ('ADMIN','RECEPTOR','ENCARGADO','REQUIRENTE','PROVEEDOR'));
+-- (los roles válidos ahora están en la tabla roles; ver más abajo)
 
 CREATE TABLE IF NOT EXISTS ordenes_compra (
   id             SERIAL PRIMARY KEY,
@@ -228,3 +226,31 @@ CREATE TABLE IF NOT EXISTS stock_minimos (
   minimo      INT NOT NULL CHECK (minimo > 0),
   PRIMARY KEY (almacen_id, producto_id)
 );
+
+-- ===== Roles configurables =====
+CREATE TABLE IF NOT EXISTS roles (
+  codigo      VARCHAR(30) PRIMARY KEY,
+  nombre      VARCHAR(80) NOT NULL,
+  descripcion TEXT,
+  permisos    TEXT NOT NULL DEFAULT '',   -- claves separadas por coma
+  almacenes   TEXT,                       -- ids separados por coma; NULL = todos
+  sistema     BOOLEAN NOT NULL DEFAULT FALSE,
+  creado_en   TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+INSERT INTO roles (codigo, nombre, descripcion, permisos, sistema) VALUES
+  ('ADMIN', 'Administrador', 'Acceso total a parametrizaciones y transacciones', '', TRUE),
+  ('RECEPTOR', 'Receptor', 'Recibe, transfiere, registra consumos y atiende pedidos',
+     'verStock,verPedidos,atenderPedido,verCompras,recibir,transferir,consumir,verMovimientos', TRUE),
+  ('ENCARGADO', 'Encargado', 'Consulta stock y movimientos; define stock mínimo',
+     'verStock,minimos,verPedidos,verCompras,verMovimientos', TRUE),
+  ('REQUIRENTE', 'Requirente', 'Hace notas de pedido de transferencia', 'verPedidos,crearPedido', TRUE),
+  ('PROVEEDOR', 'Proveedor', 'Portal del proveedor: solo sus pedidos y documentos', 'portalProveedor', TRUE)
+ON CONFLICT (codigo) DO NOTHING;
+
+ALTER TABLE usuarios DROP CONSTRAINT IF EXISTS usuarios_rol_check;
+ALTER TABLE usuarios ALTER COLUMN rol TYPE VARCHAR(30);
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'usuarios_rol_fk') THEN
+    ALTER TABLE usuarios ADD CONSTRAINT usuarios_rol_fk FOREIGN KEY (rol) REFERENCES roles(codigo) ON UPDATE CASCADE;
+  END IF;
+END $$;

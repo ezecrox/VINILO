@@ -218,3 +218,15 @@ tr.inactive td { color: #a8a397; }
 .resumen a small { color: var(--muted); }
 td.bajo-min { color: var(--danger); font-weight: 700; background: #fff6f5; }
 td .min { display: block; font-size: 0.7rem; color: var(--muted); font-weight: 400; }
+
+/* Pestañas y editor de roles */
+.tabs { display: flex; gap: 4px; margin-bottom: 18px; border-bottom: 1px solid var(--line); }
+.tabs a { padding: 8px 16px; text-decoration: none; color: var(--muted); font-weight: 600; border-bottom: 3px solid transparent; margin-bottom: -1px; }
+.tabs a.on { color: var(--ink); border-bottom-color: var(--accent); }
+.perm-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; }
+.perm-grid fieldset { border: 1px solid var(--line); border-radius: var(--radius); padding: 8px 12px 10px; margin: 0; }
+.perm-grid legend { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 700; padding: 0 4px; }
+.check.perm { align-items: flex-start; padding: 5px 0; }
+.check.perm input { margin-top: 3px; }
+.check.perm small { display: block; color: var(--muted); font-size: 0.8rem; }
+.alm-list { display: flex; flex-wrap: wrap; gap: 6px 18px; padding: 8px 0 4px 26px; }

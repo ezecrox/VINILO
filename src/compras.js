@@ -7,7 +7,7 @@ const TIPOS_ARCHIVO = {
 };
 const ABIERTAS = ['CONFIRMADA', 'PARCIAL'];
 
-module.exports = function registrarCompras({ route, query, tx, fail, permitir, registrarMovimiento, almacenActivo, isTrue, toInt, str, fechaOk }) {
+module.exports = function registrarCompras({ route, query, tx, fail, permitir, registrarMovimiento, almacenActivo, isTrue, toInt, str, fechaOk, veAlmacen, exigirAlmacen }) {
   const puede = (user, p) => user.permisos.includes(p);
   const permitirAlguno = (user, ...ps) => { if (!ps.some((p) => puede(user, p))) fail(403, 'No tenés permiso para esta operación'); };
   const esProveedor = (user) => user.rol === 'PROVEEDOR';
@@ -16,7 +16,7 @@ module.exports = function registrarCompras({ route, query, tx, fail, permitir, r
   const normProv = (r) => ({ ...r, id: Number(r.id), activo: isTrue(r.activo), usuarios: r.usuarios === undefined ? undefined : Number(r.usuarios) });
 
   route('GET', '/api/proveedores', async ({ user }) => {
-    permitirAlguno(user, 'compras', 'verCompras', 'parametrizar');
+    permitirAlguno(user, 'compras', 'verCompras', 'proveedores', 'usuarios');
     const { rows } = await query(
       `SELECT p.*, (SELECT count(*)::int FROM usuarios u WHERE u.proveedor_id = p.id) AS usuarios
        FROM proveedores p ORDER BY p.nombre`);
@@ -31,7 +31,7 @@ module.exports = function registrarCompras({ route, query, tx, fail, permitir, r
   const dup = (e) => { if (e.code === '23505' || /duplicate|unique/i.test(e.message)) fail(409, 'Ya existe un proveedor con ese nombre'); throw e; };
 
   route('POST', '/api/proveedores', async ({ user, body }) => {
-    permitirAlguno(user, 'compras', 'parametrizar');
+    permitir(user, 'proveedores');
     try {
       const { rows } = await query('INSERT INTO proveedores (nombre, cuit, email, telefono, contacto, direccion, comentario) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id', datosProveedor(body));
       return { id: Number(rows[0].id) };
@@ -39,7 +39,7 @@ module.exports = function registrarCompras({ route, query, tx, fail, permitir, r
   });
 
   route('PUT', '/api/proveedores/:id', async ({ user, body, params }) => {
-    permitirAlguno(user, 'compras', 'parametrizar');
+    permitir(user, 'proveedores');
     try {
       await query('UPDATE proveedores SET nombre=$2, cuit=$3, email=$4, telefono=$5, contacto=$6, direccion=$7, comentario=$8, activo=$9 WHERE id=$1',
         [toInt(params.id), ...datosProveedor(body), body.activo === undefined ? true : !!body.activo]);
@@ -62,6 +62,7 @@ module.exports = function registrarCompras({ route, query, tx, fail, permitir, r
     } else {
       permitirAlguno(user, 'compras', 'verCompras');
       if (oc.estado === 'BORRADOR' && !puede(user, 'compras')) fail(404, 'Pedido a proveedor inexistente');
+      if (!veAlmacen(user, oc.almacen_id)) fail(404, 'Pedido a proveedor inexistente');
     }
     return { ...oc, id: Number(oc.id), proveedor_id: Number(oc.proveedor_id), almacen_id: Number(oc.almacen_id) };
   }
@@ -117,6 +118,7 @@ module.exports = function registrarCompras({ route, query, tx, fail, permitir, r
       permitirAlguno(user, 'compras', 'verCompras');
       if (!puede(user, 'compras')) where.push("oc.estado <> 'BORRADOR'");
       if (url.searchParams.get('proveedor_id')) add('oc.proveedor_id = ?', toInt(url.searchParams.get('proveedor_id')));
+      if (user.almacenes) where.push(`oc.almacen_id = ANY('{${user.almacenes.join(',')}}'::int[])`);
     }
     const est = url.searchParams.get('estado');
     if (est === 'ABIERTAS') where.push("oc.estado IN ('BORRADOR','CONFIRMADA','PARCIAL')");
@@ -168,6 +170,7 @@ module.exports = function registrarCompras({ route, query, tx, fail, permitir, r
     permitir(user, 'compras');
     return tx(async (client) => {
       const cab = await validarCabecera(client, body);
+      exigirAlmacen(user, cab[1], 'entrega');
       const { rows } = await client.query(
         'INSERT INTO ordenes_compra (proveedor_id, almacen_id, fecha_entrega, observacion, creado_por) VALUES ($1,$2,$3,$4,$5) RETURNING id',
         [...cab, user.id]);
@@ -185,6 +188,7 @@ module.exports = function registrarCompras({ route, query, tx, fail, permitir, r
     if (!rows[0]) fail(404, 'Pedido a proveedor inexistente');
     const oc = rows[0];
     if (esProveedor(user) && Number(oc.proveedor_id) !== user.proveedor_id) fail(404, 'Pedido a proveedor inexistente');
+    if (!esProveedor(user) && !veAlmacen(user, oc.almacen_id)) fail(404, 'Pedido a proveedor inexistente');
     if (estados && !estados.includes(oc.estado)) fail(409, `El pedido está ${oc.estado} y no admite esta operación`);
     return oc;
   }
@@ -193,8 +197,10 @@ module.exports = function registrarCompras({ route, query, tx, fail, permitir, r
     permitir(user, 'compras');
     const id = toInt(params.id);
     return tx(async (client) => {
-      await ocBloqueada(client, id, ['BORRADOR'], user);
+      const actual = await ocBloqueada(client, id, ['BORRADOR'], user);
+      exigirAlmacen(user, actual.almacen_id, 'entrega');
       const cab = await validarCabecera(client, body);
+      exigirAlmacen(user, cab[1], 'entrega');
       await client.query('UPDATE ordenes_compra SET proveedor_id=$2, almacen_id=$3, fecha_entrega=$4, observacion=$5 WHERE id=$1', [id, ...cab]);
       await guardarItems(client, id, body.items);
       return { ok: true };
@@ -245,6 +251,7 @@ module.exports = function registrarCompras({ route, query, tx, fail, permitir, r
     const id = toInt(params.id);
     return tx(async (client) => {
       const oc = await ocBloqueada(client, id, ABIERTAS, user);
+      exigirAlmacen(user, oc.almacen_id, 'entrega');
       const { rows: items } = await client.query(
         `SELECT i.id, i.producto_id, i.cantidad, i.cantidad_recibida, p.nombre FROM oc_items i JOIN productos p ON p.id = i.producto_id
          WHERE i.oc_id = $1 FOR UPDATE OF i`, [id]);

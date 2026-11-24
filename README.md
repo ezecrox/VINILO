@@ -17,6 +17,8 @@ recepción de mercadería, transferencias entre depósitos, consumos, ajustes de
 | **REQUIRENTE** | Crear notas de pedido (solicitud de transferencia de un depósito a otro), ver y cancelar las propias |
 | **PROVEEDOR** | Vinculado a un proveedor. Solo ve **sus** pedidos ya confirmados (lo pedido, lo recibido y lo pendiente) y sube remitos / facturas |
 
+**Roles configurables:** en **Usuarios y roles → Roles** se elige, para cada rol, qué opciones del menú y acciones tiene habilitadas y **qué almacenes ve** (todos o una lista). Se pueden crear roles nuevos (p. ej. "Barra Galpón" que solo ve EL GALPON VINILO y registra consumos). La tabla de arriba describe la configuración inicial. ADMIN siempre tiene acceso total y PROVEEDOR solo a su portal. Un usuario solo ve el stock, los movimientos, pedidos y tareas de sus almacenes; para transferir o pedir mercadería puede elegir cualquier almacén como contraparte.
+
 **Permiso de Compras:** el ADMIN lo puede sumar a cualquier usuario (ADMIN lo tiene siempre). Solo con este permiso se crean, confirman, cierran o anulan pedidos a proveedores.
 
 > El consumo quedó habilitado para ADMIN y RECEPTOR. Para cambiarlo, editar el objeto `PUEDE` al principio de `server.js`.

@@ -6,37 +6,8 @@ const { hashPassword, verifyPassword, signToken, verifyToken } = require('./src/
 
 const PORT = process.env.PORT || 3000;
 const PUBLIC_DIR = path.join(__dirname, 'public');
-const ROLES = ['ADMIN', 'RECEPTOR', 'ENCARGADO', 'REQUIRENTE', 'PROVEEDOR'];
+const { CATALOGO, permisosDe } = require('./src/permisos');
 
-// Permisos por rol
-const PUEDE = {
-  parametrizar: ['ADMIN'],
-  recibir: ['ADMIN', 'RECEPTOR'],
-  transferir: ['ADMIN', 'RECEPTOR'],
-  consumir: ['ADMIN', 'RECEPTOR'],
-  ajustar: ['ADMIN'],
-  verStock: ['ADMIN', 'RECEPTOR', 'ENCARGADO'],
-  minimos: ['ADMIN', 'ENCARGADO'],
-  verMovimientos: ['ADMIN', 'RECEPTOR', 'ENCARGADO'],
-  crearPedido: ['ADMIN', 'REQUIRENTE'],
-  atenderPedido: ['ADMIN', 'RECEPTOR'],
-  verPedidos: ['ADMIN', 'RECEPTOR', 'ENCARGADO', 'REQUIRENTE'],
-  verProductos: ['ADMIN', 'RECEPTOR', 'ENCARGADO', 'REQUIRENTE'],
-  // Compras: ADMIN siempre; el resto según el permiso "Compras" del usuario (ver permisosDe)
-  compras: ['ADMIN'],
-  verCompras: ['ADMIN', 'RECEPTOR', 'ENCARGADO'],
-  portalProveedor: ['PROVEEDOR'],
-};
-
-function permisosDe(u) {
-  const p = Object.keys(PUEDE).filter((k) => PUEDE[k].includes(u.rol));
-  if (u.permiso_compras && u.rol !== 'PROVEEDOR') {
-    if (!p.includes('compras')) p.push('compras');
-    if (!p.includes('verCompras')) p.push('verCompras');
-    if (!p.includes('verProductos')) p.push('verProductos');
-  }
-  return p;
-}
 const PERMISO_POR_TIPO = { RECEPCION: 'recibir', TRANSFERENCIA: 'transferir', CONSUMO: 'consumir', AJUSTE: 'ajustar' };
 
 class HttpError extends Error {
@@ -44,6 +15,15 @@ class HttpError extends Error {
 }
 const fail = (status, msg) => { throw new HttpError(status, msg); };
 const permitir = (user, accion) => { if (!user.permisos.includes(accion)) fail(403, 'No tenés permiso para esta operación'); };
+const permitirAlguno = (user, ...acc) => { if (!acc.some((a) => user.permisos.includes(a))) fail(403, 'No tenés permiso para esta operación'); };
+
+// Almacenes visibles: user.almacenes = null (todos) o lista de ids
+const veAlmacen = (user, id) => !user.almacenes || user.almacenes.includes(Number(id));
+const exigirAlmacen = (user, id, etiqueta = '') => {
+  if (id !== null && id !== undefined && id !== '' && !veAlmacen(user, id)) fail(403, `No tenés acceso a ese almacén${etiqueta ? ' (' + etiqueta + ')' : ''}`);
+};
+// Fragmento SQL seguro (ids enteros validados) para filtrar por almacenes visibles
+const sqlAlm = (user, col) => (user.almacenes ? ` AND ${col} = ANY('{${user.almacenes.map(Number).filter(Number.isInteger).join(',')}}'::int[])` : '');
 
 // ---------- Mini router ----------
 const routes = [];
@@ -91,17 +71,20 @@ async function currentUser(req) {
   const payload = verifyToken(h.startsWith('Bearer ') ? h.slice(7) : null);
   if (!payload) return null;
   const { rows } = await query(
-    `SELECT u.id, u.username, u.nombre, u.rol, u.activo, u.permiso_compras, u.proveedor_id, p.nombre AS proveedor
-     FROM usuarios u LEFT JOIN proveedores p ON p.id = u.proveedor_id WHERE u.id = $1`, [payload.uid]);
+    `SELECT u.id, u.username, u.nombre, u.rol, u.activo, u.permiso_compras, u.proveedor_id, p.nombre AS proveedor,
+            r.nombre AS rol_nombre, r.permisos AS rol_permisos, r.almacenes AS rol_almacenes
+     FROM usuarios u LEFT JOIN proveedores p ON p.id = u.proveedor_id LEFT JOIN roles r ON r.codigo = u.rol WHERE u.id = $1`, [payload.uid]);
   const u = rows[0];
   if (!u || !isTrue(u.activo)) return null;
   if (u.rol === 'PROVEEDOR' && !u.proveedor_id) return null;
   const user = {
-    id: Number(u.id), username: u.username, nombre: u.nombre, rol: u.rol,
+    id: Number(u.id), username: u.username, nombre: u.nombre, rol: u.rol, rol_nombre: u.rol_nombre || u.rol,
     permiso_compras: isTrue(u.permiso_compras) || u.rol === 'ADMIN',
     proveedor_id: u.proveedor_id ? Number(u.proveedor_id) : null, proveedor: u.proveedor || null,
+    almacenes: u.rol === 'ADMIN' || u.rol === 'PROVEEDOR' || u.rol_almacenes === null || u.rol_almacenes === undefined || u.rol_almacenes === ''
+      ? null : String(u.rol_almacenes).split(',').map(Number).filter(Number.isInteger),
   };
-  user.permisos = permisosDe(user);
+  user.permisos = permisosDe(user, u.rol_permisos);
   return user;
 }
 
@@ -231,17 +214,18 @@ route('POST', '/api/me/password', async ({ user, body }) => {
 
 // ---------- Usuarios ----------
 route('GET', '/api/usuarios', async ({ user }) => {
-  permitir(user, 'parametrizar');
+  permitir(user, 'usuarios');
   const { rows } = await query(
-    `SELECT u.id, u.username, u.nombre, u.rol, u.activo, u.permiso_compras, u.proveedor_id, p.nombre AS proveedor, u.creado_en
-     FROM usuarios u LEFT JOIN proveedores p ON p.id = u.proveedor_id ORDER BY u.nombre`);
+    `SELECT u.id, u.username, u.nombre, u.rol, u.activo, u.permiso_compras, u.proveedor_id, p.nombre AS proveedor, u.creado_en, r.nombre AS rol_nombre
+     FROM usuarios u LEFT JOIN proveedores p ON p.id = u.proveedor_id LEFT JOIN roles r ON r.codigo = u.rol ORDER BY u.nombre`);
   return rows.map((r) => ({ ...r, id: Number(r.id), activo: isTrue(r.activo), permiso_compras: isTrue(r.permiso_compras), proveedor_id: r.proveedor_id ? Number(r.proveedor_id) : null }));
 });
 
 // Valida rol / proveedor / permiso de compras
 async function datosRolUsuario(body, actual = {}) {
   const rol = body.rol ?? actual.rol;
-  if (!ROLES.includes(rol)) fail(400, 'Rol inválido');
+  const { rows: rr } = await query('SELECT codigo FROM roles WHERE codigo = $1', [rol]);
+  if (!rr[0]) fail(400, 'Rol inválido');
   let proveedorId = null;
   let compras = body.permiso_compras === undefined ? isTrue(actual.permiso_compras) : bool(body.permiso_compras);
   if (rol === 'PROVEEDOR') {
@@ -255,7 +239,7 @@ async function datosRolUsuario(body, actual = {}) {
 }
 
 route('POST', '/api/usuarios', async ({ user, body }) => {
-  permitir(user, 'parametrizar');
+  permitir(user, 'usuarios');
   const username = str(body.username, 60);
   const nombre = str(body.nombre, 120);
   if (!username || !nombre) fail(400, 'Usuario y nombre son obligatorios');
@@ -275,7 +259,7 @@ route('POST', '/api/usuarios', async ({ user, body }) => {
 });
 
 route('PUT', '/api/usuarios/:id', async ({ user, body, params }) => {
-  permitir(user, 'parametrizar');
+  permitir(user, 'usuarios');
   const id = toInt(params.id);
   const { rows } = await query('SELECT * FROM usuarios WHERE id = $1', [id]);
   const u = rows[0];
@@ -292,14 +276,89 @@ route('PUT', '/api/usuarios/:id', async ({ user, body, params }) => {
   return { ok: true };
 });
 
+// ---------- Roles ----------
+const FIJOS = ['ADMIN', 'PROVEEDOR']; // ADMIN = todo; PROVEEDOR = portal (no se configuran)
+
+route('GET', '/api/roles/catalogo', async ({ user }) => {
+  permitir(user, 'usuarios');
+  return CATALOGO;
+});
+
+route('GET', '/api/roles', async ({ user }) => {
+  permitirAlguno(user, 'usuarios');
+  const { rows } = await query(
+    `SELECT r.*, (SELECT count(*)::int FROM usuarios u WHERE u.rol = r.codigo) AS usuarios FROM roles r
+     ORDER BY CASE r.codigo WHEN 'ADMIN' THEN 0 WHEN 'PROVEEDOR' THEN 2 ELSE 1 END, r.nombre`);
+  return rows.map((r) => ({
+    codigo: r.codigo, nombre: r.nombre, descripcion: r.descripcion, sistema: isTrue(r.sistema), fijo: FIJOS.includes(r.codigo),
+    permisos: r.codigo === 'ADMIN' ? CATALOGO.map((c) => c.clave) : String(r.permisos || '').split(',').filter(Boolean),
+    almacenes: r.almacenes === null || r.almacenes === undefined || r.almacenes === '' ? null : String(r.almacenes).split(',').map(Number),
+    usuarios: Number(r.usuarios),
+  }));
+});
+
+function datosRol(body) {
+  const nombre = str(body.nombre, 80);
+  if (!nombre) fail(400, 'El nombre del rol es obligatorio');
+  const claves = CATALOGO.map((c) => c.clave);
+  const permisos = (Array.isArray(body.permisos) ? body.permisos : []).filter((p) => claves.includes(p));
+  if (!permisos.length) fail(400, 'Elegí al menos una opción del menú');
+  let almacenes = null;
+  if (Array.isArray(body.almacenes)) {
+    almacenes = [...new Set(body.almacenes.map(toInt).filter(Number.isInteger))];
+    if (!almacenes.length) fail(400, 'Elegí al menos un almacén o "Todos los almacenes"');
+  }
+  return { nombre, descripcion: str(body.descripcion, 300), permisos: permisos.join(','), almacenes: almacenes ? almacenes.join(',') : null };
+}
+
+route('POST', '/api/roles', async ({ user, body }) => {
+  permitir(user, 'usuarios');
+  const codigo = String(body.codigo || body.nombre || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toUpperCase().replace(/[^A-Z0-9]+/g, '_').replace(/^_|_$/g, '').slice(0, 30);
+  if (!codigo) fail(400, 'Indicá el nombre del rol');
+  const d = datosRol(body);
+  try {
+    await query('INSERT INTO roles (codigo, nombre, descripcion, permisos, almacenes) VALUES ($1,$2,$3,$4,$5)', [codigo, d.nombre, d.descripcion, d.permisos, d.almacenes]);
+  } catch (e) {
+    if (e.code === '23505' || /duplicate|unique/i.test(e.message)) fail(409, `Ya existe un rol con el código ${codigo}`);
+    throw e;
+  }
+  return { codigo };
+});
+
+route('PUT', '/api/roles/:codigo', async ({ user, body, params }) => {
+  permitir(user, 'usuarios');
+  const codigo = params.codigo;
+  if (FIJOS.includes(codigo)) fail(400, codigo === 'ADMIN' ? 'El rol Administrador siempre tiene acceso total' : 'El rol Proveedor tiene un acceso fijo a su portal');
+  const d = datosRol(body);
+  // Evitar que quien edita se quite el acceso a Usuarios y roles
+  if (user.rol === codigo && !d.permisos.split(',').includes('usuarios')) fail(400, 'No podés quitarle "Usuarios y roles" a tu propio rol');
+  const { rows } = await query('UPDATE roles SET nombre=$2, descripcion=$3, permisos=$4, almacenes=$5 WHERE codigo=$1 RETURNING codigo',
+    [codigo, d.nombre, d.descripcion, d.permisos, d.almacenes]);
+  if (!rows[0]) fail(404, 'Rol inexistente');
+  return { ok: true };
+});
+
+route('DELETE', '/api/roles/:codigo', async ({ user, params }) => {
+  permitir(user, 'usuarios');
+  const { rows } = await query('SELECT sistema, (SELECT count(*)::int FROM usuarios u WHERE u.rol = roles.codigo) AS n FROM roles WHERE codigo = $1', [params.codigo]);
+  if (!rows[0]) fail(404, 'Rol inexistente');
+  if (isTrue(rows[0].sistema)) fail(400, 'Los roles de sistema no se eliminan (se pueden editar)');
+  if (Number(rows[0].n) > 0) fail(409, 'El rol tiene usuarios asignados: cambiales el rol antes de eliminarlo');
+  await query('DELETE FROM roles WHERE codigo = $1', [params.codigo]);
+  return { ok: true };
+});
+
 // ---------- Almacenes ----------
-route('GET', '/api/almacenes', async () => {
+// ?todos=1 devuelve todos los almacenes (para elegir el destino de una transferencia o el origen de un pedido)
+route('GET', '/api/almacenes', async ({ user, url }) => {
   const { rows } = await query('SELECT id, nombre, activo FROM almacenes ORDER BY id');
-  return rows.map((r) => ({ ...r, id: Number(r.id), activo: isTrue(r.activo) }));
+  const todos = url.searchParams.get('todos') === '1' || user.permisos.includes('almacenes');
+  return rows.map((r) => ({ ...r, id: Number(r.id), activo: isTrue(r.activo), visible: veAlmacen(user, r.id) }))
+    .filter((r) => todos || r.visible);
 });
 
 route('POST', '/api/almacenes', async ({ user, body }) => {
-  permitir(user, 'parametrizar');
+  permitir(user, 'almacenes');
   const nombre = str(body.nombre, 80);
   if (!nombre) fail(400, 'El nombre es obligatorio');
   try {
@@ -312,7 +371,7 @@ route('POST', '/api/almacenes', async ({ user, body }) => {
 });
 
 route('PUT', '/api/almacenes/:id', async ({ user, body, params }) => {
-  permitir(user, 'parametrizar');
+  permitir(user, 'almacenes');
   const id = toInt(params.id);
   const nombre = str(body.nombre, 80);
   if (!nombre) fail(400, 'El nombre es obligatorio');
@@ -361,7 +420,7 @@ function datosProducto(body) {
 }
 
 route('POST', '/api/productos', async ({ user, body }) => {
-  permitir(user, 'parametrizar');
+  permitir(user, 'productos');
   try {
     const { rows } = await query(
       `INSERT INTO productos (codigo, nombre, categoria, unidad, alerta_vencimiento, fecha_vencimiento, alerta_cuidado, alerta_frio, nota_alerta, activo)
@@ -374,7 +433,7 @@ route('POST', '/api/productos', async ({ user, body }) => {
 });
 
 route('PUT', '/api/productos/:id', async ({ user, body, params }) => {
-  permitir(user, 'parametrizar');
+  permitir(user, 'productos');
   try {
     await query(
       `UPDATE productos SET codigo=$2, nombre=$3, categoria=$4, unidad=$5, alerta_vencimiento=$6, fecha_vencimiento=$7,
@@ -389,7 +448,7 @@ route('PUT', '/api/productos/:id', async ({ user, body, params }) => {
 
 // Importación del maestro: crea o actualiza por código
 route('POST', '/api/productos/importar', async ({ user, body }) => {
-  permitir(user, 'parametrizar');
+  permitir(user, 'productos');
   const filas = Array.isArray(body.productos) ? body.productos : [];
   if (!filas.length) fail(400, 'No hay filas para importar');
   return tx(async (client) => {
@@ -425,8 +484,9 @@ route('GET', '/api/stock', async ({ user }) => {
   for (const r of st.rows) (stockMap[Number(r.producto_id)] = stockMap[Number(r.producto_id)] || {})[Number(r.almacen_id)] = Number(r.cantidad);
   const minMap = {};
   for (const r of mins.rows) (minMap[Number(r.producto_id)] = minMap[Number(r.producto_id)] || {})[Number(r.almacen_id)] = Number(r.minimo);
+  for (const k of Object.keys(stockMap)) for (const a of Object.keys(stockMap[k])) if (!veAlmacen(user, a)) delete stockMap[k][a];
   return {
-    almacenes: alm.rows.map((a) => ({ id: Number(a.id), nombre: a.nombre, activo: isTrue(a.activo) })),
+    almacenes: alm.rows.map((a) => ({ id: Number(a.id), nombre: a.nombre, activo: isTrue(a.activo) })).filter((a) => veAlmacen(user, a.id)),
     productos: prods.rows.map(normalizarProducto).map((p) => {
       const porAlmacen = stockMap[p.id] || {};
       return { ...p, stock: porAlmacen, minimos: minMap[p.id] || {}, total: Object.values(porAlmacen).reduce((x, y) => x + y, 0) };
@@ -436,7 +496,7 @@ route('GET', '/api/stock', async ({ user }) => {
 
 // Stock mínimo por almacén de un producto
 route('GET', '/api/productos/:id/minimos', async ({ user, params }) => {
-  if (!user.permisos.includes('verStock') && !user.permisos.includes('parametrizar')) fail(403, 'No tenés permiso para esta operación');
+  permitirAlguno(user, 'verStock', 'productos');
   const { rows } = await query('SELECT almacen_id, minimo FROM stock_minimos WHERE producto_id = $1', [toInt(params.id)]);
   return Object.fromEntries(rows.map((r) => [Number(r.almacen_id), Number(r.minimo)]));
 });
@@ -452,6 +512,7 @@ route('PUT', '/api/productos/:id/minimos', async ({ user, body, params }) => {
       const almId = toInt(alm);
       const min = v === '' || v === null || v === undefined ? 0 : toInt(v);
       if (!Number.isInteger(almId) || !Number.isInteger(min) || min < 0) fail(400, 'Los mínimos deben ser enteros mayores o iguales a 0');
+      exigirAlmacen(user, almId);
       if (min === 0) await client.query('DELETE FROM stock_minimos WHERE almacen_id = $1 AND producto_id = $2', [almId, pid]);
       else await client.query(
         `INSERT INTO stock_minimos (almacen_id, producto_id, minimo) VALUES ($1,$2,$3)
@@ -466,6 +527,8 @@ route('POST', '/api/movimientos', async ({ user, body }) => {
   const accion = PERMISO_POR_TIPO[body.tipo];
   if (!accion) fail(400, 'Tipo de movimiento inválido');
   permitir(user, accion);
+  if (body.tipo === 'RECEPCION') exigirAlmacen(user, body.destino_id, 'destino');
+  else exigirAlmacen(user, body.origen_id, 'origen');
   const id = await tx((client) => registrarMovimiento(client, { ...body, usuario_id: user.id, pedido_id: null, oc_id: null }));
   return { id };
 });
@@ -477,6 +540,7 @@ route('GET', '/api/movimientos', async ({ user, url }) => {
   const params = [];
   const add = (cond, val) => { params.push(val); where.push(cond.replace('?', `$${params.length}`)); };
   if (q.get('tipo')) add('m.tipo = ?', q.get('tipo'));
+  if (user.almacenes) where.push(`(m.origen_id = ANY('{${user.almacenes.join(',')}}'::int[]) OR m.destino_id = ANY('{${user.almacenes.join(',')}}'::int[]))`);
   if (q.get('almacen_id')) { params.push(toInt(q.get('almacen_id'))); where.push(`(m.origen_id = $${params.length} OR m.destino_id = $${params.length})`); }
   if (fechaOk(q.get('desde'))) add("m.fecha >= (?::date)::timestamp AT TIME ZONE 'America/Argentina/Buenos_Aires'", q.get('desde'));
   if (fechaOk(q.get('hasta'))) add("m.fecha < ((?::date) + 1)::timestamp AT TIME ZONE 'America/Argentina/Buenos_Aires'", q.get('hasta'));
@@ -503,6 +567,7 @@ route('GET', '/api/movimientos/:id', async ({ user, params }) => {
      FROM movimientos m LEFT JOIN almacenes o ON o.id = m.origen_id LEFT JOIN almacenes d ON d.id = m.destino_id
      JOIN usuarios u ON u.id = m.usuario_id WHERE m.id = $1`, [id]);
   if (!rows[0]) fail(404, 'Movimiento inexistente');
+  if (![rows[0].origen_id, rows[0].destino_id].filter(Boolean).some((a) => veAlmacen(user, a))) fail(404, 'Movimiento inexistente');
   const { rows: items } = await query(
     `SELECT i.cantidad, p.codigo, p.nombre, p.unidad FROM movimiento_items i JOIN productos p ON p.id = i.producto_id
      WHERE i.movimiento_id = $1 ORDER BY p.nombre`, [id]);
@@ -544,6 +609,7 @@ route('GET', '/api/pedidos', async ({ user, url }) => {
   const params = [];
   if (user.rol === 'REQUIRENTE') { params.push(user.id); where.push(`pe.solicitante_id = $${params.length}`); }
   if (estado) { params.push(estado); where.push(`pe.estado = $${params.length}`); }
+  if (user.almacenes && user.rol !== 'REQUIRENTE') where.push(`(pe.origen_id = ANY('{${user.almacenes.join(',')}}'::int[]) OR pe.destino_id = ANY('{${user.almacenes.join(',')}}'::int[]))`);
   return cargarPedidos(where.length ? 'WHERE ' + where.join(' AND ') : '', params);
 });
 
@@ -552,6 +618,7 @@ route('POST', '/api/pedidos', async ({ user, body }) => {
   return tx(async (client) => {
     const origenId = toInt(body.origen_id);
     const destinoId = toInt(body.destino_id);
+    exigirAlmacen(user, destinoId, 'destino');
     await almacenActivo(client, origenId, 'origen');
     await almacenActivo(client, destinoId, 'destino');
     if (origenId === destinoId) fail(400, 'El origen y el destino deben ser distintos');
@@ -589,6 +656,7 @@ route('POST', '/api/pedidos/:id/atender', async ({ user, body, params }) => {
   const id = toInt(params.id);
   return tx(async (client) => {
     const pe = await pedidoPendiente(client, id);
+    exigirAlmacen(user, pe.origen_id, 'origen');
     const { rows: items } = await client.query('SELECT id, producto_id, cantidad FROM pedido_items WHERE pedido_id = $1', [id]);
     const entregas = new Map((Array.isArray(body.items) ? body.items : []).map((i) => [toInt(i.item_id), toInt(i.cantidad)]));
     const movItems = [];
@@ -613,7 +681,8 @@ route('POST', '/api/pedidos/:id/rechazar', async ({ user, body, params }) => {
   permitir(user, 'atenderPedido');
   const id = toInt(params.id);
   return tx(async (client) => {
-    await pedidoPendiente(client, id);
+    const pe = await pedidoPendiente(client, id);
+    if (!veAlmacen(user, pe.origen_id) && !veAlmacen(user, pe.destino_id)) fail(403, 'No tenés acceso a los almacenes de este pedido');
     await client.query("UPDATE pedidos SET estado = 'RECHAZADO', motivo_rechazo = $2, atendido_por = $3, atendido_en = now() WHERE id = $1",
       [id, str(body.motivo, 500), user.id]);
     return { ok: true };
@@ -632,13 +701,13 @@ route('POST', '/api/pedidos/:id/cancelar', async ({ user, params }) => {
 });
 
 // ---------- Compras a proveedores ----------
-require('./src/compras')({ route, query, tx, fail, permitir, registrarMovimiento, almacenActivo, isTrue, toInt, str, fechaOk });
+require('./src/compras')({ route, query, tx, fail, permitir, registrarMovimiento, almacenActivo, isTrue, toInt, str, fechaOk, veAlmacen, exigirAlmacen });
 
 // ---------- Integración Fudo ----------
 const fudo = require('./src/fudo');
 const { pool } = require('./src/db');
 route('GET', '/api/fudo/estado', async ({ user }) => {
-  if (!user.permisos.includes('compras') && !user.permisos.includes('parametrizar')) fail(403, 'No tenés permiso para esta operación');
+  permitirAlguno(user, 'compras', 'productos', 'proveedores');
   const ultimo = {};
   for (const e of ['proveedores', 'productos']) {
     const { rows } = await query('SELECT * FROM fudo_sync_log WHERE entidad = $1 ORDER BY id DESC LIMIT 1', [e]);
@@ -653,7 +722,7 @@ route('GET', '/api/fudo/estado', async ({ user }) => {
   };
 });
 route('POST', '/api/fudo/sincronizar', async ({ user, url }) => {
-  if (!user.permisos.includes('compras') && !user.permisos.includes('parametrizar')) fail(403, 'No tenés permiso para esta operación');
+  permitirAlguno(user, 'compras', 'productos', 'proveedores');
   if (!fudo.configurado()) fail(400, 'La integración con Fudo no está configurada: cargá FUDO_API_KEY y FUDO_API_SECRET en Render.');
   const entidad = url.searchParams.get('entidad') || 'proveedores';
   const fn = entidad === 'productos' ? fudo.sincronizarProductos : fudo.sincronizarProveedores;
@@ -661,13 +730,13 @@ route('POST', '/api/fudo/sincronizar', async ({ user, url }) => {
 });
 
 // ---------- Consumos desde ventas de Fudo ----------
-require('./src/consumos')({ route, query, tx, fail, permitir, registrarMovimiento, almacenActivo, isTrue, toInt, str, pool });
+require('./src/consumos')({ route, query, tx, fail, permitir, registrarMovimiento, almacenActivo, isTrue, toInt, str, pool, veAlmacen, exigirAlmacen });
 
 const { calcularTareas } = require('./src/tareas');
 
 // ---------- Panel ----------
 route('GET', '/api/dashboard', async ({ user }) => {
-  const res = { rol: user.rol, pedidos_pendientes: 0, tareas: await calcularTareas(user, { query, fudo }) };
+  const res = { rol: user.rol, pedidos_pendientes: 0, tareas: await calcularTareas(user, { query, fudo, sqlAlm }) };
   if (user.permisos.includes('verCompras') || user.permisos.includes('portalProveedor')) {
     const prov = user.rol === 'PROVEEDOR';
     const { rows } = await query(
@@ -688,7 +757,8 @@ route('GET', '/api/dashboard', async ({ user }) => {
               count(s.producto_id) FILTER (WHERE s.cantidad > 0)::int AS productos,
               coalesce(sum(s.cantidad), 0)::int AS unidades
        FROM almacenes a LEFT JOIN stock s ON s.almacen_id = a.id GROUP BY a.id ORDER BY a.id`);
-    res.almacenes = alm.map((a) => ({ id: Number(a.id), nombre: a.nombre, activo: isTrue(a.activo), productos: Number(a.productos), unidades: Number(a.unidades) }));
+    res.almacenes = alm.map((a) => ({ id: Number(a.id), nombre: a.nombre, activo: isTrue(a.activo), productos: Number(a.productos), unidades: Number(a.unidades) }))
+      .filter((a) => veAlmacen(user, a.id));
     const { rows: alertas } = await query(
       `SELECT ${PRODUCTO_COLS}, (SELECT coalesce(sum(cantidad),0)::int FROM stock s WHERE s.producto_id = productos.id) AS total
        FROM productos WHERE activo AND (alerta_vencimiento OR alerta_cuidado OR alerta_frio)
@@ -697,7 +767,9 @@ route('GET', '/api/dashboard', async ({ user }) => {
     const { rows: ult } = await query(
       `SELECT m.id, m.tipo, m.fecha, o.nombre AS origen, d.nombre AS destino, u.nombre AS usuario
        FROM movimientos m LEFT JOIN almacenes o ON o.id = m.origen_id LEFT JOIN almacenes d ON d.id = m.destino_id
-       JOIN usuarios u ON u.id = m.usuario_id ORDER BY m.fecha DESC, m.id DESC LIMIT 8`);
+       JOIN usuarios u ON u.id = m.usuario_id
+       ${user.almacenes ? `WHERE (m.origen_id = ANY('{${user.almacenes.join(',')}}'::int[]) OR m.destino_id = ANY('{${user.almacenes.join(',')}}'::int[]))` : ''}
+       ORDER BY m.fecha DESC, m.id DESC LIMIT 8`);
     res.ultimos = ult.map((m) => ({ ...m, id: Number(m.id) }));
   }
   return res;

@@ -134,12 +134,18 @@
     });
   }
 
+  async function cargarAlmacenes() {
+    const [vis, todos] = await Promise.all([api('/api/almacenes'), api('/api/almacenes?todos=1')]);
+    S.almacenes = vis.filter((a) => a.visible !== false);
+    S.todosAlmacenes = todos;
+  }
+
   async function boot() {
     if (!S.token) return renderLogin();
     try {
       const me = await api('/api/me');
       S.user = me.user; S.permisos = me.permisos;
-      S.almacenes = await api('/api/almacenes');
+      await cargarAlmacenes();
     } catch (_) { return renderLogin(); }
     renderShell();
     router();
@@ -172,20 +178,20 @@
     { id: 'stock', lbl: 'Stock por almacén', ok: () => puede('verStock') },
     { id: 'pedidos', lbl: 'Notas de pedido', ok: () => puede('verPedidos'), pill: true },
     { id: 'compras', lbl: 'Mis pedidos', ok: () => puede('portalProveedor'), pillOc: true },
-    { sec: 'Compras', ok: () => puede('compras') || puede('verCompras') },
+    { sec: 'Compras', ok: () => puede('compras') || puede('verCompras') || puede('proveedores') },
     { id: 'compras', lbl: 'Pedidos a proveedores', ok: () => puede('compras') || puede('verCompras'), pillOc: true },
-    { id: 'proveedores', lbl: 'Proveedores', ok: () => puede('compras') || puede('parametrizar') },
-    { sec: 'Operaciones', ok: () => puede('recibir') || puede('consumir') },
+    { id: 'proveedores', lbl: 'Proveedores', ok: () => puede('proveedores') },
+    { sec: 'Operaciones', ok: () => ['recibir', 'transferir', 'consumir', 'ajustar', 'verMovimientos'].some(puede) },
     { id: 'recepcion', lbl: 'Recepción', ok: () => puede('recibir') },
     { id: 'transferencia', lbl: 'Transferencia', ok: () => puede('transferir') },
     { id: 'consumo', lbl: 'Consumo', ok: () => puede('consumir') },
     { id: 'consumos-fudo', lbl: 'Consumos desde Fudo', ok: () => puede('consumir') || puede('verMovimientos'), pillCf: true },
     { id: 'ajuste', lbl: 'Ajuste de inventario', ok: () => puede('ajustar') },
     { id: 'movimientos', lbl: 'Movimientos', ok: () => puede('verMovimientos') },
-    { sec: 'Parametrización', ok: () => puede('parametrizar') },
-    { id: 'productos', lbl: 'Productos', ok: () => puede('parametrizar') },
-    { id: 'almacenes', lbl: 'Almacenes', ok: () => puede('parametrizar') },
-    { id: 'usuarios', lbl: 'Usuarios', ok: () => puede('parametrizar') },
+    { sec: 'Parametrización', ok: () => puede('productos') || puede('almacenes') || puede('usuarios') },
+    { id: 'productos', lbl: 'Productos', ok: () => puede('productos') },
+    { id: 'almacenes', lbl: 'Almacenes', ok: () => puede('almacenes') },
+    { id: 'usuarios', lbl: 'Usuarios y roles', ok: () => puede('usuarios') },
   ];
 
   function renderShell() {
@@ -198,7 +204,7 @@
         <nav class="side" id="side">
           <div class="brand"><span class="logo-tile"><img src="/logo.png" alt="Vinilo"></span><div><b>VINILO</b><small>Gestión de Almacén</small></div></div>
           ${links}
-          <div class="who"><b>${esc(S.user.nombre)}</b>${ROL_LBL[S.user.rol]}${S.user.proveedor ? ' · ' + esc(S.user.proveedor) : ''}${S.user.permiso_compras && S.user.rol !== 'ADMIN' ? ' · Compras' : ''}
+          <div class="who"><b>${esc(S.user.nombre)}</b>${esc(S.user.rol_nombre || ROL_LBL[S.user.rol] || S.user.rol)}${S.user.proveedor ? ' · ' + esc(S.user.proveedor) : ''}${S.user.permiso_compras && S.user.rol !== 'ADMIN' ? ' · Compras' : ''}
             <div class="links"><button id="pwd-btn">${icono('clave')}Contraseña</button><button id="out-btn">${icono('salir')}Salir</button></div></div>
         </nav>
         <main id="main"></main>
@@ -265,9 +271,9 @@
     });
   }
 
-  const optAlmacenes = (sel, { soloActivos = true, vacio = '' } = {}) =>
+  const optAlmacenes = (sel, { soloActivos = true, vacio = '', todos = false } = {}) =>
     (vacio ? `<option value="">${vacio}</option>` : '') +
-    S.almacenes.filter((a) => !soloActivos || a.activo).map((a) => `<option value="${a.id}" ${String(sel) === String(a.id) ? 'selected' : ''}>${esc(a.nombre)}</option>`).join('');
+    (todos ? S.todosAlmacenes : S.almacenes).filter((a) => !soloActivos || a.activo).map((a) => `<option value="${a.id}" ${String(sel) === String(a.id) ? 'selected' : ''}>${esc(a.nombre)}</option>`).join('');
 
   // ---------- Panel: tareas pendientes ----------
   VIEWS.panel = async (main) => {
@@ -276,7 +282,7 @@
     const total = tareas.filter((t) => t.prioridad !== 'baja').length;
     const PRI = { alta: 'Urgente', media: 'Pendiente', baja: 'Sugerencia' };
     let html = `<h1>Hola, ${esc(S.user.nombre.split(' ')[0])}</h1>
-      <p class="sub">${ROL_LBL[S.user.rol]}${S.user.proveedor ? ' · ' + esc(S.user.proveedor) : ''} · ${new Date().toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' })}
+      <p class="sub">${esc(S.user.rol_nombre || ROL_LBL[S.user.rol] || S.user.rol)}${S.user.proveedor ? ' · ' + esc(S.user.proveedor) : ''} · ${new Date().toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' })}
       · ${total ? `<b>${total} ${total === 1 ? 'tarea pendiente' : 'tareas pendientes'}</b>` : 'sin tareas pendientes'}</p>`;
     html += tareas.length ? `<div class="tareas">${tareas.map((t) => `
       <section class="tarea pri-${t.prioridad}">
@@ -403,7 +409,7 @@
         <div class="card">
           <div class="row">
             ${cfg.origen ? `<div class="f"><label>${tipo === 'TRANSFERENCIA' ? 'Desde (origen)' : 'Almacén'}</label><select id="m-origen">${optAlmacenes('', { vacio: 'Seleccionar…' })}</select></div>` : ''}
-            ${cfg.destino ? `<div class="f"><label>${tipo === 'TRANSFERENCIA' ? 'Hacia (destino)' : 'Almacén que recibe'}</label><select id="m-destino">${optAlmacenes('', { vacio: 'Seleccionar…' })}</select></div>` : ''}
+            ${cfg.destino ? `<div class="f"><label>${tipo === 'TRANSFERENCIA' ? 'Hacia (destino)' : 'Almacén que recibe'}</label><select id="m-destino">${optAlmacenes('', { vacio: 'Seleccionar…', todos: tipo === 'TRANSFERENCIA' })}</select></div>` : ''}
             <div class="f"><label>${cfg.ref}</label><input id="m-ref" maxlength="120"></div>
           </div>
         </div>
@@ -714,7 +720,7 @@
     const productos = (await api('/api/productos')).filter((p) => p.activo);
     const lineas = [];
     const m = modal(`<h2>Nueva nota de pedido</h2>
-      <div class="row"><div class="f"><label>Pedir desde (origen)</label><select id="n-orig">${optAlmacenes('', { vacio: 'Seleccionar…' })}</select></div>
+      <div class="row"><div class="f"><label>Pedir desde (origen)</label><select id="n-orig">${optAlmacenes('', { vacio: 'Seleccionar…', todos: true })}</select></div>
         <div class="f"><label>Para (destino)</label><select id="n-dest">${optAlmacenes('', { vacio: 'Seleccionar…' })}</select></div></div>
       <div class="row mt"><div class="f w"><label>Producto</label><input id="n-prod" list="n-prod-list" autocomplete="off" placeholder="Código o nombre…">
         <datalist id="n-prod-list">${productos.map((p) => `<option value="${esc(p.codigo)} — ${esc(p.nombre)}"></option>`).join('')}</datalist></div>
@@ -955,7 +961,7 @@
         e.preventDefault();
         try {
           await api(a ? '/api/almacenes/' + a.id : '/api/almacenes', { method: a ? 'PUT' : 'POST', body: { nombre: e.target.nombre.value, activo: a ? e.target.activo.checked : true } });
-          S.almacenes = await api('/api/almacenes');
+          await cargarAlmacenes();
           closeModal(); toast('Almacén guardado'); router();
         } catch (err) { toast(err.message, true); }
       });
@@ -966,11 +972,13 @@
 
   // ---------- Usuarios (ADMIN) ----------
   VIEWS.usuarios = async (main) => {
-    const [us, provs] = await Promise.all([api('/api/usuarios'), api('/api/proveedores')]);
-    main.innerHTML = `<h1>Usuarios</h1><p class="sub">Roles: <b>Administrador</b> (todo) · <b>Receptor</b> (recibe, transfiere, consume, atiende pedidos) · <b>Encargado</b> (consulta stock y movimientos) · <b>Requirente</b> (notas de pedido internas) · <b>Proveedor</b> (solo sus pedidos y documentos).<br>El permiso <b>Compras</b> habilita a crear y confirmar pedidos a proveedores y se puede sumar a cualquier rol.</p>
+    const tab = new URLSearchParams(location.hash.split('?')[1] || '').get('tab');
+    if (tab === 'roles') return vistaRoles(main);
+    const [us, provs, roles] = await Promise.all([api('/api/usuarios'), api('/api/proveedores'), api('/api/roles')]);
+    main.innerHTML = `${tabsUsuarios('usuarios')}<h1>Usuarios</h1><p class="sub">Cada usuario tiene un <b>rol</b>, que define qué opciones del menú y qué almacenes ve (se configuran en la pestaña <a href="#/usuarios?tab=roles">Roles</a>). El permiso <b>Compras</b> se puede sumar a cualquier usuario.</p>
       <div class="toolbar"><div class="spacer"></div><button class="btn" id="us-new">+ Nuevo usuario</button></div>
       <div class="tbl-wrap"><table><thead><tr><th>Usuario</th><th>Nombre</th><th>Rol</th><th>Compras</th><th>Proveedor</th><th>Estado</th><th></th></tr></thead><tbody>
-      ${us.map((u) => `<tr class="${u.activo ? '' : 'inactive'}"><td class="code">${esc(u.username)}</td><td>${esc(u.nombre)}</td><td><span class="badge b-rol">${ROL_LBL[u.rol]}</span></td>
+      ${us.map((u) => `<tr class="${u.activo ? '' : 'inactive'}"><td class="code">${esc(u.username)}</td><td>${esc(u.nombre)}</td><td><span class="badge b-rol">${esc(u.rol_nombre || u.rol)}</span></td>
         <td>${u.rol === 'ADMIN' || u.permiso_compras ? '<span class="badge b-COMPLETADO">Sí</span>' : ''}</td><td>${esc(u.proveedor || '')}</td>
         <td>${u.activo ? 'Activo' : 'Inactivo'}</td><td class="num"><button class="btn ghost sm" data-ed="${u.id}">Editar</button></td></tr>`).join('')}
       </tbody></table></div>`;
@@ -978,7 +986,7 @@
       const m = modal(`<h2>${u ? 'Editar' : 'Nuevo'} usuario</h2><form id="f-us">
         <div class="row"><div class="f"><label>Usuario (login)</label><input name="username" value="${esc(u ? u.username : '')}" ${u ? 'disabled' : 'required'} maxlength="60" autocomplete="off"></div>
           <div class="f"><label>Nombre y apellido</label><input name="nombre" value="${esc(u ? u.nombre : '')}" required maxlength="120"></div></div>
-        <div class="row mt"><div class="f"><label>Rol</label><select name="rol">${Object.entries(ROL_LBL).map(([k, v]) => `<option value="${k}" ${u && u.rol === k ? 'selected' : ''}>${v}</option>`).join('')}</select></div>
+        <div class="row mt"><div class="f"><label>Rol</label><select name="rol">${roles.map((r) => `<option value="${esc(r.codigo)}" ${u && u.rol === r.codigo ? 'selected' : ''}>${esc(r.nombre)}</option>`).join('')}</select></div>
           <div class="f"><label>${u ? 'Nueva contraseña (dejar vacío para no cambiar)' : 'Contraseña (mín. 6)'}</label><input type="password" name="password" ${u ? '' : 'required'} minlength="6" autocomplete="new-password"></div></div>
         <div class="row mt" id="us-prov"><div class="f"><label>Proveedor vinculado *</label><select name="proveedor_id"><option value="">Seleccionar…</option>
           ${provs.filter((p) => p.activo || (u && u.proveedor_id === p.id)).map((p) => `<option value="${p.id}" ${u && u.proveedor_id === p.id ? 'selected' : ''}>${esc(p.nombre)}</option>`).join('')}</select>
@@ -1008,6 +1016,67 @@
     $$('[data-ed]').forEach((b) => b.addEventListener('click', () => editar(us.find((x) => x.id == b.dataset.ed))));
   };
 
+
+  // ---------- Roles ----------
+  const tabsUsuarios = (act) => `<div class="tabs"><a href="#/usuarios" class="${act === 'usuarios' ? 'on' : ''}">Usuarios</a><a href="#/usuarios?tab=roles" class="${act === 'roles' ? 'on' : ''}">Roles</a></div>`;
+
+  async function vistaRoles(main) {
+    const [roles, cat] = await Promise.all([api('/api/roles'), api('/api/roles/catalogo')]);
+    const nomAlm = (ids) => (ids ? ids.map((id) => (S.todosAlmacenes.find((a) => a.id === id) || { nombre: `#${id}` }).nombre).join(', ') : 'Todos');
+    const menus = (r) => [...new Set(cat.filter((c) => r.permisos.includes(c.clave)).map((c) => c.menu))];
+    main.innerHTML = `${tabsUsuarios('roles')}<h1>Roles</h1>
+      <p class="sub">Elegí, para cada rol, a qué opciones del menú accede y qué almacenes ve. El Administrador tiene acceso total y el Proveedor solo a su portal.</p>
+      <div class="toolbar"><div class="spacer"></div><button class="btn" id="rl-new">+ Nuevo rol</button></div>
+      <div class="tbl-wrap"><table><thead><tr><th>Rol</th><th>Menú habilitado</th><th>Almacenes</th><th class="num">Usuarios</th><th></th></tr></thead><tbody>
+      ${roles.map((r) => `<tr><td><b>${esc(r.nombre)}</b><br><span class="muted" style="font-size:.85rem">${esc(r.descripcion || '')}</span></td>
+        <td>${r.codigo === 'PROVEEDOR' ? '<span class="muted">Portal: sus pedidos y documentos</span>' : r.codigo === 'ADMIN' ? '<span class="muted">Todo</span>' : menus(r).map((m) => `<span class="badge b-rol">${esc(m)}</span>`).join(' ')}</td>
+        <td>${r.codigo === 'PROVEEDOR' ? '—' : esc(nomAlm(r.almacenes))}</td><td class="num">${r.usuarios}</td>
+        <td class="num">${r.fijo ? '<span class="muted" style="font-size:.85rem">fijo</span>' : `<button class="btn ghost sm" data-ed="${esc(r.codigo)}">Editar</button>`}</td></tr>`).join('')}
+      </tbody></table></div>`;
+    const editar = (r) => {
+      const grupos = [...new Set(cat.map((c) => c.grupo))];
+      const todos = !r || !r.almacenes;
+      const m = modal(`<h2>${r ? 'Editar rol' : 'Nuevo rol'}</h2><form id="f-rl">
+        <div class="row"><div class="f"><label>Nombre *</label><input name="nombre" value="${esc(r ? r.nombre : '')}" maxlength="80" required></div>
+          <div class="f w"><label>Descripción</label><input name="descripcion" value="${esc(r ? r.descripcion || '' : '')}" maxlength="300"></div></div>
+        <h2 class="mt" style="font-size:1rem">Opciones del menú y acciones</h2>
+        <div class="perm-grid">${grupos.map((g) => `<fieldset><legend>${esc(g)}</legend>
+          ${cat.filter((c) => c.grupo === g).map((c) => `<label class="check perm"><input type="checkbox" name="perm" value="${c.clave}" data-req="${c.requiere || ''}" ${r && r.permisos.includes(c.clave) ? 'checked' : ''}>
+            <span><b>${esc(c.menu)}</b>${c.requiere ? ' · acción' : ''}<small>${esc(c.desc)}</small></span></label>`).join('')}</fieldset>`).join('')}</div>
+        <h2 class="mt" style="font-size:1rem">Almacenes que ve</h2>
+        <label class="check"><input type="radio" name="almmodo" value="todos" ${todos ? 'checked' : ''}> Todos los almacenes (incluye los que se creen después)</label>
+        <label class="check mt"><input type="radio" name="almmodo" value="solo" ${todos ? '' : 'checked'}> Solo estos:</label>
+        <div class="alm-list">${S.todosAlmacenes.map((a) => `<label class="check"><input type="checkbox" name="alm" value="${a.id}" ${r && r.almacenes && r.almacenes.includes(a.id) ? 'checked' : ''}> ${esc(a.nombre)}${a.activo ? '' : ' (inactivo)'}</label>`).join('')}</div>
+        <p class="stock-hint">Un usuario solo ve el stock, los movimientos y las operaciones de sus almacenes. Para transferir o pedir mercadería puede elegir cualquier almacén como contraparte.</p>
+        <div class="form-actions">${r && !r.sistema ? '<button type="button" class="btn danger" id="rl-del">Eliminar rol</button>' : ''}<span style="flex:1"></span>
+          <button type="button" class="btn sec" data-close>Cancelar</button><button class="btn">Guardar</button></div></form>`, { wide: true });
+      const f = $('#f-rl', m);
+      // marcar una acción marca su menú; desmarcar el menú desmarca sus acciones
+      $$('input[name=perm]', m).forEach((c) => c.addEventListener('change', () => {
+        if (c.checked && c.dataset.req) { const base = $(`input[name=perm][value="${c.dataset.req}"]`, m); if (base) base.checked = true; }
+        if (!c.checked) $$(`input[name=perm][data-req="${c.value}"]`, m).forEach((x) => { x.checked = false; });
+      }));
+      const syncAlm = () => { const solo = f.almmodo.value === 'solo'; $$('input[name=alm]', m).forEach((x) => { x.disabled = !solo; }); };
+      $$('input[name=almmodo]', m).forEach((x) => x.addEventListener('change', syncAlm)); syncAlm();
+      f.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const body = { nombre: f.nombre.value, descripcion: f.descripcion.value,
+          permisos: $$('input[name=perm]:checked', m).map((x) => x.value),
+          almacenes: f.almmodo.value === 'todos' ? null : $$('input[name=alm]:checked', m).map((x) => Number(x.value)) };
+        try {
+          await api(r ? '/api/roles/' + encodeURIComponent(r.codigo) : '/api/roles', { method: r ? 'PUT' : 'POST', body });
+          closeModal(); toast('Rol guardado. Los usuarios lo ven al recargar la página.'); router();
+        } catch (err) { toast(err.message, true); }
+      });
+      if ($('#rl-del', m)) $('#rl-del', m).onclick = async () => {
+        if (!confirm(`¿Eliminar el rol ${r.nombre}?`)) return;
+        try { await api('/api/roles/' + encodeURIComponent(r.codigo), { method: 'DELETE' }); closeModal(); toast('Rol eliminado'); router(); } catch (err) { toast(err.message, true); }
+      };
+    };
+    $('#rl-new').onclick = () => editar(null);
+    $$('[data-ed]').forEach((b) => b.addEventListener('click', () => editar(roles.find((x) => x.codigo === b.dataset.ed))));
+  }
+
   // ---------- Proveedores ----------
   VIEWS.proveedores = async (main) => {
     const provs = await api('/api/proveedores');
@@ -1020,7 +1089,7 @@
           <span class="stock-hint">${u ? `Última: ${fmtFecha(u.fin || u.inicio)} · ${u.ok === false ? `<b class="bad">Error: ${esc(u.detalle || '')}</b>` : u.ok ? `${u.leidos} leídos, ${u.creados} nuevos, ${u.actualizados} actualizados, ${u.desactivados} desactivados` : 'en curso…'}` : 'Todavía no se sincronizó.'}
           ${u && u.ok && u.detalle ? `<br>⚠ ${esc(u.detalle).replace(/\n/g, '<br>⚠ ')}` : ''}</span></div>
           <button class="btn sec" id="pv-sync">Sincronizar con Fudo</button></div>`;
-    main.innerHTML = `<h1>Proveedores</h1><p class="sub">Para que un proveedor entre al sistema, creá un usuario con rol <b>Proveedor</b> vinculado acá${puede('parametrizar') ? ' (en Usuarios)' : ' (lo hace el administrador)'}.</p>
+    main.innerHTML = `<h1>Proveedores</h1><p class="sub">Para que un proveedor entre al sistema, creá un usuario con rol <b>Proveedor</b> vinculado acá${puede('usuarios') ? ' (en Usuarios)' : ' (lo hace el administrador)'}.</p>
       ${fudoHtml}
       <div class="toolbar"><div class="grow"><label>Buscar</label><input id="pv-q" placeholder="Nombre, CUIT, comentario…"></div>
         <label class="check" style="margin-bottom:10px"><input type="checkbox" id="pv-inac"> Ver inactivos</label>

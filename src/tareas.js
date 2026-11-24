@@ -4,7 +4,7 @@ const fmt = (d) => new Date(d).toLocaleString('es-AR', { timeZone: 'America/Arge
 const fmtDia = (d) => (d ? String(d).slice(0, 10).split('-').reverse().join('/') : '');
 const n = (v) => Number(v || 0);
 
-async function calcularTareas(user, { query, fudo }) {
+async function calcularTareas(user, { query, fudo, sqlAlm }) {
   const p = (x) => user.permisos.includes(x);
   const t = [];
   const add = (x) => { if (x.cantidad > 0 || x.siempre) t.push(x); };
@@ -32,7 +32,8 @@ async function calcularTareas(user, { query, fudo }) {
     const { rows: bor } = await query(
       `SELECT ci.id, ci.desde, ci.hasta, a.nombre AS almacen,
               (SELECT count(*)::int FROM consumo_import_items x WHERE x.importacion_id = ci.id AND x.producto_id IS NOT NULL AND x.incluir) AS productos
-       FROM consumo_importaciones ci LEFT JOIN almacenes a ON a.id = ci.almacen_id WHERE ci.estado = 'BORRADOR' ORDER BY ci.desde`);
+       FROM consumo_importaciones ci LEFT JOIN almacenes a ON a.id = ci.almacen_id WHERE ci.estado = 'BORRADOR'
+       ${user.almacenes ? `AND (ci.almacen_id IS NULL ${sqlAlm(user, 'ci.almacen_id').replace(' AND', ' OR')})` : ''} ORDER BY ci.desde`);
     add({ id: 'cf-borrador', prioridad: 'alta', titulo: 'Consumos de Fudo sin confirmar', cantidad: bor.length, link: '#/consumos-fudo', accion: 'Revisar consumos',
       detalle: 'Ventas importadas en borrador: elegí el almacén y confirmá para descontar el stock.',
       items: bor.slice(0, 6).map((r) => ({ texto: `#${r.id} · ${fmt(r.desde)} → ${fmt(r.hasta)}`, sub: `${r.productos} productos · ${r.almacen || 'almacén a definir'}`, link: '#/consumos-fudo' })) });
@@ -54,7 +55,7 @@ async function calcularTareas(user, { query, fudo }) {
       `SELECT pe.id, pe.creado_en, o.nombre AS origen, d.nombre AS destino, s.nombre AS solicitante,
               (SELECT count(*)::int FROM pedido_items i WHERE i.pedido_id = pe.id) AS items
        FROM pedidos pe JOIN almacenes o ON o.id = pe.origen_id JOIN almacenes d ON d.id = pe.destino_id JOIN usuarios s ON s.id = pe.solicitante_id
-       WHERE pe.estado = 'PENDIENTE' ORDER BY pe.creado_en`);
+       WHERE pe.estado = 'PENDIENTE' ${sqlAlm(user, 'pe.origen_id')} ORDER BY pe.creado_en`);
     const viejo = rows.some((r) => Date.now() - new Date(r.creado_en).getTime() > 24 * 3600e3);
     add({ id: 'ped-atender', prioridad: viejo ? 'alta' : 'media', titulo: 'Notas de pedido para atender', cantidad: rows.length, link: '#/pedidos', accion: 'Atender pedidos',
       detalle: 'Pedidos de transferencia entre almacenes esperando respuesta.',
@@ -78,14 +79,14 @@ async function calcularTareas(user, { query, fudo }) {
   if (p('compras')) {
     const { rows: bor } = await query(
       `SELECT oc.id, oc.creado_en, pr.nombre AS proveedor, (SELECT count(*)::int FROM oc_items i WHERE i.oc_id = oc.id) AS items
-       FROM ordenes_compra oc JOIN proveedores pr ON pr.id = oc.proveedor_id WHERE oc.estado = 'BORRADOR' ORDER BY oc.creado_en`);
+       FROM ordenes_compra oc JOIN proveedores pr ON pr.id = oc.proveedor_id WHERE oc.estado = 'BORRADOR' ${sqlAlm(user, 'oc.almacen_id')} ORDER BY oc.creado_en`);
     add({ id: 'oc-borrador', prioridad: 'media', titulo: 'Pedidos a proveedores sin confirmar', cantidad: bor.length, link: '#/compras', accion: 'Revisar y confirmar',
       detalle: 'Borradores que el proveedor todavía no ve.',
       items: bor.slice(0, 6).map((r) => ({ texto: `#${r.id} · ${r.proveedor}`, sub: `${r.items} productos · creado ${fmt(r.creado_en)}`, link: `#/compras?id=${r.id}` })) });
     const { rows: par } = await query(
       `SELECT oc.id, pr.nombre AS proveedor,
               (SELECT coalesce(sum(GREATEST(i.cantidad - i.cantidad_recibida,0)),0)::int FROM oc_items i WHERE i.oc_id = oc.id) AS pendiente
-       FROM ordenes_compra oc JOIN proveedores pr ON pr.id = oc.proveedor_id WHERE oc.estado = 'PARCIAL' ORDER BY oc.confirmado_en`);
+       FROM ordenes_compra oc JOIN proveedores pr ON pr.id = oc.proveedor_id WHERE oc.estado = 'PARCIAL' ${sqlAlm(user, 'oc.almacen_id')} ORDER BY oc.confirmado_en`);
     add({ id: 'oc-faltantes', prioridad: 'media', titulo: 'Pedidos a proveedores con faltantes', cantidad: par.length, link: '#/compras', accion: 'Reclamar o cerrar',
       detalle: 'Se recibieron en parte: reclamá lo que falta al proveedor o cerralos con faltante.',
       items: par.slice(0, 6).map((r) => ({ texto: `#${r.id} · ${r.proveedor}`, sub: `faltan ${r.pendiente} unidades`, link: `#/compras?id=${r.id}` })) });
@@ -95,7 +96,7 @@ async function calcularTareas(user, { query, fudo }) {
       `SELECT oc.id, oc.estado, oc.fecha_entrega, pr.nombre AS proveedor, a.nombre AS almacen, (oc.fecha_entrega < CURRENT_DATE) AS vencido,
               (SELECT count(*)::int FROM oc_archivos f WHERE f.oc_id = oc.id) AS archivos
        FROM ordenes_compra oc JOIN proveedores pr ON pr.id = oc.proveedor_id JOIN almacenes a ON a.id = oc.almacen_id
-       WHERE oc.estado IN ('CONFIRMADA','PARCIAL') ORDER BY oc.fecha_entrega NULLS LAST, oc.id`);
+       WHERE oc.estado IN ('CONFIRMADA','PARCIAL') ${sqlAlm(user, 'oc.almacen_id')} ORDER BY oc.fecha_entrega NULLS LAST, oc.id`);
     const venc = rows.filter((r) => r.vencido === true || r.vencido === 't');
     add({ id: 'oc-recibir', prioridad: venc.length ? 'alta' : 'media', titulo: 'Mercadería de proveedores por recibir', cantidad: rows.length, link: '#/compras', accion: 'Recibir mercadería',
       detalle: venc.length ? `${venc.length} con fecha de entrega vencida.` : 'Pedidos confirmados a la espera de la entrega.',
@@ -110,7 +111,7 @@ async function calcularTareas(user, { query, fudo }) {
       `SELECT m.almacen_id, a.nombre AS almacen, m.producto_id, pr.codigo, pr.nombre, m.minimo, coalesce(s.cantidad,0)::int AS cantidad
        FROM stock_minimos m JOIN productos pr ON pr.id = m.producto_id AND pr.activo JOIN almacenes a ON a.id = m.almacen_id AND a.activo
        LEFT JOIN stock s ON s.almacen_id = m.almacen_id AND s.producto_id = m.producto_id
-       WHERE coalesce(s.cantidad,0) < m.minimo ORDER BY (coalesce(s.cantidad,0) = 0) DESC, a.id, pr.nombre`);
+       WHERE coalesce(s.cantidad,0) < m.minimo ${sqlAlm(user, 'm.almacen_id')} ORDER BY (coalesce(s.cantidad,0) = 0) DESC, a.id, pr.nombre`);
     if (bajo.length) {
       const ids = [...new Set(bajo.map((b) => Number(b.producto_id)))];
       const { rows: otros } = await query(
@@ -141,7 +142,7 @@ async function calcularTareas(user, { query, fudo }) {
     }
     const { rows: venc } = await query(
       `SELECT pr.id, pr.nombre, pr.fecha_vencimiento, (pr.fecha_vencimiento - CURRENT_DATE) AS dias,
-              (SELECT coalesce(sum(cantidad),0)::int FROM stock s WHERE s.producto_id = pr.id) AS total
+              (SELECT coalesce(sum(cantidad),0)::int FROM stock s WHERE s.producto_id = pr.id ${sqlAlm(user, 's.almacen_id')}) AS total
        FROM productos pr WHERE pr.activo AND pr.alerta_vencimiento AND pr.fecha_vencimiento IS NOT NULL AND pr.fecha_vencimiento <= CURRENT_DATE + 7
        ORDER BY pr.fecha_vencimiento`);
     const conStock = venc.filter((v) => n(v.total) > 0);
@@ -151,7 +152,7 @@ async function calcularTareas(user, { query, fudo }) {
   }
 
   // ---- Integración Fudo ----
-  if (p('compras') || p('parametrizar')) {
+  if (p('compras') || p('productos') || p('proveedores')) {
     if (fudo.configurado()) {
       for (const [ent, link] of [['proveedores', '#/proveedores'], ['productos', '#/productos']]) {
         const { rows } = await query('SELECT ok, detalle, inicio FROM fudo_sync_log WHERE entidad = $1 ORDER BY id DESC LIMIT 1', [ent]);
@@ -160,7 +161,7 @@ async function calcularTareas(user, { query, fudo }) {
             detalle: `${fmt(rows[0].inicio)}: ${String(rows[0].detalle || '').slice(0, 220)}`, items: [] });
         }
       }
-    } else if (p('parametrizar')) {
+    } else if (p('usuarios')) {
       add({ id: 'fudo-config', prioridad: 'baja', titulo: 'Conectar con Fudo', cantidad: 1, link: '#/proveedores', accion: 'Ver cómo',
         detalle: 'Cargá FUDO_API_KEY y FUDO_API_SECRET en Render para sincronizar proveedores, productos y ventas.', items: [] });
     }

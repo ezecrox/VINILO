@@ -50,7 +50,7 @@ async function leerItemsFudo(desde, hasta) {
   return { items, ventas };
 }
 
-module.exports = function registrarConsumos({ route, query, tx, fail, permitir, registrarMovimiento, almacenActivo, isTrue, toInt, str, pool }) {
+module.exports = function registrarConsumos({ route, query, tx, fail, permitir, registrarMovimiento, almacenActivo, isTrue, toInt, str, pool, veAlmacen, exigirAlmacen }) {
   const puede = (u, p) => u.permisos.includes(p);
   const verPermiso = (u) => { if (!puede(u, 'consumir') && !puede(u, 'verMovimientos')) fail(403, 'No tenés permiso para esta operación'); };
 
@@ -70,6 +70,7 @@ module.exports = function registrarConsumos({ route, query, tx, fail, permitir, 
               (SELECT count(*)::int FROM consumo_import_items x WHERE x.importacion_id = ci.id AND x.producto_id IS NULL) AS sin_vincular
        FROM consumo_importaciones ci LEFT JOIN almacenes a ON a.id = ci.almacen_id JOIN usuarios u ON u.id = ci.creado_por
        LEFT JOIN usuarios uc ON uc.id = ci.confirmado_por
+       ${user.almacenes ? `WHERE ci.almacen_id IS NULL OR ci.almacen_id = ANY('{${user.almacenes.join(',')}}'::int[])` : ''}
        ORDER BY ci.hasta DESC, ci.id DESC LIMIT 200`);
     return {
       configurado: fudo.configurado(),
@@ -177,7 +178,7 @@ module.exports = function registrarConsumos({ route, query, tx, fail, permitir, 
     return tx(async (client) => {
       await borrador(client, id);
       const almId = body.almacen_id ? toInt(body.almacen_id) : null;
-      if (almId) await almacenActivo(client, almId, 'consumo');
+      if (almId) { exigirAlmacen(user, almId); await almacenActivo(client, almId, 'consumo'); }
       await client.query('UPDATE consumo_importaciones SET almacen_id = $2, observacion = $3 WHERE id = $1', [id, almId, str(body.observacion, 1000)]);
       for (const l of Array.isArray(body.items) ? body.items : []) {
         const cant = toInt(l.cantidad);
@@ -196,6 +197,7 @@ module.exports = function registrarConsumos({ route, query, tx, fail, permitir, 
     return tx(async (client) => {
       const imp = await borrador(client, id);
       const almId = toInt(body.almacen_id || imp.almacen_id);
+      exigirAlmacen(user, almId);
       const alm = await almacenActivo(client, almId, 'consumo');
       const { rows: lineas } = await client.query(
         `SELECT x.producto_id, x.cantidad, p.nombre FROM consumo_import_items x JOIN productos p ON p.id = x.producto_id
