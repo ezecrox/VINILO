@@ -23,6 +23,9 @@ recepción de mercadería, transferencias entre depósitos, consumos, ajustes de
 
 ## Funcionalidades
 
+- **Panel de tareas pendientes:** al entrar, cada usuario ve lo que tiene que hacer según su rol, ordenado por urgencia: consumos de Fudo sin confirmar, ventas sin importar, mercadería de proveedores por recibir (con entregas vencidas), pedidos a proveedores sin confirmar o con faltantes, notas de pedido por atender, **productos para reponer** (bajo el stock mínimo, con sugerencia de transferir desde otro almacén o pedir a proveedor), productos por vencer y errores de sincronización con Fudo. El proveedor ve sus pedidos por entregar y los que no tienen remito.
+- **Stock mínimo por almacén:** ADMIN y ENCARGADO lo cargan desde Stock por almacén (✎). Las celdas bajo mínimo se marcan en rojo y hay un filtro "Solo bajo mínimo".
+
 - **Stock por almacén:** tabla con una columna por depósito y total, búsqueda, filtros por almacén / categoría / alerta, exportación CSV.
 - **Alertas por producto** (definidas por el ADMIN): ⏳ vencimiento próximo (con fecha opcional), ⚠ producto de cuidado, ❄ cadena de frío, y una nota libre. Se muestran en el stock, en los formularios de movimientos y en el panel.
 - **Recepción:** ingreso a un almacén con referencia (remito / proveedor).

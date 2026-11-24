@@ -220,3 +220,11 @@ CREATE TABLE IF NOT EXISTS consumo_import_items (
 );
 CREATE INDEX IF NOT EXISTS idx_cii_imp ON consumo_import_items (importacion_id);
 CREATE INDEX IF NOT EXISTS idx_ci_estado ON consumo_importaciones (estado, hasta);
+
+-- ===== Stock mínimo por almacén (punto de reposición) =====
+CREATE TABLE IF NOT EXISTS stock_minimos (
+  almacen_id  INT NOT NULL REFERENCES almacenes(id),
+  producto_id INT NOT NULL REFERENCES productos(id),
+  minimo      INT NOT NULL CHECK (minimo > 0),
+  PRIMARY KEY (almacen_id, producto_id)
+);

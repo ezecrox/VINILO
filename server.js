@@ -16,6 +16,7 @@ const PUEDE = {
   consumir: ['ADMIN', 'RECEPTOR'],
   ajustar: ['ADMIN'],
   verStock: ['ADMIN', 'RECEPTOR', 'ENCARGADO'],
+  minimos: ['ADMIN', 'ENCARGADO'],
   verMovimientos: ['ADMIN', 'RECEPTOR', 'ENCARGADO'],
   crearPedido: ['ADMIN', 'REQUIRENTE'],
   atenderPedido: ['ADMIN', 'RECEPTOR'],
@@ -414,23 +415,50 @@ route('POST', '/api/productos/importar', async ({ user, body }) => {
 // ---------- Stock ----------
 route('GET', '/api/stock', async ({ user }) => {
   permitir(user, 'verStock');
-  const [alm, prods, st] = await Promise.all([
+  const [alm, prods, st, mins] = await Promise.all([
     query('SELECT id, nombre, activo FROM almacenes ORDER BY id'),
     query(`SELECT ${PRODUCTO_COLS} FROM productos ORDER BY nombre`),
     query('SELECT almacen_id, producto_id, cantidad FROM stock WHERE cantidad <> 0'),
+    query('SELECT almacen_id, producto_id, minimo FROM stock_minimos'),
   ]);
   const stockMap = {};
-  for (const s of st.rows) {
-    const pid = Number(s.producto_id);
-    (stockMap[pid] = stockMap[pid] || {})[Number(s.almacen_id)] = Number(s.cantidad);
-  }
+  for (const r of st.rows) (stockMap[Number(r.producto_id)] = stockMap[Number(r.producto_id)] || {})[Number(r.almacen_id)] = Number(r.cantidad);
+  const minMap = {};
+  for (const r of mins.rows) (minMap[Number(r.producto_id)] = minMap[Number(r.producto_id)] || {})[Number(r.almacen_id)] = Number(r.minimo);
   return {
     almacenes: alm.rows.map((a) => ({ id: Number(a.id), nombre: a.nombre, activo: isTrue(a.activo) })),
     productos: prods.rows.map(normalizarProducto).map((p) => {
       const porAlmacen = stockMap[p.id] || {};
-      return { ...p, stock: porAlmacen, total: Object.values(porAlmacen).reduce((a, b) => a + b, 0) };
+      return { ...p, stock: porAlmacen, minimos: minMap[p.id] || {}, total: Object.values(porAlmacen).reduce((x, y) => x + y, 0) };
     }),
   };
+});
+
+// Stock mínimo por almacén de un producto
+route('GET', '/api/productos/:id/minimos', async ({ user, params }) => {
+  if (!user.permisos.includes('verStock') && !user.permisos.includes('parametrizar')) fail(403, 'No tenés permiso para esta operación');
+  const { rows } = await query('SELECT almacen_id, minimo FROM stock_minimos WHERE producto_id = $1', [toInt(params.id)]);
+  return Object.fromEntries(rows.map((r) => [Number(r.almacen_id), Number(r.minimo)]));
+});
+
+route('PUT', '/api/productos/:id/minimos', async ({ user, body, params }) => {
+  permitir(user, 'minimos');
+  const pid = toInt(params.id);
+  const mins = body && typeof body.minimos === 'object' ? body.minimos : {};
+  return tx(async (client) => {
+    const { rows } = await client.query('SELECT 1 FROM productos WHERE id = $1', [pid]);
+    if (!rows[0]) fail(404, 'Producto inexistente');
+    for (const [alm, v] of Object.entries(mins)) {
+      const almId = toInt(alm);
+      const min = v === '' || v === null || v === undefined ? 0 : toInt(v);
+      if (!Number.isInteger(almId) || !Number.isInteger(min) || min < 0) fail(400, 'Los mínimos deben ser enteros mayores o iguales a 0');
+      if (min === 0) await client.query('DELETE FROM stock_minimos WHERE almacen_id = $1 AND producto_id = $2', [almId, pid]);
+      else await client.query(
+        `INSERT INTO stock_minimos (almacen_id, producto_id, minimo) VALUES ($1,$2,$3)
+         ON CONFLICT (almacen_id, producto_id) DO UPDATE SET minimo = EXCLUDED.minimo`, [almId, pid, min]);
+    }
+    return { ok: true };
+  });
 });
 
 // ---------- Movimientos ----------
@@ -635,9 +663,11 @@ route('POST', '/api/fudo/sincronizar', async ({ user, url }) => {
 // ---------- Consumos desde ventas de Fudo ----------
 require('./src/consumos')({ route, query, tx, fail, permitir, registrarMovimiento, almacenActivo, isTrue, toInt, str, pool });
 
+const { calcularTareas } = require('./src/tareas');
+
 // ---------- Panel ----------
 route('GET', '/api/dashboard', async ({ user }) => {
-  const res = { rol: user.rol, pedidos_pendientes: 0 };
+  const res = { rol: user.rol, pedidos_pendientes: 0, tareas: await calcularTareas(user, { query, fudo }) };
   if (user.permisos.includes('verCompras') || user.permisos.includes('portalProveedor')) {
     const prov = user.rol === 'PROVEEDOR';
     const { rows } = await query(

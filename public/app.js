@@ -269,39 +269,31 @@
     (vacio ? `<option value="">${vacio}</option>` : '') +
     S.almacenes.filter((a) => !soloActivos || a.activo).map((a) => `<option value="${a.id}" ${String(sel) === String(a.id) ? 'selected' : ''}>${esc(a.nombre)}</option>`).join('');
 
-  // ---------- Panel ----------
+  // ---------- Panel: tareas pendientes ----------
   VIEWS.panel = async (main) => {
     const d = await api('/api/dashboard');
-    let html = `<h1>Hola, ${esc(S.user.nombre.split(' ')[0])}</h1><p class="sub">${ROL_LBL[S.user.rol]}${S.user.proveedor ? ' · ' + esc(S.user.proveedor) : ''} · ${new Date().toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' })}</p>`;
-    const oc = d.oc || {};
-    const kpiOc = (lbl, n, det, href = '#/compras') => `<a class="kpi acc" href="${href}" style="text-decoration:none"><div class="lbl">${lbl}</div><div class="val">${n || 0}</div><div class="det">${det}</div></a>`;
-    if (S.user.rol === 'PROVEEDOR') {
-      html += `<div class="grid cols-3">${kpiOc('Pedidos por entregar', oc.CONFIRMADA, 'confirmados por Vinilo')}${kpiOc('Entregas parciales', oc.PARCIAL, 'con productos pendientes')}${kpiOc('Completados', (oc.RECIBIDA || 0) + (oc.CERRADA || 0), 'recibidos o cerrados')}</div>
-        <div class="card mt"><p style="margin:0">En <a href="#/compras"><b>Mis pedidos</b></a> ves cada nota de pedido, lo que Vinilo ya recibió y lo pendiente, y podés subir el <b>remito</b> o la <b>factura</b> (PDF o foto).</p></div>`;
-      main.innerHTML = html;
-      return;
-    }
-    if (d.oc && (puede('compras') || puede('recibir'))) {
-      html += `<div class="grid cols-3" style="margin-bottom:14px">${puede('compras') ? kpiOc('Borradores sin confirmar', oc.BORRADOR, 'pedidos a proveedores') : ''}${kpiOc('Por recibir de proveedores', oc.CONFIRMADA, 'confirmados')}${kpiOc('Recepción parcial', oc.PARCIAL, 'con faltantes')}</div>`;
-    }
+    const tareas = d.tareas || [];
+    const total = tareas.filter((t) => t.prioridad !== 'baja').length;
+    const PRI = { alta: 'Urgente', media: 'Pendiente', baja: 'Sugerencia' };
+    let html = `<h1>Hola, ${esc(S.user.nombre.split(' ')[0])}</h1>
+      <p class="sub">${ROL_LBL[S.user.rol]}${S.user.proveedor ? ' · ' + esc(S.user.proveedor) : ''} · ${new Date().toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' })}
+      · ${total ? `<b>${total} ${total === 1 ? 'tarea pendiente' : 'tareas pendientes'}</b>` : 'sin tareas pendientes'}</p>`;
+    html += tareas.length ? `<div class="tareas">${tareas.map((t) => `
+      <section class="tarea pri-${t.prioridad}">
+        <header><span class="tarea-n">${t.cantidad > 1 || t.items.length ? fmtN(t.cantidad) : '!'}</span>
+          <div><span class="tarea-pri">${PRI[t.prioridad]}</span><h3>${esc(t.titulo)}</h3></div></header>
+        <p class="tarea-det">${esc(t.detalle)}</p>
+        ${t.items.length ? `<ul>${t.items.map((i) => `<li><a href="${i.link || t.link}" class="${i.alerta ? 'al' : ''}"><b>${esc(i.texto)}</b>${i.sub ? `<span>${esc(i.sub)}</span>` : ''}</a></li>`).join('')}
+          ${t.cantidad > t.items.length ? `<li class="mas">y ${fmtN(t.cantidad - t.items.length)} más…</li>` : ''}</ul>` : ''}
+        <a class="btn sm" href="${t.link}">${esc(t.accion)} →</a>
+      </section>`).join('')}</div>`
+      : `<div class="card empty" style="padding:40px"><div style="font-size:2rem">✅</div><b>Todo al día.</b><br>No hay tareas pendientes para tu usuario.</div>`;
     if (d.almacenes) {
-      html += '<div class="grid cols-3">' + d.almacenes.filter((a) => a.activo).map((a) => `
-        <a class="kpi" href="#/stock?alm=${a.id}" style="text-decoration:none">
-          <div class="lbl">${esc(a.nombre)}</div><div class="val">${fmtN(a.unidades)}</div>
-          <div class="det">unidades · ${fmtN(a.productos)} productos con stock</div></a>`).join('') + `
-        <a class="kpi acc" href="#/pedidos" style="text-decoration:none"><div class="lbl">Notas de pedido pendientes</div>
-          <div class="val">${d.pedidos_pendientes}</div><div class="det">${puede('atenderPedido') ? 'para atender' : 'en curso'}</div></a></div>`;
-      const conStock = d.alertas.filter((a) => a.total > 0);
-      html += `<div class="card mt"><h2>Productos con alerta (${conStock.length} con stock)</h2>${conStock.length ? `
-        <div class="tbl-wrap"><table><thead><tr><th>Producto</th><th>Alertas</th><th>Nota</th><th class="num">Stock total</th></tr></thead><tbody>
-        ${conStock.map((p) => `<tr><td><span class="code">${esc(p.codigo)}</span> ${esc(p.nombre)}</td><td>${badgesAlerta(p)}</td><td class="muted">${esc(p.nota_alerta || '')}</td><td class="num">${fmtN(p.total)}</td></tr>`).join('')}
-        </tbody></table></div>` : '<p class="muted">No hay productos con alerta y stock.</p>'}</div>`;
-      html += `<div class="card"><h2>Últimos movimientos</h2>${d.ultimos.length ? `<div class="tbl-wrap"><table><thead><tr><th>#</th><th>Fecha</th><th>Tipo</th><th>Desde</th><th>Hacia</th><th>Usuario</th></tr></thead><tbody>
-        ${d.ultimos.map((m) => `<tr><td>${m.id}</td><td>${fmtFecha(m.fecha)}</td><td><span class="badge b-${m.tipo}">${TIPO_LBL[m.tipo]}</span></td><td>${esc(m.origen || '—')}</td><td>${esc(m.destino || '—')}</td><td>${esc(m.usuario)}</td></tr>`).join('')}
-        </tbody></table></div>` : '<p class="muted">Todavía no hay movimientos.</p>'}</div>`;
-    } else {
-      html += `<div class="grid cols-3"><a class="kpi acc" href="#/pedidos" style="text-decoration:none"><div class="lbl">Mis pedidos pendientes</div><div class="val">${d.pedidos_pendientes}</div></a></div>
-        <div class="form-actions" style="justify-content:flex-start"><a class="btn" href="#/pedidos?nuevo=1" style="text-decoration:none">+ Nueva nota de pedido</a></div>`;
+      html += `<h2 class="mt" style="margin-top:28px">Resumen de stock</h2><div class="resumen">${d.almacenes.filter((a) => a.activo).map((a) => `
+        <a href="#/stock?alm=${a.id}"><span>${esc(a.nombre)}</span><b>${fmtN(a.unidades)}</b><small>${fmtN(a.productos)} productos</small></a>`).join('')}</div>`;
+    }
+    if (S.user.rol === 'REQUIRENTE') {
+      html += `<div class="form-actions" style="justify-content:flex-start"><a class="btn" href="#/pedidos?nuevo=1" style="text-decoration:none">+ Nueva nota de pedido</a></div>`;
     }
     main.innerHTML = html;
   };
@@ -320,6 +312,7 @@
         <div class="f"><label>Categoría</label><select id="s-cat"><option value="">Todas</option>${cats.map((c) => `<option>${esc(c)}</option>`).join('')}</select></div>
         <div class="f"><label>Alerta</label><select id="s-al"><option value="">Todas</option><option value="any">Cualquier alerta</option><option value="venc">Vencimiento próximo</option><option value="cuid">De cuidado</option><option value="frio">Cadena de frío</option></select></div>
         <label class="check" style="margin-bottom:10px"><input type="checkbox" id="s-cero"> Mostrar sin stock</label>
+        <label class="check" style="margin-bottom:10px"><input type="checkbox" id="s-bajo" ${params.get('bajo') ? 'checked' : ''}> Solo bajo mínimo</label>
         <div class="spacer"></div>
         <button class="btn sec" id="s-csv">Exportar CSV</button>
       </div>
@@ -330,6 +323,7 @@
       const cat = $('#s-cat').value;
       const al = $('#s-al').value;
       const cero = $('#s-cero').checked;
+      const bajo = $('#s-bajo').checked;
       const cols = almId ? alms.filter((a) => String(a.id) === almId) : alms;
       const rows = data.productos.filter((p) => {
         if (q && !(`${p.codigo} ${p.nombre}`.toLowerCase().includes(q))) return false;
@@ -339,6 +333,8 @@
         if (al === 'cuid' && !p.alerta_cuidado) return false;
         if (al === 'frio' && !p.alerta_frio) return false;
         const cant = almId ? (p.stock[almId] || 0) : p.total;
+        const bajoMin = (almId ? [Number(almId)] : alms.map((a) => a.id)).some((aid) => p.minimos[aid] && (p.stock[aid] || 0) < p.minimos[aid]);
+        if (bajo) return bajoMin;
         if (!cero && cant === 0) return false;
         if (!p.activo && cant === 0) return false;
         return true;
@@ -349,13 +345,34 @@
       const { cols, rows, almId } = filtrar();
       const totCols = cols.map((a) => rows.reduce((s, p) => s + (p.stock[a.id] || 0), 0));
       $('#s-tbl').innerHTML = rows.length ? `<div class="tbl-wrap"><table>
-        <thead><tr><th>Código</th><th>Producto</th><th>Alertas</th>${cols.map((a) => `<th class="num">${esc(a.nombre)}</th>`).join('')}${almId ? '' : '<th class="num">Total</th>'}</tr></thead>
+        <thead><tr><th>Código</th><th>Producto</th><th>Alertas</th>${cols.map((a) => `<th class="num">${esc(a.nombre)}</th>`).join('')}${almId ? '' : '<th class="num">Total</th>'}${puede('minimos') ? '<th></th>' : ''}</tr></thead>
         <tbody>${rows.map((p) => `<tr class="${p.activo ? '' : 'inactive'}"><td class="code">${esc(p.codigo)}</td><td>${esc(p.nombre)}${p.categoria ? ` <span class="muted">· ${esc(p.categoria)}</span>` : ''}${p.activo ? '' : ' <span class="muted">(inactivo)</span>'}</td>
-          <td>${badgesAlerta(p)}</td>${cols.map((a) => { const v = p.stock[a.id] || 0; return `<td class="num ${v ? '' : 'zero'}">${fmtN(v)}</td>`; }).join('')}${almId ? '' : `<td class="num tot">${fmtN(p.total)}</td>`}</tr>`).join('')}</tbody>
-        <tfoot><tr><td></td><td><b>${rows.length} productos</b></td><td></td>${totCols.map((t) => `<td class="num tot">${fmtN(t)}</td>`).join('')}${almId ? '' : `<td class="num tot">${fmtN(totCols.reduce((a, b) => a + b, 0))}</td>`}</tr></tfoot>
-        </table></div>` : '<div class="card empty">No hay productos que coincidan con el filtro.</div>';
+          <td>${badgesAlerta(p)}</td>${cols.map((a) => { const v = p.stock[a.id] || 0; const mn = p.minimos[a.id]; const b = mn && v < mn;
+            return `<td class="num ${v ? '' : 'zero'} ${b ? 'bajo-min' : ''}" title="${mn ? `Mínimo ${mn}` : ''}">${fmtN(v)}${mn ? `<small class="min">mín ${fmtN(mn)}</small>` : ''}</td>`; }).join('')}${almId ? '' : `<td class="num tot">${fmtN(p.total)}</td>`}
+          ${puede('minimos') ? `<td class="num"><button class="btn ghost sm" data-min="${p.id}" title="Stock mínimo por almacén">✎</button></td>` : ''}</tr>`).join('')}</tbody>
+        <tfoot><tr><td></td><td><b>${rows.length} productos</b></td><td></td>${totCols.map((t) => `<td class="num tot">${fmtN(t)}</td>`).join('')}${almId ? '' : `<td class="num tot">${fmtN(totCols.reduce((a, b) => a + b, 0))}</td>`}${puede('minimos') ? '<td></td>' : ''}</tr></tfoot>
+        </table></div>` : `<div class="card empty">${bajoSel() ? 'Ningún producto está por debajo de su mínimo.' : 'No hay productos que coincidan con el filtro.'}</div>`;
+      $$('#s-tbl [data-min]').forEach((b) => b.addEventListener('click', () => editarMinimos(data.productos.find((x) => x.id == b.dataset.min))));
     };
-    ['#s-q', '#s-alm', '#s-cat', '#s-al', '#s-cero'].forEach((s) => $(s).addEventListener('input', pintar));
+    const bajoSel = () => $('#s-bajo').checked;
+    const editarMinimos = (p) => {
+      const m = modal(`<h2>Stock mínimo · ${esc(p.nombre)}</h2>
+        <p class="muted">Cuando el stock de un almacén quede por debajo de su mínimo, el producto aparece en el panel como <b>para reponer</b>. Dejá vacío o 0 para no controlar ese almacén.</p>
+        <div class="tbl-wrap"><table><thead><tr><th>Almacén</th><th class="num">Stock actual</th><th class="num" style="width:140px">Mínimo</th></tr></thead><tbody>
+        ${alms.map((a) => `<tr><td>${esc(a.nombre)}</td><td class="num">${fmtN(p.stock[a.id] || 0)}</td>
+          <td class="num"><input type="number" min="0" step="1" data-alm="${a.id}" value="${p.minimos[a.id] || ''}" style="width:110px;text-align:right"></td></tr>`).join('')}
+        </tbody></table></div>
+        <div class="form-actions"><button class="btn sec" data-close>Cancelar</button><button class="btn" id="mn-ok">Guardar</button></div>`);
+      $('#mn-ok', m).onclick = async () => {
+        const minimos = Object.fromEntries($$('[data-alm]', m).map((i) => [i.dataset.alm, i.value === '' ? 0 : parseInt(i.value, 10)]));
+        try {
+          await api(`/api/productos/${p.id}/minimos`, { method: 'PUT', body: { minimos } });
+          p.minimos = Object.fromEntries(Object.entries(minimos).filter(([, v]) => v > 0).map(([k, v]) => [Number(k), v]));
+          closeModal(); toast('Mínimos guardados'); pintar();
+        } catch (err) { toast(err.message, true); }
+      };
+    };
+    ['#s-q', '#s-alm', '#s-cat', '#s-al', '#s-cero', '#s-bajo'].forEach((s) => $(s).addEventListener('input', pintar));
     $('#s-csv').onclick = () => {
       const { cols, rows } = filtrar();
       descargarCSV(`stock_${hoyISO()}.csv`, [
