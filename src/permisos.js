@@ -15,7 +15,7 @@ const CATALOGO = [
   { grupo: 'Operaciones', clave: 'producir', menu: 'Producción', desc: 'Producir productos con receta (descuenta insumos y suma lo producido)' },
   { grupo: 'Operaciones', clave: 'verMovimientos', menu: 'Movimientos', desc: 'Ver el historial de movimientos' },
   { grupo: 'Personal', clave: 'solicitudes', menu: 'Mis solicitudes', desc: 'Pedir adelantos de sueldo, vacaciones y licencias (examen, enfermedad, etc.)' },
-  { grupo: 'Personal', clave: 'misHoras', menu: 'Mis horas', desc: 'Ver las propias horas trabajadas y fichadas del reloj (requiere N° en el reloj en el usuario)' },
+  { grupo: 'Personal', clave: 'misHoras', menu: 'Mis horas', desc: 'Ver las propias horas trabajadas. Todo usuario con N° en el reloj ya lo tiene, sea cual sea su rol' },
   { grupo: 'Personal', clave: 'gestionarSolicitudes', menu: 'Solicitudes del personal', desc: 'Ver, aprobar o rechazar las solicitudes de los empleados' },
   { grupo: 'Personal', clave: 'verHoras', menu: 'Horas del personal', desc: 'Ver fichadas y horas trabajadas (CrossChex) y sincronizar el reloj' },
   { grupo: 'Parametrización', clave: 'productos', menu: 'Productos', desc: 'Maestro de productos, alertas e importación' },
@@ -30,6 +30,7 @@ function permisosDe(u, permisosRol) {
   let p = u.rol === 'ADMIN' ? [...CLAVES] : String(permisosRol || '').split(',').map((x) => x.trim()).filter((x) => CLAVES.includes(x));
   if (u.permiso_compras) p.push('compras', 'verCompras');
   p.push('verProductos'); // listas de productos para formularios
+  if (u.legajo) p.push('misHoras'); // quien ficha en el reloj siempre ve sus propias horas
   // Dependencias: una acción implica poder ver su menú
   for (const c of CATALOGO) if (c.requiere && p.includes(c.clave)) p.push(c.requiere);
   return [...new Set(p)];

@@ -76,7 +76,7 @@ async function currentUser(req) {
   const payload = verifyToken(h.startsWith('Bearer ') ? h.slice(7) : null);
   if (!payload) return null;
   const { rows } = await query(
-    `SELECT u.id, u.username, u.nombre, u.rol, u.activo, u.permiso_compras, u.proveedor_id, p.nombre AS proveedor,
+    `SELECT u.id, u.username, u.nombre, u.rol, u.activo, u.permiso_compras, u.proveedor_id, u.legajo, p.nombre AS proveedor,
             r.nombre AS rol_nombre, r.permisos AS rol_permisos, r.almacenes AS rol_almacenes
      FROM usuarios u LEFT JOIN proveedores p ON p.id = u.proveedor_id LEFT JOIN roles r ON r.codigo = u.rol WHERE u.id = $1`, [payload.uid]);
   const u = rows[0];
@@ -85,7 +85,7 @@ async function currentUser(req) {
   const user = {
     id: Number(u.id), username: u.username, nombre: u.nombre, rol: u.rol, rol_nombre: u.rol_nombre || u.rol,
     permiso_compras: isTrue(u.permiso_compras) || u.rol === 'ADMIN',
-    proveedor_id: u.proveedor_id ? Number(u.proveedor_id) : null, proveedor: u.proveedor || null,
+    proveedor_id: u.proveedor_id ? Number(u.proveedor_id) : null, proveedor: u.proveedor || null, legajo: u.legajo || null,
     almacenes: u.rol === 'ADMIN' || u.rol === 'PROVEEDOR' || u.rol_almacenes === null || u.rol_almacenes === undefined || u.rol_almacenes === ''
       ? null : String(u.rol_almacenes).split(',').map(Number).filter(Number.isInteger),
   };

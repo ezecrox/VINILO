@@ -155,6 +155,17 @@
     router();
   }
 
+  // Si el administrador cambia el rol o sus permisos, se toma al volver a la app (sin recargar)
+  document.addEventListener('visibilitychange', async () => {
+    if (document.hidden || !S.token || !S.user) return;
+    try {
+      const me = await api('/api/me');
+      if (JSON.stringify(me.permisos) === JSON.stringify(S.permisos)) return;
+      S.user = me.user; S.permisos = me.permisos;
+      await cargarAlmacenes(); renderShell(); router();
+    } catch (_) { /* sin conexión: se reintenta la próxima vez */ }
+  });
+
   // ---------- Navegación ----------
   const ICON_PATHS = {
     panel: '<rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/>',
