@@ -17,8 +17,10 @@ const CATALOGO = [
   { grupo: 'Personal', clave: 'solicitudes', menu: 'Mis solicitudes', desc: 'Pedir adelantos de sueldo, vacaciones y licencias (examen, enfermedad, etc.)' },
   { grupo: 'Personal', clave: 'misHoras', menu: 'Mis horas', desc: 'Ver las propias horas trabajadas. Todo usuario con N° en el reloj ya lo tiene, sea cual sea su rol' },
   { grupo: 'Personal', clave: 'gestionarSolicitudes', menu: 'Solicitudes del personal', desc: 'Ver, aprobar o rechazar las solicitudes de los empleados' },
+  { grupo: 'Personal', clave: 'programacion', menu: 'Programación', desc: 'Programar los días y horarios que trabaja cada empleado en cada sucursal' },
   { grupo: 'Personal', clave: 'verHoras', menu: 'Horas del personal', desc: 'Ver fichadas y horas trabajadas (CrossChex) y sincronizar el reloj' },
   { grupo: 'Parametrización', clave: 'productos', menu: 'Productos', desc: 'Maestro de productos, alertas e importación' },
+  { grupo: 'Parametrización', clave: 'sucursales', menu: 'Sucursales', desc: 'Alta y edición de sucursales y qué empleados trabajan en cada una' },
   { grupo: 'Parametrización', clave: 'almacenes', menu: 'Almacenes', desc: 'Alta y edición de almacenes' },
   { grupo: 'Parametrización', clave: 'usuarios', menu: 'Usuarios y roles', desc: 'Usuarios, roles y permisos' },
 ];

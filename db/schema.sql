@@ -368,3 +368,41 @@ BEGIN
     RAISE NOTICE 'Limpieza de transacciones realizada';
   END IF;
 END $$;
+
+-- ===== Sucursales y programación de días de trabajo =====
+CREATE TABLE IF NOT EXISTS sucursales (
+  id         SERIAL PRIMARY KEY,
+  nombre     VARCHAR(80) NOT NULL UNIQUE,
+  direccion  VARCHAR(200),
+  activo     BOOLEAN NOT NULL DEFAULT TRUE,
+  creado_en  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM app_config WHERE clave = 'seed_sucursales') THEN
+    INSERT INTO sucursales (nombre) VALUES ('VINILO BAR'), ('VINILO GALPON') ON CONFLICT (nombre) DO NOTHING;
+    INSERT INTO app_config (clave, valor) VALUES ('seed_sucursales', '1');
+  END IF;
+END $$;
+
+-- Un empleado puede estar en una o varias sucursales
+CREATE TABLE IF NOT EXISTS usuario_sucursales (
+  usuario_id  INT NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+  sucursal_id INT NOT NULL REFERENCES sucursales(id) ON DELETE CASCADE,
+  PRIMARY KEY (usuario_id, sucursal_id)
+);
+
+-- Días calendario programados para trabajar (sin fila = no trabaja / franco)
+CREATE TABLE IF NOT EXISTS programacion (
+  id          SERIAL PRIMARY KEY,
+  usuario_id  INT NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+  sucursal_id INT NOT NULL REFERENCES sucursales(id),
+  fecha       DATE NOT NULL,
+  hora_desde  TIME,
+  hora_hasta  TIME,
+  nota        VARCHAR(200),
+  creado_por  INT REFERENCES usuarios(id),
+  creado_en   TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (usuario_id, fecha, sucursal_id)
+);
+CREATE INDEX IF NOT EXISTS programacion_fecha_idx ON programacion (fecha);

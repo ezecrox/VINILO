@@ -168,3 +168,10 @@ src/compras.js     pedidos a proveedores, archivos y recepción validada
 public/            interfaz web (index.html, app.js, styles.css)
 render.yaml        Blueprint de Render
 ```
+
+## Sucursales y programación del personal
+
+- **Parametrización → Sucursales** (permiso `sucursales`): alta y edición de sucursales (se cargan VINILO BAR y VINILO GALPON) y qué empleados trabajan en cada una. Un empleado puede estar en una o varias; también se asigna desde **Usuarios**.
+- **Personal → Programación** (permiso `programacion`): grilla semanal por empleado con los días y horarios a trabajar en cada sucursal. Filtro por sucursal, alta/edición de un día tocando la celda, **Programar varios días** (rango de fechas + días de la semana + horario, para varios empleados a la vez, o quitar días) y **Copiar semana anterior**. Un día sin programar es franco; los turnos que cruzan la medianoche se cargan en el día en que empiezan.
+- El empleado ve sus próximos días de trabajo en su **Panel** y en **Mis horas**.
+- Ambos permisos se habilitan por rol en Usuarios → Roles.

@@ -275,10 +275,23 @@ route('GET', '/api/usuarios', async ({ user }) => {
   permitir(user, 'usuarios');
   const { rows } = await query(
     `SELECT u.id, u.username, u.nombre, u.rol, u.activo, u.permiso_compras, u.proveedor_id, p.nombre AS proveedor, u.creado_en, r.nombre AS rol_nombre, u.legajo,
+            (SELECT coalesce(array_agg(us.sucursal_id ORDER BY us.sucursal_id), '{}') FROM usuario_sucursales us WHERE us.usuario_id = u.id) AS sucursales,
             (SELECT max(l.fecha) FROM login_log l WHERE l.usuario_id = u.id AND l.evento = 'INGRESO') AS ultimo_ingreso
      FROM usuarios u LEFT JOIN proveedores p ON p.id = u.proveedor_id LEFT JOIN roles r ON r.codigo = u.rol ORDER BY u.nombre`);
-  return rows.map((r) => ({ ...r, id: Number(r.id), activo: isTrue(r.activo), permiso_compras: isTrue(r.permiso_compras), proveedor_id: r.proveedor_id ? Number(r.proveedor_id) : null }));
+  return rows.map((r) => ({ ...r, id: Number(r.id), activo: isTrue(r.activo), permiso_compras: isTrue(r.permiso_compras), proveedor_id: r.proveedor_id ? Number(r.proveedor_id) : null, sucursales: arrInt(r.sucursales) }));
 });
+
+// int[] de Postgres (array o texto '{1,2}', según el driver)
+const arrInt = (v) => (Array.isArray(v) ? v : String(v || '').replace(/[{}]/g, '').split(',')).map(Number).filter(Number.isInteger);
+
+// Sucursales en las que trabaja el usuario (una o varias)
+async function guardarSucursalesUsuario(id, rol, sucursales) {
+  if (!Array.isArray(sucursales)) return;
+  const ids = [...new Set(sucursales.map(toInt).filter(Number.isInteger))];
+  await query('DELETE FROM usuario_sucursales WHERE usuario_id = $1', [id]);
+  if (rol === 'PROVEEDOR') return;
+  for (const s of ids) await query('INSERT INTO usuario_sucursales (usuario_id, sucursal_id) SELECT $1, id FROM sucursales WHERE id = $2 ON CONFLICT DO NOTHING', [id, s]);
+}
 
 // Valida rol / proveedor / permiso de compras
 async function datosRolUsuario(body, actual = {}) {
@@ -310,6 +323,7 @@ route('POST', '/api/usuarios', async ({ user, body }) => {
        VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
       [username, nombre, hashPassword(body.password), rol, proveedorId, compras, str(body.legajo, 30)]
     );
+    await guardarSucursalesUsuario(Number(rows[0].id), rol, body.sucursales);
     return { id: Number(rows[0].id) };
   } catch (e) {
     if (e.code === '23505' || /duplicate|unique/i.test(e.message)) fail(409, /legajo/.test(e.message) ? 'Ese N° de reloj ya está asignado a otro usuario' : 'Ese nombre de usuario ya existe');
@@ -333,6 +347,7 @@ route('PUT', '/api/usuarios/:id', async ({ user, body, params }) => {
     if (e.code === '23505' || /duplicate|unique/i.test(e.message)) fail(409, 'Ese N° de reloj ya está asignado a otro usuario');
     throw e;
   }
+  await guardarSucursalesUsuario(id, rol, body.sucursales);
   if (body.password) {
     if (String(body.password).length < 6) fail(400, 'La contraseña debe tener al menos 6 caracteres');
     await query('UPDATE usuarios SET password_hash = $2 WHERE id = $1', [id, hashPassword(body.password)]);
@@ -835,6 +850,7 @@ require('./src/produccion')({ route, query, tx, fail, permitir, permitirAlguno, 
 
 // ---------- Personal (solicitudes de empleados) ----------
 require('./src/personal')({ route, query, tx, fail, permitir, permitirAlguno, isTrue, toInt, str, fechaOk });
+require('./src/programacion')({ route, query, tx, fail, permitir, permitirAlguno, isTrue, toInt, str, fechaOk });
 
 // ---------- CrossChex (reloj de asistencia) ----------
 const crosschex = require('./src/crosschex');

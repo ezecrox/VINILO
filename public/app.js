@@ -186,6 +186,8 @@
     'mis-solicitudes': '<rect x="4" y="5" width="16" height="16" rx="2"/><path d="M8 3v4M16 3v4M4 10h16"/><path d="m9 15 2 2 4-4"/>',
     solicitudes: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="m16 11 2 2 4-4"/>',
     'mis-horas': '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+    programacion: '<rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/><path d="M7 13h3v3H7zM14 13h3v3h-3z"/>',
+    sucursales: '<path d="M3 10 5 4h14l2 6"/><path d="M3 10a3 3 0 0 0 6 0 3 3 0 0 0 6 0 3 3 0 0 0 6 0"/><path d="M5 12v9h14v-9"/><path d="M10 21v-5h4v5"/>',
     horas: '<circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5"/><path d="M9 2h6M12 2v3"/>',
     salir: '<path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3"/><path d="M10 16l-4-4 4-4"/><path d="M6 12h10"/>',
     clave: '<circle cx="8" cy="15" r="4"/><path d="m11 12 9-9"/><path d="m17 6 3 3"/>',
@@ -209,14 +211,16 @@
     { id: 'produccion', lbl: 'Producción', ok: () => puede('producir') },
     { id: 'ajuste', lbl: 'Ajuste de inventario', ok: () => puede('ajustar') },
     { id: 'movimientos', lbl: 'Movimientos', ok: () => puede('verMovimientos') },
-    { sec: 'Personal', ok: () => puede('solicitudes') || puede('misHoras') || puede('gestionarSolicitudes') || puede('verHoras') },
+    { sec: 'Personal', ok: () => puede('solicitudes') || puede('misHoras') || puede('gestionarSolicitudes') || puede('verHoras') || puede('programacion') },
     { id: 'mis-solicitudes', lbl: 'Mis solicitudes', ok: () => puede('solicitudes'), pillSol: true },
     { id: 'mis-horas', lbl: 'Mis horas', ok: () => puede('misHoras') },
     { id: 'solicitudes', lbl: 'Solicitudes del personal', ok: () => puede('gestionarSolicitudes'), pillSolG: true },
+    { id: 'programacion', lbl: 'Programación', ok: () => puede('programacion') },
     { id: 'horas', lbl: 'Horas del personal', ok: () => puede('verHoras') },
-    { sec: 'Parametrización', ok: () => puede('productos') || puede('almacenes') || puede('usuarios') },
+    { sec: 'Parametrización', ok: () => puede('productos') || puede('almacenes') || puede('sucursales') || puede('usuarios') },
     { id: 'productos', lbl: 'Productos', ok: () => puede('productos') },
     { id: 'almacenes', lbl: 'Almacenes', ok: () => puede('almacenes') },
+    { id: 'sucursales', lbl: 'Sucursales', ok: () => puede('sucursales') },
     { id: 'usuarios', lbl: 'Usuarios y roles', ok: () => puede('usuarios') },
   ];
 
@@ -273,6 +277,7 @@
   const VIEWS = {};
   async function router() {
     if (!S.user) return;
+    closeModal();
     const id = (location.hash.replace(/^#\/?/, '') || 'panel').split('?')[0];
     const nav = NAV.find((n) => n.id === id && (!n.ok || n.ok()));
     const view = nav ? id : 'panel';
@@ -339,10 +344,12 @@
         <a href="#/mis-solicitudes?nueva=OTRAS" class="sol-tipo"><span>📝</span>Otra licencia</a></div>`;
     }
     if (puede('misHoras') && !puede('verStock')) html += `<div id="panel-horas"></div>`;
+    if (!puede('portalProveedor')) html += `<div id="panel-prog"></div>`;
     if (S.user.rol === 'REQUIRENTE') {
       html += `<div class="form-actions" style="justify-content:flex-start"><a class="btn" href="#/pedidos?nuevo=1" style="text-decoration:none">+ Nueva nota de pedido</a></div>`;
     }
     main.innerHTML = html;
+    if ($('#panel-prog')) misProximosDias($('#panel-prog'), { titulo: 'Tus próximos días de trabajo', dias: 7 });
     if ($('#panel-horas')) api('/api/horas/mias').then((h) => {
       if (!h.vinculado || !$('#panel-horas')) return;
       $('#panel-horas').innerHTML = `<h2 class="mt" style="margin-top:28px">Mis horas de este mes</h2><div class="resumen">
@@ -1007,12 +1014,188 @@
         <td class="num">${hm(d.minutos)}${d.incompleta ? ' <span class="badge b-PENDIENTE">incompleta</span>' : ''}</td></tr>`).join('')}</tbody></table>`;
   }
 
+  // ---------- Programación de días de trabajo ----------
+  const addDias = (iso, n) => { const d = new Date(iso + 'T12:00:00'); d.setDate(d.getDate() + n); return isoLocal(d); };
+  const lunesDe = (iso) => { const d = new Date(iso + 'T12:00:00'); return addDias(iso, -((d.getDay() + 6) % 7)); };
+  const DIAS_LV = [['1', 'Lun'], ['2', 'Mar'], ['3', 'Mié'], ['4', 'Jue'], ['5', 'Vie'], ['6', 'Sáb'], ['0', 'Dom']];
+  const horario = (t) => (t.hora_desde ? `${t.hora_desde}–${t.hora_hasta}` : 'Sin horario');
+  const minTurno = (t) => { if (!t.hora_desde) return 0; const [a, b] = t.hora_desde.split(':').map(Number); const [c, d] = t.hora_hasta.split(':').map(Number); let m = c * 60 + d - (a * 60 + b); if (m <= 0) m += 1440; return m; };
+  const fechasEntre = (d, h, dias) => { const out = []; for (let f = d; f <= h && out.length < 400; f = addDias(f, 1)) if (dias.includes(String(new Date(f + 'T12:00:00').getDay()))) out.push(f); return out; };
+
+  VIEWS.programacion = async (main) => {
+    const hoy = hoyISO();
+    const sucs = (await api('/api/sucursales'));
+    const activas = sucs.filter((s) => s.activo);
+    const st = VIEWS.programacion._st || (VIEWS.programacion._st = { lunes: lunesDe(hoy), suc: '' });
+    const ultHorario = VIEWS.programacion._h || (VIEWS.programacion._h = {});
+    main.innerHTML = `<h1>Programación</h1><p class="sub">Días y horarios que trabaja cada empleado en cada sucursal. Tocá un día para programarlo o cambiarlo.</p>
+      <div class="toolbar">
+        <div class="f"><label>Sucursal</label><select id="pg-suc"><option value="">Todas</option>${activas.map((s) => `<option value="${s.id}" ${String(s.id) === String(st.suc) ? 'selected' : ''}>${esc(s.nombre)}</option>`).join('')}</select></div>
+        <div style="display:flex;gap:6px;align-items:center;margin-bottom:2px"><button class="btn ghost sm" id="pg-prev" title="Semana anterior">◀</button>
+          <b id="pg-tit" style="min-width:190px;text-align:center"></b><button class="btn ghost sm" id="pg-next" title="Semana siguiente">▶</button>
+          <button class="btn ghost sm" id="pg-hoy">Hoy</button></div>
+        <div class="spacer"></div>
+        <button class="btn sec" id="pg-copiar" title="Copia lo programado la semana anterior a esta semana">Copiar semana anterior</button>
+        <button class="btn" id="pg-varios">Programar varios días</button>
+      </div>
+      <div class="pg-leyenda">${activas.map((s) => `<span><i style="background:${sucColor(s.id, sucs)}"></i>${esc(s.nombre)}</span>`).join('')}</div>
+      <div id="pg-tbl"><p class="muted">Cargando…</p></div>`;
+    let data = null;
+    const cargar = async () => {
+      const dias = [...Array(7)].map((_, i) => addDias(st.lunes, i));
+      $('#pg-tit').textContent = `${fmtDia(dias[0]).slice(0, 5)} al ${fmtDia(dias[6])}`;
+      data = await api(`/api/programacion?desde=${dias[0]}&hasta=${dias[6]}${st.suc ? '&sucursal_id=' + st.suc : ''}`);
+      if (!data.empleados.length) {
+        $('#pg-tbl').innerHTML = `<div class="card empty" style="padding:32px"><div style="font-size:2rem">🗓️</div><b>No hay empleados asignados${st.suc ? ' a esta sucursal' : ' a sucursales'}.</b><br>
+          Asignalos en ${puede('sucursales') ? '<a href="#/sucursales">Sucursales</a>' : 'Sucursales'}${puede('usuarios') ? ' o en <a href="#/usuarios">Usuarios</a>' : ''}.</div>`;
+        return;
+      }
+      const porCelda = new Map();
+      for (const t of data.turnos) { const k = t.usuario_id + '|' + t.fecha; if (!porCelda.has(k)) porCelda.set(k, []); porCelda.get(k).push(t); }
+      const sucsEmp = (e) => e.sucursales.filter((id) => activas.some((s) => s.id === id) && (!st.suc || String(id) === String(st.suc)));
+      const filas = data.empleados.map((e) => {
+        let dTot = 0, mTot = 0;
+        const celdas = dias.map((f) => {
+          const ts = porCelda.get(e.id + '|' + f) || [];
+          if (ts.length) dTot++; ts.forEach((t) => { mTot += minTurno(t); });
+          const libres = sucsEmp(e).filter((id) => !ts.some((t) => t.sucursal_id === id));
+          return `<td class="pg-cel ${f === hoy ? 'hoy' : ''} ${f < hoy ? 'pasado' : ''}">${ts.map((t) => `<button class="pg-chip" style="--c:${sucColor(t.sucursal_id, sucs)}" data-t="${t.id}" title="${esc(t.sucursal)}${t.nota ? ' · ' + esc(t.nota) : ''}"><b>${esc(sucCorto(t.sucursal))}</b><span>${horario(t)}</span></button>`).join('')}
+            ${libres.length ? `<button class="pg-add" data-u="${e.id}" data-f="${f}" title="Programar">${ts.length ? '+' : '<span>+</span>'}</button>` : ''}</td>`;
+        }).join('');
+        return `<tr><th class="pg-emp"><b>${esc(e.nombre)}</b><small>${esc(e.rol_nombre)} · ${e.sucursales.map((id) => esc(sucCorto((sucs.find((s) => s.id === id) || {}).nombre))).join(', ') || 'sin sucursal'}</small></th>${celdas}
+          <td class="num pg-tot"><b>${dTot}</b> ${dTot === 1 ? 'día' : 'días'}${mTot ? `<small>${hm(mTot)} h</small>` : ''}</td></tr>`;
+      }).join('');
+      const pie = dias.map((f) => {
+        const ts = data.turnos.filter((t) => t.fecha === f);
+        const cnt = activas.map((s) => [s, ts.filter((t) => t.sucursal_id === s.id).length]).filter(([, n]) => n);
+        return `<td class="pg-pie">${cnt.map(([s, n]) => `<span style="color:${sucColor(s.id, sucs)}">${esc(sucCorto(s.nombre))} <b>${n}</b></span>`).join('') || '<span class="muted">—</span>'}</td>`;
+      }).join('');
+      $('#pg-tbl').innerHTML = `<div class="tbl-wrap"><table class="pg-tabla"><thead><tr><th>Empleado</th>${dias.map((f) => `<th class="${f === hoy ? 'hoy' : ''}">${diaSem(f)}<small>${fmtDia(f).slice(0, 5)}</small></th>`).join('')}<th class="num">Semana</th></tr></thead>
+        <tbody>${filas}</tbody><tfoot><tr><th>Personas por día</th>${pie}<td></td></tr></tfoot></table></div>
+        <p class="stock-hint mt">Un día sin programar es franco. Los turnos que pasan la medianoche (ej. 20:00–04:00) se cargan en el día en que empiezan.</p>`;
+      $$('.pg-add').forEach((b) => b.addEventListener('click', () => editarDia(data.empleados.find((e) => e.id == b.dataset.u), b.dataset.f, null)));
+      $$('.pg-chip').forEach((b) => b.addEventListener('click', () => { const t = data.turnos.find((x) => x.id == b.dataset.t); editarDia(data.empleados.find((e) => e.id === t.usuario_id), t.fecha, t); }));
+    };
+    const opcSuc = (ids, sel) => ids.map((id) => sucs.find((s) => s.id === id)).filter((s) => s && (s.activo || s.id === sel))
+      .map((s) => `<option value="${s.id}" ${s.id === sel ? 'selected' : ''}>${esc(s.nombre)}</option>`).join('');
+    const editarDia = (e, f, t) => {
+      const ocupadas = data.turnos.filter((x) => x.usuario_id === e.id && x.fecha === f && (!t || x.id !== t.id)).map((x) => x.sucursal_id);
+      const ids = e.sucursales.filter((id) => !ocupadas.includes(id) && (!st.suc || !t ? (!st.suc || String(id) === String(st.suc)) : true));
+      const sel = t ? t.sucursal_id : ids[0];
+      const h = t || ultHorario[sel] || {};
+      const m = modal(`<h2>${esc(e.nombre)}</h2><p class="sub" style="margin-top:-6px">${diaSem(f)} ${fmtDia(f)}</p><form id="f-pg">
+        <div class="f"><label>Sucursal</label><select name="sucursal_id">${opcSuc(t ? [...new Set([t.sucursal_id, ...e.sucursales.filter((id) => !ocupadas.includes(id))])] : ids, sel)}</select></div>
+        <div class="row mt"><div class="f"><label>Entra</label><input type="time" name="hora_desde" value="${esc(h.hora_desde || '')}"></div>
+          <div class="f"><label>Sale</label><input type="time" name="hora_hasta" value="${esc(h.hora_hasta || '')}"></div></div>
+        <div class="stock-hint">Podés dejar el horario vacío si todavía no está definido.</div>
+        <div class="f mt"><label>Nota</label><input name="nota" maxlength="200" value="${esc(t && t.nota ? t.nota : '')}" placeholder="Ej.: apertura, evento, cubre a…"></div>
+        <div class="form-actions">${t ? '<button type="button" class="btn ghost" id="pg-del" style="margin-right:auto;color:var(--accent)">Quitar este día</button>' : ''}
+          <button type="button" class="btn sec" data-close>Cancelar</button><button class="btn">Guardar</button></div></form>`);
+      const fm = $('#f-pg', m);
+      fm.sucursal_id.addEventListener('change', () => { if (!t) { const u = ultHorario[fm.sucursal_id.value]; if (u) { fm.hora_desde.value = u.hora_desde || ''; fm.hora_hasta.value = u.hora_hasta || ''; } } });
+      fm.addEventListener('submit', async (ev) => {
+        ev.preventDefault();
+        const body = { sucursal_id: Number(fm.sucursal_id.value), hora_desde: fm.hora_desde.value, hora_hasta: fm.hora_hasta.value, nota: fm.nota.value };
+        try {
+          if (t) await api('/api/programacion/' + t.id, { method: 'PUT', body });
+          else await api('/api/programacion', { method: 'POST', body: { ...body, usuario_ids: [e.id], fechas: [f] } });
+          ultHorario[body.sucursal_id] = { hora_desde: body.hora_desde, hora_hasta: body.hora_hasta };
+          closeModal(); toast('Día programado'); cargar();
+        } catch (err) { toast(err.message, true); }
+      });
+      if (t) $('#pg-del', m).addEventListener('click', async () => {
+        try { await api('/api/programacion/' + t.id, { method: 'DELETE' }); closeModal(); toast('Día quitado'); cargar(); } catch (err) { toast(err.message, true); }
+      });
+    };
+    const varios = () => {
+      const sucIni = st.suc ? Number(st.suc) : (activas[0] || {}).id;
+      const m = modal(`<h2>Programar varios días</h2><form id="f-pv">
+        <div class="seg" id="pv-acc"><label><input type="radio" name="acc" value="prog" checked> Programar</label><label><input type="radio" name="acc" value="quitar"> Quitar días</label></div>
+        <div class="row mt"><div class="f" id="pv-suc-w"><label>Sucursal</label><select name="sucursal_id">${activas.map((s) => `<option value="${s.id}" ${s.id === sucIni ? 'selected' : ''}>${esc(s.nombre)}</option>`).join('')}</select></div>
+          <div class="f"><label>Desde</label><input type="date" name="desde" value="${st.lunes}"></div><div class="f"><label>Hasta</label><input type="date" name="hasta" value="${addDias(st.lunes, 6)}"></div></div>
+        <div class="f mt"><label>Días de la semana</label><div class="dias-sel">${DIAS_LV.map(([v, n]) => `<label><input type="checkbox" name="dia" value="${v}" checked><span>${n}</span></label>`).join('')}</div></div>
+        <div class="row mt" id="pv-hor"><div class="f"><label>Entra</label><input type="time" name="hora_desde"></div><div class="f"><label>Sale</label><input type="time" name="hora_hasta"></div>
+          <div class="f" style="flex:2"><label>Nota</label><input name="nota" maxlength="200"></div></div>
+        <div class="f mt"><label>Empleados <a href="#" id="pv-todos" style="font-weight:400">(marcar todos)</a></label><div class="chk-grupo chk-lista" id="pv-emp"></div></div>
+        <label class="check mt" id="pv-reem"><input type="checkbox" name="reemplazar"> Si ese día ya estaba programado en otra sucursal, reemplazarlo</label>
+        <div class="card mt" id="pv-res" style="background:#eaf2fa;border-color:#c9d6e3"></div>
+        <div class="form-actions"><button type="button" class="btn sec" data-close>Cancelar</button><button class="btn" id="pv-ok">Programar</button></div></form>`, { wide: true });
+      const fm = $('#f-pv', m);
+      const acc = () => fm.acc.value;
+      const pintarEmp = () => {
+        const s = Number(fm.sucursal_id.value);
+        const lista = data.empleados.filter((e) => e.sucursales.includes(s));
+        const marcados = new Set($$('input[name=emp]:checked', fm).map((c) => Number(c.value)));
+        $('#pv-emp', m).innerHTML = lista.map((e) => `<label class="check"><input type="checkbox" name="emp" value="${e.id}" ${marcados.has(e.id) ? 'checked' : ''}> ${esc(e.nombre)}</label>`).join('') || '<span class="muted">Nadie asignado a esta sucursal.</span>';
+        $$('input[name=emp]', fm).forEach((c) => c.addEventListener('change', resumen));
+      };
+      const fechas = () => fechasEntre(fm.desde.value, fm.hasta.value, $$('input[name=dia]:checked', fm).map((c) => c.value));
+      const resumen = () => {
+        const n = fechas().length, e = $$('input[name=emp]:checked', fm).length;
+        const q = acc() === 'quitar';
+        $('#pv-hor', m).hidden = q; $('#pv-reem', m).hidden = q;
+        $('#pv-ok', m).textContent = q ? 'Quitar días' : 'Programar';
+        $('#pv-res', m).innerHTML = !fm.desde.value || !fm.hasta.value || fm.hasta.value < fm.desde.value ? 'Revisá las fechas.'
+          : `${q ? 'Se quitan' : 'Se programan'} <b>${n}</b> ${n === 1 ? 'día' : 'días'} para <b>${e}</b> ${e === 1 ? 'empleado' : 'empleados'}${q ? ' en la sucursal elegida' : ''}${n && e ? ` (${n * e} en total)` : ''}.`;
+      };
+      fm.sucursal_id.addEventListener('change', () => { pintarEmp(); resumen(); });
+      [fm.desde, fm.hasta].forEach((i) => i.addEventListener('change', resumen));
+      $$('input[name=dia], input[name=acc]', fm).forEach((c) => c.addEventListener('change', resumen));
+      $('#pv-todos', m).addEventListener('click', (ev) => { ev.preventDefault(); const cs = $$('input[name=emp]', fm); const all = cs.every((c) => c.checked); cs.forEach((c) => { c.checked = !all; }); resumen(); });
+      pintarEmp(); resumen();
+      fm.addEventListener('submit', async (ev) => {
+        ev.preventDefault();
+        const fs = fechas(); const emp = $$('input[name=emp]:checked', fm).map((c) => Number(c.value));
+        if (!emp.length) return toast('Elegí al menos un empleado', true);
+        if (!fs.length) return toast('No hay días en ese rango con los días de la semana elegidos', true);
+        try {
+          if (acc() === 'quitar') {
+            const r = await api('/api/programacion/quitar', { method: 'POST', body: { usuario_ids: emp, fechas: fs, sucursal_id: Number(fm.sucursal_id.value) } });
+            toast(`${r.quitados} ${r.quitados === 1 ? 'día quitado' : 'días quitados'}`);
+          } else {
+            const r = await api('/api/programacion', { method: 'POST', body: { usuario_ids: emp, fechas: fs, sucursal_id: Number(fm.sucursal_id.value),
+              hora_desde: fm.hora_desde.value, hora_hasta: fm.hora_hasta.value, nota: fm.nota.value, reemplazar: fm.reemplazar.checked } });
+            toast(`Listo: ${r.creados} nuevos${r.actualizados ? `, ${r.actualizados} actualizados` : ''}${r.quitados ? `, ${r.quitados} reemplazados` : ''}`);
+          }
+          closeModal(); cargar();
+        } catch (err) { toast(err.message, true); }
+      });
+    };
+    $('#pg-suc').addEventListener('change', (e) => { st.suc = e.target.value; cargar(); });
+    $('#pg-prev').addEventListener('click', () => { st.lunes = addDias(st.lunes, -7); cargar(); });
+    $('#pg-next').addEventListener('click', () => { st.lunes = addDias(st.lunes, 7); cargar(); });
+    $('#pg-hoy').addEventListener('click', () => { st.lunes = lunesDe(hoy); cargar(); });
+    $('#pg-varios').addEventListener('click', () => { if (!activas.length) return toast('Primero cargá una sucursal', true); varios(); });
+    $('#pg-copiar').addEventListener('click', async () => {
+      if (!confirm(`¿Copiar lo programado la semana anterior a la semana del ${fmtDia(st.lunes)}${st.suc ? ' (solo esta sucursal)' : ''}? Los días que ya estén programados no se tocan.`)) return;
+      try { const r = await api('/api/programacion/copiar-semana', { method: 'POST', body: { desde: st.lunes, sucursal_id: st.suc ? Number(st.suc) : null } }); toast(r.copiados ? `${r.copiados} días copiados` : 'No había nada nuevo para copiar'); cargar(); }
+      catch (err) { toast(err.message, true); }
+    });
+    await cargar();
+  };
+
+  // Próximos días programados del propio usuario (Mis horas y panel)
+  async function misProximosDias(cont, { titulo = 'Mis próximos días de trabajo', dias = 14 } = {}) {
+    try {
+      const hoy = hoyISO();
+      const r = await api(`/api/programacion/mia?desde=${hoy}&hasta=${addDias(hoy, dias - 1)}`);
+      if (!cont || !document.body.contains(cont)) return;
+      if (!r.turnos.length) { cont.innerHTML = ''; return; }
+      const porDia = new Map(); r.turnos.forEach((t) => { if (!porDia.has(t.fecha)) porDia.set(t.fecha, []); porDia.get(t.fecha).push(t); });
+      cont.innerHTML = `<h2 class="mt" style="margin-top:22px">${titulo}</h2><div class="mis-dias">${[...porDia].map(([f, ts]) => `
+        <div class="mis-dia ${f === hoy ? 'hoy' : ''}"><div class="md-f"><span>${f === hoy ? 'Hoy' : f === addDias(hoy, 1) ? 'Mañana' : diaSem(f)}</span><b>${fmtDia(f).slice(0, 5)}</b></div>
+          <div>${ts.map((t) => `<div class="md-t"><b>${esc(t.sucursal)}</b> ${horario(t)}${t.nota ? `<small>${esc(t.nota)}</small>` : ''}</div>`).join('')}</div></div>`).join('')}</div>
+        <p class="stock-hint">Los días que no aparecen son franco.</p>`;
+    } catch (_) { /* sin datos */ }
+  }
+
   // ---------- Mis horas (empleado) ----------
   VIEWS['mis-horas'] = async (main) => {
     const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
     const hoy = new Date();
     let y = hoy.getFullYear(), m = hoy.getMonth(), vista = 'mes';
-    main.innerHTML = `<h1>Mis horas</h1><p class="sub">Tus fichadas del reloj y las horas trabajadas en cada jornada.</p>
+    main.innerHTML = `<h1>Mis horas</h1><p class="sub">Tus días programados, tus fichadas del reloj y las horas trabajadas en cada jornada.</p>
+      <div id="mh-prog"></div><h2 class="mt" style="margin-top:18px">Horas trabajadas</h2>
       <div class="toolbar">
         <div style="display:flex;gap:6px;align-items:center">
           <button class="btn ghost sm" id="mh-prev" title="Mes anterior">◀</button>
@@ -1061,6 +1244,7 @@
     $$('[data-v]').forEach((b) => b.addEventListener('click', () => {
       vista = b.dataset.v; if (vista === 'semana') { y = hoy.getFullYear(); m = hoy.getMonth(); } cargar();
     }));
+    misProximosDias($('#mh-prog'));
     cargar();
   };
 
@@ -1508,17 +1692,58 @@
     $$('[data-ed]').forEach((b) => b.addEventListener('click', () => editar(alms.find((a) => a.id == b.dataset.ed))));
   };
 
+  // ---------- Sucursales ----------
+  const SUC_COL = ['#165f96', '#c0221f', '#2f7d4f', '#8e44ad', '#b7791f', '#0f766e'];
+  const sucColor = (id, sucs) => SUC_COL[Math.max(0, sucs.findIndex((s) => s.id === id)) % SUC_COL.length];
+  const sucCorto = (n) => String(n || '').replace(/^VINILO\s+/i, '');
+
+  VIEWS.sucursales = async (main) => {
+    const [sucs, us] = await Promise.all([api('/api/sucursales'), puede('usuarios') || puede('sucursales') ? api('/api/programacion/empleados').catch(() => []) : Promise.resolve([])]);
+    main.innerHTML = `<h1>Sucursales</h1><p class="sub">Locales donde trabaja el personal. Un empleado puede estar en una o en varias sucursales a la vez.</p>
+      <div class="toolbar"><div class="spacer"></div><button class="btn" id="su-new">+ Nueva sucursal</button></div>
+      ${sucs.length ? `<div class="suc-grid">${sucs.map((s) => `<div class="card suc-card ${s.activo ? '' : 'inactive'}" style="--c:${sucColor(s.id, sucs)}">
+        <div class="suc-top"><div><h3>${esc(s.nombre)}</h3>${s.direccion ? `<div class="muted">${esc(s.direccion)}</div>` : ''}</div>
+          <span class="badge ${s.activo ? 'b-COMPLETADO' : ''}">${s.activo ? 'Activa' : 'Inactiva'}</span></div>
+        <div class="suc-emp"><b>${s.empleados.length}</b> ${s.empleados.length === 1 ? 'empleado' : 'empleados'}
+          <div>${s.empleados.map((e) => `<span class="emp-chip">${esc(e.nombre)}</span>`).join('') || '<span class="muted">Sin empleados asignados</span>'}</div></div>
+        <div class="form-actions" style="margin-top:10px"><button class="btn ghost sm" data-ed="${s.id}">Editar</button></div></div>`).join('')}</div>`
+        : '<div class="card empty">Todavía no hay sucursales.</div>'}`;
+    const editar = (s) => {
+      const asign = new Set(s ? s.empleados.map((e) => e.id) : []);
+      const m = modal(`<h2>${s ? 'Editar' : 'Nueva'} sucursal</h2><form id="f-su">
+        <div class="row"><div class="f"><label>Nombre *</label><input name="nombre" value="${esc(s ? s.nombre : '')}" required maxlength="80"></div>
+          <div class="f"><label>Dirección</label><input name="direccion" value="${esc(s ? s.direccion || '' : '')}" maxlength="200"></div></div>
+        ${us.length ? `<div class="f mt"><label>Empleados que trabajan en esta sucursal</label>
+          <input type="search" id="su-q" placeholder="Buscar empleado…" style="margin-bottom:6px">
+          <div class="chk-grupo chk-lista">${us.map((u) => `<label class="check" data-n="${esc(u.nombre.toLowerCase())}"><input type="checkbox" name="emp" value="${u.id}" ${asign.has(u.id) ? 'checked' : ''}> ${esc(u.nombre)} <span class="muted">· ${esc(u.rol_nombre)}</span></label>`).join('')}</div></div>` : ''}
+        ${s ? `<label class="check mt"><input type="checkbox" name="activo" ${s.activo ? 'checked' : ''}> Activa</label>` : ''}
+        <div class="form-actions"><button type="button" class="btn sec" data-close>Cancelar</button><button class="btn">Guardar</button></div></form>`, { wide: true });
+      const f = $('#f-su', m);
+      if ($('#su-q', m)) $('#su-q', m).addEventListener('input', (e) => { const q = e.target.value.toLowerCase(); $$('.chk-lista label', m).forEach((l) => { l.hidden = q && !l.dataset.n.includes(q); }); });
+      f.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const body = { nombre: f.nombre.value, direccion: f.direccion.value, activo: s ? f.activo.checked : true };
+        if (us.length) body.empleados = $$('input[name=emp]:checked', f).map((c) => Number(c.value));
+        try { await api(s ? '/api/sucursales/' + s.id : '/api/sucursales', { method: s ? 'PUT' : 'POST', body }); closeModal(); toast('Sucursal guardada'); router(); }
+        catch (err) { toast(err.message, true); }
+      });
+    };
+    $('#su-new').onclick = () => editar(null);
+    $$('[data-ed]').forEach((b) => b.addEventListener('click', () => editar(sucs.find((x) => x.id == b.dataset.ed))));
+  };
+
   // ---------- Usuarios (ADMIN) ----------
   VIEWS.usuarios = async (main) => {
     const tab = new URLSearchParams(location.hash.split('?')[1] || '').get('tab');
     if (tab === 'roles') return vistaRoles(main);
     if (tab === 'accesos' && S.user.rol === 'ADMIN') return vistaAccesos(main);
-    const [us, provs, roles] = await Promise.all([api('/api/usuarios'), api('/api/proveedores'), api('/api/roles')]);
+    const [us, provs, roles, sucs] = await Promise.all([api('/api/usuarios'), api('/api/proveedores'), api('/api/roles'), api('/api/sucursales')]);
+    const nomSuc = (ids) => (ids || []).map((i) => (sucs.find((s) => s.id === i) || {}).nombre).filter(Boolean).map((n) => n.replace(/^VINILO\s+/i, '')).join(', ');
     main.innerHTML = `${tabsUsuarios('usuarios')}<h1>Usuarios</h1><p class="sub">Cada usuario tiene un <b>rol</b>, que define qué opciones del menú y qué almacenes ve (se configuran en la pestaña <a href="#/usuarios?tab=roles">Roles</a>). El permiso <b>Compras</b> se puede sumar a cualquier usuario.</p>
       <div class="toolbar"><div class="spacer"></div><button class="btn" id="us-new">+ Nuevo usuario</button></div>
-      <div class="tbl-wrap"><table><thead><tr><th>Usuario</th><th>Nombre</th><th>Rol</th><th>Compras</th><th>Proveedor</th><th>N° reloj</th><th>Último ingreso</th><th>Estado</th><th></th></tr></thead><tbody>
+      <div class="tbl-wrap"><table><thead><tr><th>Usuario</th><th>Nombre</th><th>Rol</th><th>Compras</th><th>Proveedor</th><th>N° reloj</th><th>Sucursales</th><th>Último ingreso</th><th>Estado</th><th></th></tr></thead><tbody>
       ${us.map((u) => `<tr class="${u.activo ? '' : 'inactive'}"><td class="code">${esc(u.username)}</td><td>${esc(u.nombre)}</td><td><span class="badge b-rol">${esc(u.rol_nombre || u.rol)}</span></td>
-        <td>${u.rol === 'ADMIN' || u.permiso_compras ? '<span class="badge b-COMPLETADO">Sí</span>' : ''}</td><td>${esc(u.proveedor || '')}</td><td class="code">${esc(u.legajo || '')}</td>
+        <td>${u.rol === 'ADMIN' || u.permiso_compras ? '<span class="badge b-COMPLETADO">Sí</span>' : ''}</td><td>${esc(u.proveedor || '')}</td><td class="code">${esc(u.legajo || '')}</td><td>${esc(nomSuc(u.sucursales))}</td>
         <td class="muted">${u.ultimo_ingreso ? fmtFecha(u.ultimo_ingreso) : 'Nunca'}</td>
         <td>${u.activo ? 'Activo' : 'Inactivo'}</td><td class="num"><button class="btn ghost sm" data-ed="${u.id}">Editar</button></td></tr>`).join('')}
       </tbody></table></div>`;
@@ -1530,6 +1755,7 @@
           <div class="f"><label>${u ? 'Nueva contraseña (dejar vacío para no cambiar)' : 'Contraseña (mín. 6)'}</label><input type="password" name="password" ${u ? '' : 'required'} minlength="6" autocomplete="new-password"></div></div>
         <div class="row mt"><div class="f"><label>N° en el reloj (CrossChex)</label><input name="legajo" value="${esc(u ? u.legajo || '' : '')}" maxlength="30" placeholder="Ej.: 12"></div>
           <div class="f"><p class="stock-hint" style="margin:24px 0 0">Vincula al usuario con sus fichadas para ver sus horas.</p></div></div>
+        <div class="f mt" id="us-suc"><label>Sucursales donde trabaja</label><div class="chk-grupo">${sucs.filter((s) => s.activo || (u && (u.sucursales || []).includes(s.id))).map((s) => `<label class="check"><input type="checkbox" name="suc" value="${s.id}" ${u && (u.sucursales || []).includes(s.id) ? 'checked' : ''}> ${esc(s.nombre)}</label>`).join('') || '<span class="muted">No hay sucursales cargadas.</span>'}</div></div>
         <div class="row mt" id="us-prov"><div class="f"><label>Proveedor vinculado *</label><select name="proveedor_id"><option value="">Seleccionar…</option>
           ${provs.filter((p) => p.activo || (u && u.proveedor_id === p.id)).map((p) => `<option value="${p.id}" ${u && u.proveedor_id === p.id ? 'selected' : ''}>${esc(p.nombre)}</option>`).join('')}</select>
           <div class="stock-hint">El usuario solo verá los pedidos confirmados de este proveedor.</div></div></div>
@@ -1541,12 +1767,14 @@
         const r = f.rol.value;
         $('#us-prov', m).hidden = r !== 'PROVEEDOR';
         $('#us-comp', m).hidden = r === 'PROVEEDOR' || r === 'ADMIN';
+        $('#us-suc', m).hidden = r === 'PROVEEDOR';
       };
       f.rol.addEventListener('change', sync); sync();
       f.addEventListener('submit', async (e) => {
         e.preventDefault();
         const body = { nombre: f.nombre.value, rol: f.rol.value, password: f.password.value || undefined, legajo: f.legajo.value,
-          proveedor_id: f.rol.value === 'PROVEEDOR' ? f.proveedor_id.value : null, permiso_compras: f.permiso_compras.checked };
+          proveedor_id: f.rol.value === 'PROVEEDOR' ? f.proveedor_id.value : null, permiso_compras: f.permiso_compras.checked,
+          sucursales: $$('input[name=suc]:checked', f).map((c) => Number(c.value)) };
         if (u) body.activo = f.activo.checked; else body.username = f.username.value;
         try {
           await api(u ? '/api/usuarios/' + u.id : '/api/usuarios', { method: u ? 'PUT' : 'POST', body });

@@ -393,3 +393,56 @@ tbody tr:hover { background: #fffaf2; }
 .dias-tbl th { position: static; }
 .dias-tbl tr.inc td { background: #fff8ec; }
 .dias-tbl b.bad { color: var(--accent); }
+
+/* Sucursales y programación */
+.chk-grupo { display: flex; flex-wrap: wrap; gap: 6px 16px; }
+.chk-grupo .check { margin: 0; }
+.chk-lista { max-height: 240px; overflow: auto; border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; flex-direction: column; flex-wrap: nowrap; background: #fff; }
+.suc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; }
+.suc-card { border-top: 5px solid var(--c); }
+.suc-card.inactive { opacity: .6; }
+.suc-top { display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; }
+.suc-top h3 { margin: 0; color: var(--side); }
+.suc-emp { margin-top: 10px; }
+.emp-chip { display: inline-block; background: var(--cream-2); border: 1px solid var(--line); border-radius: 99px; padding: 2px 10px; font-size: .8rem; margin: 4px 4px 0 0; }
+.pg-leyenda { display: flex; gap: 16px; flex-wrap: wrap; font-size: .82rem; color: var(--muted); margin: -4px 0 10px; }
+.pg-leyenda i { display: inline-block; width: 10px; height: 10px; border-radius: 3px; margin-right: 6px; vertical-align: -1px; }
+.pg-tabla { min-width: 860px; table-layout: fixed; }
+.pg-tabla th:first-child { width: 190px; }
+.pg-tabla th:last-child { width: 84px; }
+.pg-tabla thead th { text-align: center; }
+.pg-tabla thead th small { display: block; font-weight: 400; color: var(--muted); }
+.pg-tabla thead th.hoy { color: var(--accent); }
+.pg-emp { text-align: left; font-weight: 400; text-transform: none; letter-spacing: 0; }
+.pg-emp b { display: block; color: var(--side); }
+.pg-emp small { color: var(--muted); font-size: .74rem; }
+.pg-cel { vertical-align: top; padding: 4px !important; border-left: 1px solid var(--line); }
+.pg-cel.hoy { background: #fff4f2; }
+.pg-cel.pasado { background: #faf8f4; }
+.pg-chip { display: block; width: 100%; text-align: left; border: 0; border-left: 4px solid var(--c); background: color-mix(in srgb, var(--c) 12%, #fff); border-radius: 6px;
+  padding: 4px 6px; margin-bottom: 4px; cursor: pointer; font: inherit; font-size: .76rem; line-height: 1.25; color: var(--ink); }
+.pg-chip b { display: block; color: var(--c); font-size: .72rem; letter-spacing: .03em; }
+.pg-chip:hover { filter: brightness(.96); }
+.pg-add { width: 100%; border: 1.5px dashed var(--line); background: transparent; border-radius: 6px; color: var(--muted); cursor: pointer; font-size: 1rem; padding: 2px 0; }
+.pg-add span { display: block; padding: 10px 0; }
+.pg-add:hover { border-color: var(--brand-blue); color: var(--brand-blue); background: #f2f7fc; }
+.pg-tot small { display: block; color: var(--muted); }
+.pg-pie { font-size: .74rem; text-align: center; border-left: 1px solid var(--line); }
+.pg-pie span { display: block; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.seg label { padding: 6px 14px; cursor: pointer; font-weight: 600; font-size: .88rem; }
+.seg input { display: none; }
+.seg label:has(input:checked) { background: var(--side); color: #fff; }
+.dias-sel { display: flex; gap: 6px; flex-wrap: wrap; }
+.dias-sel label { cursor: pointer; }
+.dias-sel input { display: none; }
+.dias-sel span { display: inline-block; min-width: 46px; text-align: center; padding: 6px 8px; border: 1.5px solid var(--line); border-radius: 8px; font-weight: 600; font-size: .85rem; background: #fff; }
+.dias-sel input:checked + span { background: var(--brand-blue); border-color: var(--brand-blue); color: #fff; }
+.mis-dias { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 8px; }
+.mis-dia { display: flex; gap: 10px; background: #fff; border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; }
+.mis-dia.hoy { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+.md-f { text-align: center; width: 58px; flex: none; border-right: 1px solid var(--line); padding-right: 8px; }
+.md-f span { display: block; font-size: .72rem; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+.md-f b { color: var(--side); }
+.md-t { font-size: .86rem; }
+.md-t small { display: block; color: var(--muted); }
