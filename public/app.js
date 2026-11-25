@@ -1017,11 +1017,24 @@
           · Los turnos que pasan la medianoche cuentan para el día en que empezaron (corte ${datos.corte}:00 h).</span></div>
           <button class="btn sec" id="hs-sync-btn">Sincronizar</button><button class="btn ghost sm" id="hs-sync-31">Traer últimos 31 días</button></div>`;
       const sync = async (dias) => {
-        const b = $('#hs-sync-btn'); b.disabled = true; b.textContent = 'Sincronizando…';
-        try { const r = await api('/api/horas/sincronizar', { method: 'POST', body: dias ? { dias } : {} }); toast(`Reloj: ${r.nuevas} fichadas nuevas`); await cargar(); }
-        catch (err) { toast(err.message, true); b.disabled = false; b.textContent = 'Sincronizar'; }
+        try {
+          await api('/api/horas/sincronizar', { method: 'POST', body: dias ? { dias } : {} });
+          toast('Sincronizando con el reloj… puede tardar un minuto (CrossChex permite una consulta cada 15 segundos).');
+          await cargar();
+        } catch (err) { toast(err.message, true); }
       };
-      if ($('#hs-sync-btn')) { $('#hs-sync-btn').onclick = () => sync(); $('#hs-sync-31').onclick = () => sync(31); }
+      if (datos.sincronizando) {
+        const b = $('#hs-sync-btn'); if (b) { b.disabled = true; b.textContent = 'Sincronizando…'; }
+        if ($('#hs-sync-31')) $('#hs-sync-31').hidden = true;
+        clearTimeout(VIEWS.horas._t);
+        VIEWS.horas._t = setTimeout(async () => {
+          if (!location.hash.startsWith('#/horas')) return;
+          const antes = datos.ultimo && datos.ultimo.id;
+          await cargar().catch(() => {});
+          if (!datos.sincronizando && datos.ultimo) toast(datos.ultimo.ok === false ? `Reloj: ${datos.ultimo.detalle}` : `Reloj sincronizado: ${datos.ultimo.creados} fichadas nuevas`, datos.ultimo.ok === false);
+        }, 5000);
+      }
+      if ($('#hs-sync-btn') && !datos.sincronizando) { $('#hs-sync-btn').onclick = () => sync(); $('#hs-sync-31').onclick = () => sync(31); }
     };
     const cargar = async () => {
       datos = await api(`/api/horas?desde=${$('#hs-d').value}&hasta=${$('#hs-h').value}`);

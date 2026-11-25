@@ -12,15 +12,37 @@ const DEDUP_MIN = 2; // fichadas del mismo empleado a menos de 2 minutos se toma
 
 let tokenCache = null;
 let enCurso = null;
+// CrossChex permite una consulta cada 15 s: se espera entre llamadas y se reintenta si lo pide
+const ESPERA_MS = Number(process.env.CROSSCHEX_ESPERA_MS ?? 16000);
+let ultimaLlamada = 0;
+const dormir = (ms) => new Promise((r) => setTimeout(r, ms));
 
 const iso = (d) => new Date(d).toISOString().replace(/\.\d{3}Z$/, '+00:00');
 
-async function llamar(nameSpace, nameAction, payload, conToken = true) {
+async function llamar(nameSpace, nameAction, payload, conToken = true, intento = 1) {
+  const tk = conToken ? await token() : null;
+  const espera = ultimaLlamada + ESPERA_MS - Date.now();
+  if (espera > 0) await dormir(espera);
+  ultimaLlamada = Date.now();
+  try {
+    return await llamarUnaVez(nameSpace, nameAction, payload, tk);
+  } catch (e) {
+    if (/once every|too many|frequen|limit/i.test(e.message) && intento < 5) {
+      // espera progresiva: 1x, 2x, 3x, 4x el intervalo
+      ultimaLlamada = Date.now() + ESPERA_MS * (intento - 1);
+      return llamar(nameSpace, nameAction, payload, conToken, intento + 1);
+    }
+    throw e;
+  }
+}
+
+async function llamarUnaVez(nameSpace, nameAction, payload, tk) {
+  const conToken = !!tk;
   const body = {
     header: { nameSpace, nameAction, version: '1.0', requestId: crypto.randomUUID(), timestamp: iso(Date.now()) },
     payload,
   };
-  if (conToken) body.authorize = { type: 'token', token: await token() };
+  if (conToken) body.authorize = { type: 'token', token: tk };
   const res = await fetch(API_URL(), {
     method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
     body: JSON.stringify(body), signal: AbortSignal.timeout(30000),
@@ -48,11 +70,12 @@ async function token() {
   return p.token;
 }
 
-/** Trae fichadas entre dos fechas (en ventanas de 7 días, 1000 por página). */
+/** Trae fichadas entre dos fechas (en ventanas de hasta 31 días, 1000 por página). */
 async function leerFichadas(desde, hasta) {
   const out = [];
-  for (let ini = new Date(desde); ini < hasta; ini = new Date(ini.getTime() + 7 * 86400e3)) {
-    const fin = new Date(Math.min(ini.getTime() + 7 * 86400e3, hasta.getTime()));
+  const VENTANA = 31 * 86400e3;
+  for (let ini = new Date(desde); ini < hasta; ini = new Date(ini.getTime() + VENTANA)) {
+    const fin = new Date(Math.min(ini.getTime() + VENTANA, hasta.getTime()));
     for (let page = 1; page <= 500; page++) {
       const p = await llamar('attendance.record', 'getrecord', { begin_time: iso(ini), end_time: iso(fin), order: 'asc', page, per_page: 1000 });
       const lista = Array.isArray(p.list) ? p.list : [];
@@ -184,10 +207,10 @@ module.exports = function registrarCrossChex({ route, query, fail, permitir, per
   route('GET', '/api/horas', async ({ user, url }) => {
     permitir(user, 'verHoras');
     const { desde, hasta } = rango(url);
-    const { rows: lg } = await query("SELECT ok, detalle, inicio, fin, leidos, creados FROM fudo_sync_log WHERE entidad = 'crosschex' ORDER BY id DESC LIMIT 1");
+    const { rows: lg } = await query("SELECT id, ok, detalle, inicio, fin, leidos, creados FROM fudo_sync_log WHERE entidad = 'crosschex' ORDER BY id DESC LIMIT 1");
     const { rows: tot } = await query('SELECT count(*)::int AS n, max(checktime) AS ultima FROM fichadas');
     return {
-      configurado: configurado(), corte: CORTE(), desde, hasta, ultimo: lg[0] || null,
+      configurado: configurado(), sincronizando: !!enCurso, corte: CORTE(), desde, hasta, ultimo: lg[0] || null,
       fichadas_total: Number(tot[0].n), ultima_fichada: tot[0].ultima,
       empleados: await horas(desde, hasta, url.searchParams.get('workno') || null),
     };
@@ -208,7 +231,11 @@ module.exports = function registrarCrossChex({ route, query, fail, permitir, per
     permitir(user, 'verHoras');
     if (!configurado()) fail(400, 'CrossChex no está configurado: cargá CROSSCHEX_API_KEY y CROSSCHEX_API_SECRET en Render.');
     const dias = body && body.dias ? Math.min(Math.max(toInt(body.dias) || 0, 1), 93) : undefined;
-    try { return await sincronizar(pool, 'MANUAL', { dias }); } catch (e) { fail(502, e.message); }
+    // Puede tardar (una consulta cada 15 s): corre en segundo plano y la pantalla consulta el estado
+    if (body && body.esperar) { try { return await sincronizar(pool, 'MANUAL', { dias }); } catch (e) { fail(502, e.message); } }
+    if (enCurso) return { iniciada: false, en_curso: true };
+    sincronizar(pool, 'MANUAL', { dias }).catch(() => {});
+    return { iniciada: true, en_curso: true };
   });
 
   // Números de reloj vistos sin usuario vinculado (para vincular legajos)
@@ -222,6 +249,7 @@ module.exports = function registrarCrossChex({ route, query, fail, permitir, per
 };
 
 module.exports.configurado = configurado;
+module.exports.sincronizando = () => !!enCurso;
 module.exports.sincronizar = sincronizar;
 module.exports.iniciarSincronizacionAutomatica = iniciarSincronizacionAutomatica;
 module.exports.calcularJornadas = calcularJornadas;
