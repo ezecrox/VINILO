@@ -1,5 +1,6 @@
 // Catálogo de permisos configurables por rol (puntos de menú y acciones).
 const CATALOGO = [
+  { grupo: 'General', clave: 'tablero', menu: 'Tablero en vivo', desc: 'Ver el estado del bar en vivo con datos de Fudo: mesas, comensales y ventas de la jornada' },
   { grupo: 'General', clave: 'verStock', menu: 'Stock por almacén', desc: 'Ver el stock de los almacenes habilitados' },
   { grupo: 'General', clave: 'minimos', menu: 'Stock por almacén', desc: 'Definir stock mínimo por almacén', requiere: 'verStock' },
   { grupo: 'General', clave: 'verPedidos', menu: 'Notas de pedido', desc: 'Ver notas de pedido entre almacenes' },
