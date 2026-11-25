@@ -678,3 +678,6 @@ body.tv .tb-kpi > b { font-size: 2.6rem; }
 .tb-largas span { color: var(--muted); } .tb-largas .t { color: var(--side); font-weight: 700; font-variant-numeric: tabular-nums; } .tb-largas .m { text-align: right; font-variant-numeric: tabular-nums; color: var(--ink, #1f2933); }
 .tb-largas > div.muy { background: #fff6e5; border-left: 4px solid #b7791f; border-radius: 6px; } .tb-largas > div.muy .t { color: #8a5a12; }
 @media (max-width: 600px) { .tb-largas > div { grid-template-columns: 1fr auto auto; gap: 14px; } .tb-largas > div > span:nth-of-type(1), .tb-largas > div > span:nth-of-type(2) { display: none; } }
+.tb-tabs { display: flex; gap: 6px; margin: 4px 0 14px; flex-wrap: wrap; }
+.tb-tabs button { border: 1.5px solid var(--line); background: #fff; color: var(--side); font: inherit; font-weight: 700; font-size: .88rem; letter-spacing: .03em; padding: 8px 16px; border-radius: 99px; cursor: pointer; }
+.tb-tabs button.on { background: var(--side); border-color: var(--side); color: #fff; }

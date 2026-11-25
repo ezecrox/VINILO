@@ -217,3 +217,8 @@ Web Push estándar, sin servicios externos ni costo (claves VAPID generadas sola
 Menú **General → Tablero en vivo** (permiso `tablero`, solo ADMIN por defecto; se puede dar a otros roles en Roles y permisos).
 Lee de Fudo las mesas (`/tables` con ventas activas y salas), las ventas de la jornada (`/sales`, desde las 6 h) y los ítems (`/items`), con caché de 30 s; la pantalla se actualiza sola cada 60 s.
 Muestra: mesas ocupadas, comensales ahora y pico, ventas de la jornada (cobrado + en mesas) comparadas con el mismo día de la semana pasada a la misma hora, ticket promedio, gasto por comensal, permanencia promedio, gráficos de comensales y mesas ocupadas cada 15 min (hoy vs. semana pasada), ventas por hora, lo más vendido, mix salón/para llevar/delivery y la lista de mesas abiertas hace más de 1 h 30 (las de más de 2 h 30 resaltadas). Botón **Modo TV** para dejarlo en una pantalla del bar.
+
+### Tablero de dos sucursales
+La cuenta principal de Fudo (`FUDO_API_KEY`/`FUDO_API_SECRET`) es **VINILO GALPON** y es la que sincroniza productos, proveedores y consumos.
+Para sumar **VINILO BAR** al tablero, cargar en Render `FUDO_BAR_API_KEY` y `FUDO_BAR_API_SECRET` (apiKey/apiSecret de un usuario de Fudo de esa sucursal). Aparecen pestañas para elegir la sucursal (se recuerda la última). Esa cuenta se usa **solo para el tablero**; no sincroniza nada.
+Nombres opcionales: `FUDO_NOMBRE` (default VINILO GALPON) y `FUDO_BAR_NOMBRE` (default VINILO BAR).

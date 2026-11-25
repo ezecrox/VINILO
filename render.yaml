@@ -29,6 +29,10 @@ services:
         sync: false     # apiKey de Fudo
       - key: FUDO_API_SECRET
         sync: false     # apiSecret de Fudo
+      - key: FUDO_BAR_API_KEY
+        sync: false     # apiKey de Fudo de VINILO BAR (solo para el tablero en vivo)
+      - key: FUDO_BAR_API_SECRET
+        sync: false
       - key: CROSSCHEX_API_KEY
         sync: false     # reloj CrossChex Cloud (opcional)
       - key: CROSSCHEX_API_SECRET

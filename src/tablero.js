@@ -39,10 +39,10 @@ const esSalon = (v) => !!v.mesa || /EAT|SALON|IN_SITE|TABLE|MESA/.test(v.tipo) |
 const tipoNombre = (t) => (/DELIVER/.test(t) ? 'Delivery' : /TAKE|AWAY|LLEVAR|COUNTER|MOSTRADOR/.test(t) ? 'Para llevar' : /EAT|SALON|TABLE|MESA|IN/.test(t) || !t ? 'Salón' : t);
 
 // ---- Lecturas a Fudo ----
-async function leerMesas() {
+async function leerMesas(get) {
   let data;
-  try { data = await fudo.fudoGet('/tables', { 'page[size]': 500, include: 'activeSales,room' }); }
-  catch (e) { if (/HTTP 400/.test(e.message)) data = await fudo.fudoGet('/tables', { 'page[size]': 500, include: 'room' }); else throw e; }
+  try { data = await get('/tables', { 'page[size]': 500, include: 'activeSales,room' }); }
+  catch (e) { if (/HTTP 400/.test(e.message)) data = await get('/tables', { 'page[size]': 500, include: 'room' }); else throw e; }
   const inc = data.included || [];
   const salas = new Map(inc.filter((x) => x.type === 'Room').map((r) => [String(r.id), (r.attributes || {}).name || `Salón ${r.id}`]));
   const activas = new Map(inc.filter((x) => x.type === 'Sale').map((s) => [String(s.id), s]));
@@ -57,10 +57,10 @@ async function leerMesas() {
   return { mesas, salas: [...salas].map(([id, nombre]) => ({ id, nombre })), activas: [...activas.values()] };
 }
 
-async function leerVentas(desde, hasta = null, maxPag = 12) {
+async function leerVentas(get, desde, hasta = null, maxPag = 12) {
   const out = [];
   for (let p = 1; p <= maxPag; p++) {
-    const d = await fudo.fudoGet('/sales', { 'page[size]': 500, 'page[number]': p, sort: '-createdAt' });
+    const d = await get('/sales', { 'page[size]': 500, 'page[number]': p, sort: '-createdAt' });
     const lote = d.data || [];
     let viejo = null;
     for (const s of lote) { const v = venta(s); if (!v.creada) continue; viejo = v.creada; if (v.creada >= desde && (!hasta || v.creada < hasta)) out.push(v); }
@@ -69,10 +69,10 @@ async function leerVentas(desde, hasta = null, maxPag = 12) {
   return out;
 }
 
-async function leerItems(desde, maxPag = 6) {
+async function leerItems(get, desde, maxPag = 6) {
   const out = [];
   for (let p = 1; p <= maxPag; p++) {
-    const d = await fudo.fudoGet('/items', { 'page[size]': 500, 'page[number]': p, sort: '-createdAt' });
+    const d = await get('/items', { 'page[size]': 500, 'page[number]': p, sort: '-createdAt' });
     const lote = d.data || [];
     let viejo = null;
     for (const it of lote) {
@@ -108,17 +108,20 @@ function porHora(ventas, desde, hasta) {
   return [...h.values()];
 }
 
-let cache = { t: 0, datos: null, err: null };
-let cacheComp = { fecha: null, datos: null };
-const nombresProd = async (query) => {
-  const { rows } = await query("SELECT fudo_id, nombre FROM productos WHERE fudo_id IS NOT NULL");
-  return new Map(rows.map((r) => [String(r.fudo_id), r.nombre]));
+const cache = {}, cacheComp = {}, cacheProd = {};
+// Nombres de productos: la cuenta principal usa los productos sincronizados; otra cuenta los lee de su Fudo (caché 6 h)
+const nombresProd = async (query, cta) => {
+  if (cta.principal) { const { rows } = await query("SELECT fudo_id, nombre FROM productos WHERE fudo_id IS NOT NULL"); return new Map(rows.map((r) => [String(r.fudo_id), r.nombre])); }
+  const c = cacheProd[cta.id]; if (c && Date.now() - c.t < 6 * 3600e3) return c.m;
+  const m = new Map();
+  for (let p = 1; p <= 10; p++) { const d = await cta.get('/products', { 'page[size]': 500, 'page[number]': p }); const l = d.data || []; for (const x of l) m.set(String(x.id), (x.attributes || {}).name || `#${x.id}`); if (l.length < 500) break; }
+  cacheProd[cta.id] = { t: Date.now(), m }; return m;
 };
 
-async function armar(query) {
+async function armar(query, cta) {
   const ahora = new Date();
   const { fecha, desde } = inicioJornada(ahora);
-  const [m, ventas, items, prods] = await Promise.all([leerMesas(), leerVentas(desde), leerItems(desde).catch(() => []), nombresProd(query)]);
+  const [m, ventas, items, prods] = await Promise.all([leerMesas(cta.get), leerVentas(cta.get, desde), leerItems(cta.get, desde).catch(() => []), nombresProd(query, cta).catch(() => new Map())]);
   // ventas abiertas que empezaron antes de la jornada (mesa de la noche anterior) también cuentan como activas
   const activasNorm = m.activas.map(venta);
   for (const a of activasNorm) if (!ventas.some((v) => v.id === a.id)) ventas.push(a);
@@ -167,15 +170,16 @@ async function armar(query) {
 }
 
 // Comparación con el mismo día de la semana anterior, hasta la misma hora (se cachea por jornada)
-async function comparacion() {
+async function comparacion(cta) {
   const ahora = new Date();
   const { fecha, desde } = inicioJornada(ahora);
   const d0 = new Date(desde.getTime() - 7 * 86400e3), hasta = new Date(ahora.getTime() - 7 * 86400e3);
-  if (!cacheComp.datos || cacheComp.fecha !== fecha) {
-    const vs = (await leerVentas(d0, new Date(d0.getTime() + 24 * 3600e3), 30)).filter((v) => !v.anulada);
-    cacheComp = { fecha, datos: vs };
+  const cc = cacheComp[cta.id];
+  if (!cc || cc.fecha !== fecha) {
+    const vs = (await leerVentas(cta.get, d0, new Date(d0.getTime() + 24 * 3600e3), 30)).filter((v) => !v.anulada);
+    cacheComp[cta.id] = { fecha, datos: vs };
   }
-  const vs = cacheComp.datos;
+  const vs = cacheComp[cta.id].datos;
   const hastaAhora = vs.filter((v) => v.creada && v.creada <= hasta);
   return {
     fecha: d0.toISOString().slice(0, 10),
@@ -187,37 +191,40 @@ async function comparacion() {
 }
 
 // Diagnóstico al arrancar: registra qué atributos devuelve Fudo (solo nombres y valores de estado, sin datos personales)
-async function diagnostico() {
+async function diagnostico(cta) {
   try {
-    const s = await fudo.fudoGet('/sales', { 'page[size]': 5, sort: '-createdAt' });
+    const s = await cta.get('/sales', { 'page[size]': 5, sort: '-createdAt' });
     const x = (s.data || [])[0];
-    const t = await fudo.fudoGet('/tables', { 'page[size]': 3, include: 'activeSales,room' }).catch((e) => ({ error: e.message }));
-    console.log('Tablero/Fudo diagnóstico:', JSON.stringify({
+    const t = await cta.get('/tables', { 'page[size]': 3, include: 'activeSales,room' }).catch((e) => ({ error: e.message }));
+    console.log(`Tablero/Fudo diagnóstico (${cta.nombre}):`, JSON.stringify({
       venta_atributos: x ? Object.keys(x.attributes || {}) : [], venta_relaciones: x ? Object.keys(x.relationships || {}) : [],
       estados: [...new Set((s.data || []).map((v) => (v.attributes || {}).saleState))], tipos: [...new Set((s.data || []).map((v) => (v.attributes || {}).saleType))],
       personas_ej: (s.data || []).map((v) => (v.attributes || {}).people),
       mesa_atributos: t.data && t.data[0] ? Object.keys(t.data[0].attributes || {}) : t.error, mesa_relaciones: t.data && t.data[0] ? Object.keys(t.data[0].relationships || {}) : null,
       mesas: t.data ? t.data.length : null, incluidos: t.included ? [...new Set(t.included.map((i) => i.type))] : null,
     }));
-  } catch (e) { console.warn('Tablero/Fudo diagnóstico falló:', e.message); }
+  } catch (e) { console.warn(`Tablero/Fudo diagnóstico (${cta.nombre}) falló:`, e.message); }
 }
 
 module.exports = function registrarTablero({ route, query, fail, permitir }) {
-  if (fudo.configurado()) setTimeout(diagnostico, 8000);
-  route('GET', '/api/tablero', async ({ user }) => {
+  setTimeout(() => fudo.cuentasTablero().forEach((c, i) => setTimeout(() => diagnostico(c), i * 3000)), 8000);
+  const cuenta = (q) => { const cs = fudo.cuentasTablero(); if (!cs.length) fail(400, 'Fudo no está configurado: cargá FUDO_API_KEY y FUDO_API_SECRET.');
+    const c = cs.find((x) => x.id === (q && q.cuenta)) || cs[0]; return c; };
+  route('GET', '/api/tablero/cuentas', async ({ user }) => { permitir(user, 'tablero'); return fudo.cuentasTablero().map(({ id, nombre }) => ({ id, nombre })); });
+  route('GET', '/api/tablero', async ({ user, url }) => { const q = { cuenta: url.searchParams.get('cuenta') };
     permitir(user, 'tablero');
-    if (!fudo.configurado()) fail(400, 'Fudo no está configurado: cargá FUDO_API_KEY y FUDO_API_SECRET.');
-    if (cache.datos && Date.now() - cache.t < CACHE_MS) return { ...cache.datos, cache: true };
-    try { const datos = await armar(query); cache = { t: Date.now(), datos }; return datos; }
+    const cta = cuenta(q); const ch = cache[cta.id];
+    if (ch && Date.now() - ch.t < CACHE_MS) return { ...ch.datos, cuenta: cta.id, sucursal: cta.nombre, cache: true };
+    try { const datos = { ...(await armar(query, cta)), cuenta: cta.id, sucursal: cta.nombre }; cache[cta.id] = { t: Date.now(), datos }; return datos; }
     catch (e) {
-      if (cache.datos) return { ...cache.datos, desactualizado: true, error_fudo: e.message };
-      fail(502, 'No se pudieron leer los datos de Fudo: ' + e.message);
+      if (ch) return { ...ch.datos, desactualizado: true, error_fudo: e.message };
+      fail(502, `No se pudieron leer los datos de Fudo de ${cta.nombre}: ` + e.message);
     }
   });
-  route('GET', '/api/tablero/comparacion', async ({ user }) => {
+  route('GET', '/api/tablero/comparacion', async ({ user, url }) => { const q = { cuenta: url.searchParams.get('cuenta') };
     permitir(user, 'tablero');
-    if (!fudo.configurado()) fail(400, 'Fudo no está configurado');
-    try { return await comparacion(); } catch (e) { fail(502, 'No se pudo leer la semana anterior: ' + e.message); }
+    const cta = cuenta(q);
+    try { return await comparacion(cta); } catch (e) { fail(502, 'No se pudo leer la semana anterior: ' + e.message); }
   });
 };
 module.exports.inicioJornada = inicioJornada;

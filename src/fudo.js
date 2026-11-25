@@ -264,4 +264,33 @@ function iniciarSincronizacionAutomatica(pool) {
   }
 }
 
-module.exports = { fudoGet, configurado, sincronizarProveedores, sincronizarProductos, sincronizarTodo, iniciarSincronizacionAutomatica, direccionLegible };
+// Cliente de lectura para otra cuenta de Fudo (otra sucursal), con su propio token. Solo lo usa el tablero.
+function crearCliente(key, secret) {
+  let tk = null;
+  async function token() {
+    const ahora = Math.floor(Date.now() / 1000);
+    if (tk && tk.exp - 300 > ahora) return tk.token;
+    const res = await fetch(AUTH_URL, { method: 'POST', headers: { 'Content-Type': 'application/json', Accept: 'application/json' }, body: JSON.stringify({ apiKey: key, apiSecret: secret }), signal: AbortSignal.timeout(20000) });
+    if (!res.ok) throw new Error(`Fudo rechazó las credenciales de esta sucursal (HTTP ${res.status}).`);
+    const data = await res.json(); if (!data.token) throw new Error('Fudo no devolvió un token');
+    tk = { token: data.token, exp: Number(data.exp) || ahora + 23 * 3600 }; return tk.token;
+  }
+  return async function get(path, params, reintento = true) {
+    const qs = new URLSearchParams(params).toString();
+    const res = await fetch(`${API_URL}${path}${qs ? '?' + qs : ''}`, { headers: { Authorization: `Bearer ${await token()}`, Accept: 'application/json' }, signal: AbortSignal.timeout(30000) });
+    if (res.status === 401 && reintento) { tk = null; return get(path, params, false); }
+    if (!res.ok) { const txt = await res.text().catch(() => ''); throw new Error(`Fudo respondió HTTP ${res.status} en ${path}: ${txt.slice(0, 200)}`); }
+    return res.json();
+  };
+}
+// Cuentas de Fudo para el tablero: la principal (FUDO_API_KEY) y la del bar (FUDO_BAR_API_KEY), cada una con su nombre.
+let cuentasCache = null;
+function cuentasTablero() {
+  if (cuentasCache) return cuentasCache;
+  const c = [];
+  if (configurado()) c.push({ id: 'galpon', nombre: process.env.FUDO_NOMBRE || 'VINILO GALPON', principal: true, get: fudoGet });
+  if (process.env.FUDO_BAR_API_KEY && process.env.FUDO_BAR_API_SECRET) c.push({ id: 'bar', nombre: process.env.FUDO_BAR_NOMBRE || 'VINILO BAR', principal: false, get: crearCliente(process.env.FUDO_BAR_API_KEY, process.env.FUDO_BAR_API_SECRET) });
+  return (cuentasCache = c);
+}
+
+module.exports = { cuentasTablero, crearCliente, fudoGet, configurado, sincronizarProveedores, sincronizarProductos, sincronizarTodo, iniciarSincronizacionAutomatica, direccionLegible };

@@ -1481,13 +1481,23 @@
     clearInterval(VIEWS.tablero._t);
     main.innerHTML = `<div class="tb-head"><div><h1>Tablero en vivo</h1><p class="sub" id="tb-sub">Cargando datos de Fudo…</p></div>
       <div class="tb-acc"><span class="tb-live" id="tb-live"><i></i>En vivo</span><button class="btn ghost sm" id="tb-ref">🔄 Actualizar</button><button class="btn sec sm" id="tb-tv">📺 Modo TV</button></div></div>
+      <div class="tb-tabs" id="tb-tabs" hidden></div>
       <div id="tb-body"><div class="card empty">Leyendo mesas y ventas de Fudo…</div></div>`;
-    let comp = null, compT = 0, ultimo = null;
+    let comp = null, compT = 0, ultimo = null, cuentas = [];
+    let cuenta = (() => { try { return localStorage.getItem('vinilo_tb_cuenta') || ''; } catch (_) { return ''; } })();
+    try { cuentas = await api('/api/tablero/cuentas'); } catch (_) { cuentas = []; }
+    if (!cuentas.some((c) => c.id === cuenta)) cuenta = cuentas[0] ? cuentas[0].id : '';
+    const pintarTabs = () => { const t = $('#tb-tabs'); t.hidden = cuentas.length < 2;
+      t.innerHTML = cuentas.map((c) => `<button class="${c.id === cuenta ? 'on' : ''}" data-c="${esc(c.id)}">${esc(c.nombre)}</button>`).join('');
+      t.querySelectorAll('button').forEach((b) => (b.onclick = () => { if (b.dataset.c === cuenta) return; cuenta = b.dataset.c; try { localStorage.setItem('vinilo_tb_cuenta', cuenta); } catch (_) { /* sin storage */ }
+        comp = null; compT = 0; ultimo = null; pintarTabs(); $('#tb-body').innerHTML = '<div class="card empty">Leyendo mesas y ventas de Fudo…</div>'; cargar(); })); };
+    pintarTabs();
+    const qc = () => (cuenta ? 'cuenta=' + encodeURIComponent(cuenta) : '');
     const pintar = (d) => {
       const k = d.kpi, pct = k.mesas_total ? Math.round((k.mesas_ocupadas / k.mesas_total) * 100) : 0;
       const ventasHoy = k.ventas_cerradas + k.ventas_abiertas;
       const dif = comp && comp.ventas_a_esta_hora ? Math.round(((ventasHoy - comp.ventas_a_esta_hora) / comp.ventas_a_esta_hora) * 100) : null;
-      $('#tb-sub').innerHTML = `Jornada del ${new Date(d.jornada + 'T12:00:00').toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' })} · datos de Fudo${d.desactualizado ? ' · <b style="color:var(--accent)">sin conexión con Fudo, últimos datos</b>' : ''}`;
+      $('#tb-sub').innerHTML = `${d.sucursal ? `<b>${esc(d.sucursal)}</b> · ` : ''}Jornada del ${new Date(d.jornada + 'T12:00:00').toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' })} · datos de Fudo${d.desactualizado ? ' · <b style="color:var(--accent)">sin conexión con Fudo, últimos datos</b>' : ''}`;
       $('#tb-body').innerHTML = `
         <div class="tb-kpis">
           <div class="tb-kpi"><span>Mesas ocupadas</span><b>${k.mesas_ocupadas}<small> / ${k.mesas_total}</small></b><div class="tb-meter"><i style="width:${pct}%"></i></div><small>${pct}% del salón</small></div>
@@ -1521,9 +1531,9 @@
     };
     const cargar = async (forzar) => {
       try {
-        if (!comp || Date.now() - compT > 10 * 60e3) { api('/api/tablero/comparacion').then((c) => { comp = c; compT = Date.now(); if (ultimo) pintar(ultimo); }).catch(() => {}); compT = Date.now(); }
-        const d = await api('/api/tablero' + (forzar ? '?t=' + Date.now() : ''));
-        ultimo = d; d._recibido = Date.now(); pintar(d);
+        if (!comp || Date.now() - compT > 10 * 60e3) { const pedida = cuenta; api('/api/tablero/comparacion?' + qc()).then((c) => { if (pedida !== cuenta) return; comp = c; compT = Date.now(); if (ultimo) pintar(ultimo); }).catch(() => {}); compT = Date.now(); }
+        const pedida = cuenta; const d = await api('/api/tablero?' + qc() + (forzar ? '&t=' + Date.now() : ''));
+        if (pedida !== cuenta) return; ultimo = d; d._recibido = Date.now(); pintar(d);
       } catch (err) { $('#tb-body').innerHTML = `<div class="card empty">⚠️ ${esc(err.message)}</div>`; $('#tb-sub').textContent = 'Sin datos'; }
     };
     $('#tb-ref').onclick = () => cargar(true);
