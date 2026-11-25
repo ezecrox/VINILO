@@ -177,6 +177,7 @@
     recepcion: '<path d="M12 3v11"/><path d="m7.5 9.5 4.5 4.5 4.5-4.5"/><path d="M3 14v4a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-4"/>',
     transferencia: '<path d="M4 8h14"/><path d="m14 4 4 4-4 4"/><path d="M20 16H6"/><path d="m10 12-4 4 4 4"/>',
     consumo: '<path d="M6 3h12l-1.2 7.2A4.9 4.9 0 0 1 12 14.5a4.9 4.9 0 0 1-4.8-4.3L6 3Z"/><path d="M12 14.5V20"/><path d="M8 21h8"/><path d="M6.6 7h10.8"/>',
+    tablero: '<path d="M3 3v18h18"/><path d="m7 15 4-4 3 3 5-6"/><circle cx="19" cy="5" r="2" fill="currentColor"/>',
     manuales: '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z"/><path d="M9 7h7M9 11h5"/>',
     checklist: '<rect x="4" y="3" width="16" height="18" rx="2"/><path d="m8 8 1.5 1.5L12 7M8 14l1.5 1.5L12 13"/><path d="M14 8h3M14 14h3"/>',
     notificaciones: '<path d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>',
@@ -201,6 +202,7 @@
 
   const NAV = [
     { sec: 'General' },
+    { id: 'tablero', lbl: 'Tablero en vivo', ok: () => puede('tablero') },
     { id: 'panel', lbl: 'Panel', ok: () => true },
     { id: 'stock', lbl: 'Stock por almacén', ok: () => puede('verStock') },
     { id: 'pedidos', lbl: 'Notas de pedido', ok: () => puede('verPedidos'), pill: true },
@@ -1411,6 +1413,134 @@
         <p class="stock-hint">Los días que no aparecen son franco.</p>`;
     } catch (_) { /* sin datos */ }
   }
+
+  // ---------- Tablero en vivo (Fudo) ----------
+  const pesos = (n) => '$ ' + Math.round(n || 0).toLocaleString('es-AR');
+  const pesosK = (n) => (Math.abs(n) >= 1e6 ? '$ ' + (n / 1e6).toLocaleString('es-AR', { maximumFractionDigits: 1 }) + ' M' : Math.abs(n) >= 1e3 ? '$ ' + Math.round(n / 1e3).toLocaleString('es-AR') + ' k' : pesos(n));
+  const horaAR = (iso) => new Date(iso).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', hourCycle: 'h23', timeZone: 'America/Argentina/Buenos_Aires' });
+  const durTxt = (m) => (m == null ? '—' : m >= 60 ? `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')}` : `${m} min`);
+
+  // Gráfico de líneas/áreas en SVG con cruz y tooltip (una sola escala)
+  function graficoLinea(cont, { series, formato = (v) => v, alto = 200, yMin = 0 }) {
+    const W = Math.max(280, cont.clientWidth || 600), H = alto, ml = 36, mr = 12, mt = 10, mb = 24;
+    const todos = series.flatMap((s) => s.puntos);
+    if (!todos.length) { cont.innerHTML = '<div class="tb-vacio">Sin datos todavía</div>'; return; }
+    const t0 = Math.min(...todos.map((p) => p.x)), t1 = Math.max(...todos.map((p) => p.x));
+    const vmax = Math.max(1, ...todos.map((p) => p.y)); const paso = vmax <= 5 ? 1 : vmax <= 20 ? 5 : vmax <= 60 ? 10 : vmax <= 150 ? 25 : 50; const ymax = Math.ceil(vmax / paso) * paso;
+    const X = (x) => ml + ((x - t0) / Math.max(1, t1 - t0)) * (W - ml - mr), Y = (y) => mt + (1 - (y - yMin) / Math.max(1, ymax - yMin)) * (H - mt - mb);
+    let svg = `<svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" class="tb-svg" role="img">`;
+    for (let v = 0; v <= ymax; v += paso) svg += `<line x1="${ml}" x2="${W - mr}" y1="${Y(v)}" y2="${Y(v)}" class="tb-grid"/><text x="${ml - 6}" y="${Y(v) + 4}" class="tb-ax" text-anchor="end">${v}</text>`;
+    const h0 = new Date(t0); h0.setMinutes(0, 0, 0);
+    for (let h = h0.getTime() + 3600e3; h <= t1; h += 3600e3) { const hh = new Date(h).getHours(); if ((t1 - t0) > 10 * 3600e3 && hh % 2) continue; svg += `<text x="${X(h)}" y="${H - 6}" class="tb-ax" text-anchor="middle">${String(hh).padStart(2, '0')}h</text>`; }
+    for (const s of series) {
+      if (!s.puntos.length) continue;
+      const d = s.puntos.map((p, i) => `${i ? 'L' : 'M'}${X(p.x).toFixed(1)},${Y(p.y).toFixed(1)}`).join('');
+      if (s.area) svg += `<path d="${d}L${X(s.puntos.at(-1).x).toFixed(1)},${Y(0)}L${X(s.puntos[0].x).toFixed(1)},${Y(0)}Z" fill="${s.color}" opacity=".12"/>`;
+      svg += `<path d="${d}" fill="none" stroke="${s.color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" ${s.punteada ? 'stroke-dasharray="5 4"' : ''}/>`;
+    }
+    const ult = series[0].puntos.at(-1); if (ult) svg += `<circle cx="${X(ult.x)}" cy="${Y(ult.y)}" r="4.5" fill="${series[0].color}" stroke="#fff" stroke-width="2"/>`;
+    svg += `<line class="tb-cruz" visibility="hidden" y1="${mt}" y2="${H - mb}" x1="-10" x2="-10"/><rect x="${ml}" y="${mt}" width="${W - ml - mr}" height="${H - mt - mb}" fill="transparent" class="tb-hit"/></svg><div class="tb-tip" hidden></div>`;
+    cont.innerHTML = svg;
+    const hit = cont.querySelector('.tb-hit'), cruz = cont.querySelector('.tb-cruz'), tip = cont.querySelector('.tb-tip'), svgEl = cont.querySelector('svg');
+    const mover = (ev) => {
+      const r = svgEl.getBoundingClientRect(); const cx = ((ev.touches ? ev.touches[0].clientX : ev.clientX) - r.left) * (W / r.width);
+      const x = t0 + ((cx - ml) / (W - ml - mr)) * (t1 - t0);
+      const filas = series.map((s) => { if (!s.puntos.length) return null; const p = s.puntos.reduce((b, q) => (Math.abs(q.x - x) < Math.abs(b.x - x) ? q : b)); return { s, p }; }).filter(Boolean);
+      if (!filas.length) return;
+      const px = X(filas[0].p.x); cruz.setAttribute('visibility', 'visible'); cruz.setAttribute('x1', px); cruz.setAttribute('x2', px);
+      tip.hidden = false; tip.innerHTML = `<b>${horaAR(filas[0].p.x)}</b>${filas.map(({ s, p }) => `<div><i style="background:${s.color}${s.punteada ? ';opacity:.6' : ''}"></i>${esc(s.nombre)}: <b>${formato(p.y)}</b></div>`).join('')}`;
+      const left = (px / W) * r.width; tip.style.left = Math.min(r.width - 150, Math.max(0, left + 12)) + 'px';
+    };
+    hit.addEventListener('mousemove', mover); hit.addEventListener('touchmove', mover, { passive: true }); hit.addEventListener('touchstart', mover, { passive: true });
+    hit.addEventListener('mouseleave', () => { tip.hidden = true; cruz.setAttribute('visibility', 'hidden'); cruz.setAttribute('x1', -10); cruz.setAttribute('x2', -10); });
+  }
+  function graficoBarras(cont, datos, { formato = pesos, color = '#165f96', alto = 180 }) {
+    const W = Math.max(280, cont.clientWidth || 500), H = alto, ml = 44, mr = 8, mt = 10, mb = 24;
+    if (!datos.length) { cont.innerHTML = '<div class="tb-vacio">Sin ventas todavía</div>'; return; }
+    const vmax = Math.max(1, ...datos.map((d) => d.v)); const ex = Math.pow(10, Math.floor(Math.log10(vmax))); const paso = [1, 2, 2.5, 5, 10].map((k) => k * ex).find((p) => vmax / p <= 4); const ymax = Math.ceil(vmax / paso) * paso;
+    const bw = (W - ml - mr) / datos.length, Y = (v) => mt + (1 - v / ymax) * (H - mt - mb);
+    let svg = `<svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" class="tb-svg">`;
+    for (let v = 0; v <= ymax; v += paso) svg += `<line x1="${ml}" x2="${W - mr}" y1="${Y(v)}" y2="${Y(v)}" class="tb-grid"/><text x="${ml - 6}" y="${Y(v) + 4}" class="tb-ax" text-anchor="end">${pesosK(v).replace('$ ', '')}</text>`;
+    datos.forEach((d, i) => {
+      const x = ml + i * bw + Math.min(6, bw * 0.15), w = Math.max(3, bw - 2 * Math.min(6, bw * 0.15)), y = Y(d.v), h = Math.max(0, Y(0) - y);
+      svg += `<g class="tb-bar" data-i="${i}"><rect x="${ml + i * bw}" y="${mt}" width="${bw}" height="${H - mt - mb}" fill="transparent"/>${h ? `<path d="M${x},${Y(0)}V${y + Math.min(4, h)}Q${x},${y} ${x + Math.min(4, w / 2)},${y}H${x + w - Math.min(4, w / 2)}Q${x + w},${y} ${x + w},${y + Math.min(4, h)}V${Y(0)}Z" fill="${d.actual ? color : color}" opacity="${d.actual ? 0.55 : 1}"/>` : ''}
+        <text x="${ml + i * bw + bw / 2}" y="${H - 6}" class="tb-ax" text-anchor="middle">${esc(d.etq)}</text></g>`;
+    });
+    svg += '</svg><div class="tb-tip" hidden></div>';
+    cont.innerHTML = svg;
+    const tip = cont.querySelector('.tb-tip'), svgEl = cont.querySelector('svg');
+    cont.querySelectorAll('.tb-bar').forEach((g) => {
+      const d = datos[g.dataset.i];
+      const show = () => { const r = svgEl.getBoundingClientRect(); tip.hidden = false; tip.innerHTML = `<b>${esc(d.etq)}</b><div>${formato(d.v)}</div>${d.extra ? `<div class="muted">${d.extra}</div>` : ''}`;
+        tip.style.left = Math.min(r.width - 150, ((ml + g.dataset.i * bw) / W) * r.width) + 'px'; };
+      g.addEventListener('mouseenter', show); g.addEventListener('touchstart', show, { passive: true }); g.addEventListener('mouseleave', () => { tip.hidden = true; });
+    });
+  }
+
+  VIEWS.tablero = async (main) => {
+    clearInterval(VIEWS.tablero._t);
+    main.innerHTML = `<div class="tb-head"><div><h1>Tablero en vivo</h1><p class="sub" id="tb-sub">Cargando datos de Fudo…</p></div>
+      <div class="tb-acc"><span class="tb-live" id="tb-live"><i></i>En vivo</span><button class="btn ghost sm" id="tb-ref">🔄 Actualizar</button><button class="btn sec sm" id="tb-tv">📺 Modo TV</button></div></div>
+      <div id="tb-body"><div class="card empty">Leyendo mesas y ventas de Fudo…</div></div>`;
+    let comp = null, compT = 0, ultimo = null;
+    const pintar = (d) => {
+      const k = d.kpi, pct = k.mesas_total ? Math.round((k.mesas_ocupadas / k.mesas_total) * 100) : 0;
+      const ventasHoy = k.ventas_cerradas + k.ventas_abiertas;
+      const dif = comp && comp.ventas_a_esta_hora ? Math.round(((ventasHoy - comp.ventas_a_esta_hora) / comp.ventas_a_esta_hora) * 100) : null;
+      $('#tb-sub').innerHTML = `Jornada del ${new Date(d.jornada + 'T12:00:00').toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' })} · datos de Fudo${d.desactualizado ? ' · <b style="color:var(--accent)">sin conexión con Fudo, últimos datos</b>' : ''}`;
+      $('#tb-body').innerHTML = `
+        <div class="tb-kpis">
+          <div class="tb-kpi"><span>Mesas ocupadas</span><b>${k.mesas_ocupadas}<small> / ${k.mesas_total}</small></b><div class="tb-meter"><i style="width:${pct}%"></i></div><small>${pct}% del salón</small></div>
+          <div class="tb-kpi"><span>Comensales ahora</span><b>${d.personas_informadas ? k.comensales : '—'}</b><small>${k.pico_comensales ? `pico ${k.pico_comensales} a las ${horaAR(k.pico_hora)}` : d.personas_informadas ? 'sin pico todavía' : 'Fudo no informa personas'}</small></div>
+          <div class="tb-kpi"><span>Ventas de la jornada</span><b>${pesosK(ventasHoy)}</b><small>${pesos(k.ventas_cerradas)} cobrado · ${pesos(k.ventas_abiertas)} en mesas</small>
+            ${dif !== null ? `<em class="${dif >= 0 ? 'up' : 'down'}">${dif >= 0 ? '▲' : '▼'} ${Math.abs(dif)}% vs. ${diaSem(comp.fecha).toLowerCase()} pasado a esta hora</em>` : ''}</div>
+          <div class="tb-kpi"><span>Ticket promedio</span><b>${pesosK(k.ticket_promedio)}</b><small>${k.tickets_cerrados} cerrados · ${k.tickets_abiertos} abiertos</small></div>
+          <div class="tb-kpi"><span>Gasto por comensal</span><b>${k.por_comensal ? pesosK(k.por_comensal) : '—'}</b><small>${k.comensales_jornada} comensales en la jornada</small></div>
+          <div class="tb-kpi"><span>Permanencia promedio</span><b>${durTxt(k.permanencia_min)}</b><small>mesas ya cerradas</small></div>
+        </div>
+        ${d.largas.length ? `<div class="tb-alerta">⏱️ <b>${d.largas.length} ${d.largas.length === 1 ? 'mesa abierta' : 'mesas abiertas'} hace más de 2 h 30:</b> ${d.largas.map((m) => `mesa ${esc(m.numero)} (${durTxt(m.minutos)}, ${pesos(m.total)})`).join(' · ')}</div>` : ''}
+        <div class="tb-fila2">
+          <div class="card tb-card"><div class="tb-ct"><h3>Comensales en el salón</h3><div class="tb-ley"><span><i style="background:#165f96"></i>Hoy</span>${comp ? `<span><i class="pt"></i>${esc(diaSem(comp.fecha))} pasado</span>` : ''}</div></div><div id="tb-g1" class="tb-graf"></div></div>
+          <div class="card tb-card"><div class="tb-ct"><h3>Mesas ocupadas</h3><div class="tb-ley"><span><i style="background:#165f96"></i>Hoy</span>${comp ? `<span><i class="pt"></i>${esc(diaSem(comp.fecha))} pasado</span>` : ''}</div></div><div id="tb-g2" class="tb-graf"></div></div>
+        </div>
+        <div class="tb-fila3">
+          <div class="card tb-card"><div class="tb-ct"><h3>Ventas por hora</h3><small class="muted">según la hora en que se abrió la mesa</small></div><div id="tb-g3" class="tb-graf"></div></div>
+          <div class="card tb-card"><h3>Lo más vendido hoy</h3>${d.top.length ? `<div class="tb-top">${d.top.map((t) => `<div><span>${esc(t.producto)}</span><b>${t.cantidad.toLocaleString('es-AR')}</b><i style="width:${Math.round((t.cantidad / d.top[0].cantidad) * 100)}%"></i></div>`).join('')}</div>` : '<div class="tb-vacio">Sin ítems todavía</div>'}</div>
+          <div class="card tb-card"><h3>Cómo se vende</h3>${d.mix.length ? `<div class="tb-mix">${d.mix.map((m) => { const p = ventasHoy ? Math.round((m.total / ventasHoy) * 100) : 0; return `<div><span>${esc(m.tipo)}</span><b>${p}%</b><div class="tb-meter"><i style="width:${p}%"></i></div><small>${pesos(m.total)} · ${m.tickets} tickets</small></div>`; }).join('')}</div>` : '<div class="tb-vacio">Sin ventas todavía</div>'}</div>
+        </div>
+        <div class="card tb-card"><div class="tb-ct"><h3>Mapa de mesas</h3><div class="tb-ley"><span><i class="lib"></i>Libre</span><span><i style="background:#165f96"></i>Ocupada</span><span><i style="background:#b7791f"></i>⏱ Más de 2 h 30</span></div></div>
+          ${(d.salas.length ? d.salas : [{ id: null, nombre: 'Salón' }]).map((s) => { const ms = d.mapa.filter((m) => (s.id ? m.sala_id === s.id : true)); if (!ms.length) return '';
+            const conGrilla = ms.some((m) => m.fila || m.columna); const cols = conGrilla ? Math.max(...ms.map((m) => m.columna)) + 1 : 0, filas = conGrilla ? Math.max(...ms.map((m) => m.fila)) + 1 : 0;
+            return `<div class="tb-sala"><h4>${esc(s.nombre)} <small>${ms.filter((m) => m.ocupada).length}/${ms.length} ocupadas</small></h4>
+              <div class="tb-plano ${conGrilla ? 'grilla' : ''}" style="${conGrilla ? `grid-template-columns:repeat(${cols},minmax(58px,104px));grid-template-rows:repeat(${filas},auto)` : ''}">
+              ${ms.sort((a, b) => Number(a.numero) - Number(b.numero)).map((m) => `<div class="tb-mesa ${m.ocupada ? (m.minutos >= 150 ? 'larga' : 'ocu') : ''} ${m.forma === '1' ? 'red' : ''} ${m.tam === 'l' ? 'gr' : ''}" style="${conGrilla ? `grid-column:${m.columna + 1};grid-row:${m.fila + 1}` : ''}"
+                title="Mesa ${esc(m.numero)}${m.ocupada ? ` · ${m.personas} personas · ${durTxt(m.minutos)} · ${pesos(m.total)}` : ' · libre'}"><b>${esc(m.numero)}</b>${m.ocupada ? `<small>${m.personas ? '👥' + m.personas : ''} ${durTxt(m.minutos)}</small><small>${pesosK(m.total)}</small>` : ''}</div>`).join('')}</div></div>`; }).join('')}
+        </div>`;
+      const pts = (arr, k) => arr.map((p) => ({ x: new Date(p.t).getTime(), y: p[k] }));
+      const ahoraMs = Date.now();
+      const compPts = (k) => (comp ? pts(comp.serie, k).filter((p) => p.x >= new Date(d.serie[0] ? d.serie[0].t : d.desde).getTime() && p.x <= Math.max(ahoraMs + 2 * 3600e3, ahoraMs)) : []);
+      graficoLinea($('#tb-g1'), { series: [{ nombre: 'Hoy', color: '#165f96', puntos: pts(d.serie, 'comensales'), area: true }, ...(comp ? [{ nombre: `${diaSem(comp.fecha)} pasado`, color: '#7b8794', punteada: true, puntos: compPts('comensales') }] : [])], formato: (v) => `${v} comensales` });
+      graficoLinea($('#tb-g2'), { series: [{ nombre: 'Hoy', color: '#165f96', puntos: pts(d.serie, 'mesas'), area: true }, ...(comp ? [{ nombre: `${diaSem(comp.fecha)} pasado`, color: '#7b8794', punteada: true, puntos: compPts('mesas') }] : [])], formato: (v) => `${v} mesas` });
+      const hActual = new Date().getHours();
+      graficoBarras($('#tb-g3'), d.por_hora.map((h) => ({ etq: `${String(h.hora).padStart(2, '0')}h`, v: h.ventas, actual: h.hora === hActual, extra: `${h.tickets} tickets${h.comensales ? ` · ${h.comensales} comensales` : ''}${h.hora === hActual ? ' · hora en curso' : ''}` })), {});
+    };
+    const cargar = async (forzar) => {
+      try {
+        if (!comp || Date.now() - compT > 10 * 60e3) { api('/api/tablero/comparacion').then((c) => { comp = c; compT = Date.now(); if (ultimo) pintar(ultimo); }).catch(() => {}); compT = Date.now(); }
+        const d = await api('/api/tablero' + (forzar ? '?t=' + Date.now() : ''));
+        ultimo = d; d._recibido = Date.now(); pintar(d);
+      } catch (err) { $('#tb-body').innerHTML = `<div class="card empty">⚠️ ${esc(err.message)}</div>`; $('#tb-sub').textContent = 'Sin datos'; }
+    };
+    $('#tb-ref').onclick = () => cargar(true);
+    $('#tb-tv').onclick = () => { document.body.classList.toggle('tv'); $('#tb-tv').textContent = document.body.classList.contains('tv') ? '✕ Salir de modo TV' : '📺 Modo TV';
+      try { if (document.body.classList.contains('tv')) document.documentElement.requestFullscreen && document.documentElement.requestFullscreen(); else document.fullscreenElement && document.exitFullscreen(); } catch (_) { /* sin pantalla completa */ } };
+    await cargar();
+    VIEWS.tablero._t = setInterval(() => {
+      if (!location.hash.startsWith('#/tablero')) { clearInterval(VIEWS.tablero._t); document.body.classList.remove('tv'); return; }
+      if (!document.hidden) cargar();
+    }, 60000);
+    let rz; window.onresize = () => { clearTimeout(rz); rz = setTimeout(() => { if (ultimo && location.hash.startsWith('#/tablero')) pintar(ultimo); }, 250); };
+  };
 
   // ---------- Manuales ----------
   const MANUALES = [

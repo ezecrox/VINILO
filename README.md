@@ -212,3 +212,8 @@ Web Push estándar, sin servicios externos ni costo (claves VAPID generadas sola
 ## Checklist de apertura y cierre
 
 **Operaciones → Checklist apertura / cierre** (permiso `checklist`, incluido en Empleado y Encargado). Plantillas Apertura y Cierre cargadas por defecto (por secciones: salón, barra, cocina, caja), con tareas para tildar, valores (temperaturas en °C, efectivo en $) y notas. Un checklist por sucursal y jornada (antes de las 6 h cuenta para el día anterior) que varios completan a la vez desde el celular; se finaliza cuando están todas las obligatorias. Panel: checklists pendientes (urgentes después de la hora límite). Con `checklistConfig`: **Historial** (con valores registrados y checklists faltantes) y **Plantillas** (tareas, secciones, tipo de dato, obligatoria, orden, sucursal y hora límite).
+
+## Tablero en vivo (Fudo)
+Menú **General → Tablero en vivo** (permiso `tablero`, solo ADMIN por defecto; se puede dar a otros roles en Roles y permisos).
+Lee de Fudo las mesas (`/tables` con ventas activas y salas), las ventas de la jornada (`/sales`, desde las 6 h) y los ítems (`/items`), con caché de 30 s; la pantalla se actualiza sola cada 60 s.
+Muestra: mesas ocupadas, comensales ahora y pico, ventas de la jornada (cobrado + en mesas) comparadas con el mismo día de la semana pasada a la misma hora, ticket promedio, gasto por comensal, permanencia promedio, gráficos de comensales y mesas ocupadas cada 15 min (hoy vs. semana pasada), ventas por hora, lo más vendido, mix salón/para llevar/delivery, mapa de mesas por sala y aviso de mesas abiertas hace más de 2 h 30. Botón **Modo TV** para dejarlo en una pantalla del bar.
