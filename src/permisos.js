@@ -11,6 +11,7 @@ const CATALOGO = [
   { grupo: 'Operaciones', clave: 'recibir', menu: 'Recepción', desc: 'Recibir mercadería (también la de pedidos a proveedores)' },
   { grupo: 'Operaciones', clave: 'transferir', menu: 'Transferencia', desc: 'Transferir entre almacenes' },
   { grupo: 'Operaciones', clave: 'consumir', menu: 'Consumo / Consumos desde Fudo', desc: 'Registrar consumos e importar ventas de Fudo' },
+  { grupo: 'Operaciones', clave: 'contar', menu: 'Conteo de inventario', desc: 'Contar el stock desde el celular (aplicar el conteo requiere Ajuste de inventario)' },
   { grupo: 'Operaciones', clave: 'ajustar', menu: 'Ajuste de inventario', desc: 'Ajustar stock por conteo físico' },
   { grupo: 'Operaciones', clave: 'producir', menu: 'Producción', desc: 'Producir productos con receta (descuenta insumos y suma lo producido)' },
   { grupo: 'Operaciones', clave: 'verMovimientos', menu: 'Movimientos', desc: 'Ver el historial de movimientos' },

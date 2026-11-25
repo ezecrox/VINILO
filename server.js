@@ -473,7 +473,7 @@ route('PUT', '/api/almacenes/:id', async ({ user, body, params }) => {
 
 // ---------- Productos ----------
 const PRODUCTO_COLS = `id, codigo, nombre, categoria, unidad, alerta_vencimiento, fecha_vencimiento,
-  alerta_cuidado, alerta_frio, nota_alerta, activo, fudo_id, gestion_stock, gestion_produccion,
+  alerta_cuidado, alerta_frio, nota_alerta, activo, fudo_id, gestion_stock, gestion_produccion, codigo_barras,
   CASE WHEN fecha_vencimiento IS NULL THEN NULL ELSE (fecha_vencimiento - CURRENT_DATE) END AS dias_venc`;
 
 function normalizarProducto(r) {
@@ -847,6 +847,7 @@ route('POST', '/api/fudo/sincronizar', async ({ user, url }) => {
 
 // ---------- Consumos desde ventas de Fudo ----------
 require('./src/consumos')({ route, query, tx, fail, permitir, registrarMovimiento, almacenActivo, isTrue, toInt, str, pool, veAlmacen, exigirAlmacen });
+require('./src/conteos')({ route, query, tx, fail, permitir, permitirAlguno, registrarMovimiento, almacenActivo, isTrue, toInt, str, veAlmacen, exigirAlmacen, sqlAlm });
 
 const { calcularTareas } = require('./src/tareas');
 

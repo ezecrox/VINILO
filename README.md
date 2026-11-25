@@ -197,3 +197,7 @@ Configuración:
 5. Cargá los celulares: en **Usuarios → Editar** (o cada uno desde **📱 WhatsApp** en su menú) y el teléfono de cada proveedor. Formato: código de área + número, sin 0 ni 15.
 
 En **Usuarios → WhatsApp** se ve el estado de la conexión, se manda un mensaje de prueba y está el registro de cada aviso (enviado, con error o no enviado) con opción de reintentar.
+
+## Conteo de inventario desde el celular
+
+**Operaciones → Conteo de inventario** (permiso `contar`; aplicar requiere `ajustar`). Se crea un conteo por almacén (todos los productos con gestión de stock o una categoría), por defecto **ciego** (quien cuenta no ve el stock del sistema). Varias personas cuentan a la vez desde el celular: botones − / +, cantidad directa o “＋ sumar” lo encontrado en otro lugar; cada producto se guarda al instante y la pantalla se actualiza sola. Búsqueda por nombre o código, lector de código de barras (cámara en Android/Chrome o lector Bluetooth/USB) y asociación de códigos nuevos a productos. Quien puede ajustar revisa diferencias (sistema vs contado), decide qué hacer con lo no contado (dejar o poner en 0) y aplica: el stock pasa a ser lo contado y queda un movimiento de **Ajuste** con referencia al conteo. Un conteo en curso por almacén; aparece como tarea en el panel.

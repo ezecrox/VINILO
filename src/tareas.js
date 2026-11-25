@@ -27,6 +27,16 @@ async function calcularTareas(user, { query, fudo, sqlAlm }) {
     return ordenar(t);
   }
 
+  // ---- Conteos de inventario en curso ----
+  if (p('contar') || p('ajustar')) {
+    const { rows } = await query(
+      `SELECT c.id, a.nombre AS almacen, c.creado_en, (SELECT count(*)::int FROM conteo_items i WHERE i.conteo_id = c.id) AS contados
+       FROM conteos c JOIN almacenes a ON a.id = c.almacen_id WHERE c.estado = 'EN_CURSO' ${sqlAlm(user, 'c.almacen_id')} ORDER BY c.id`);
+    add({ id: 'conteos', prioridad: 'media', titulo: 'Conteos de inventario en curso', cantidad: rows.length, link: '#/conteo', accion: p('ajustar') ? 'Revisar y aplicar' : 'Seguir contando',
+      detalle: p('ajustar') ? 'Cuando terminen de contar, revisá las diferencias y aplicá el conteo.' : 'Sumate a contar desde el celular.',
+      items: rows.slice(0, 6).map((r) => ({ texto: `${r.almacen}`, sub: `${n(r.contados)} productos contados · empezado ${fmt(r.creado_en)}`, link: `#/conteo?id=${r.id}` })) });
+  }
+
   // ---- Personal ----
   if (p('gestionarSolicitudes')) {
     const { rows } = await query(

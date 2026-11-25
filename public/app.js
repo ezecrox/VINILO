@@ -176,6 +176,7 @@
     recepcion: '<path d="M12 3v11"/><path d="m7.5 9.5 4.5 4.5 4.5-4.5"/><path d="M3 14v4a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-4"/>',
     transferencia: '<path d="M4 8h14"/><path d="m14 4 4 4-4 4"/><path d="M20 16H6"/><path d="m10 12-4 4 4 4"/>',
     consumo: '<path d="M6 3h12l-1.2 7.2A4.9 4.9 0 0 1 12 14.5a4.9 4.9 0 0 1-4.8-4.3L6 3Z"/><path d="M12 14.5V20"/><path d="M8 21h8"/><path d="M6.6 7h10.8"/>',
+    conteo: '<path d="M9 4h6a1 1 0 0 1 1 1v1H8V5a1 1 0 0 1 1-1Z"/><path d="M8 5H6a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1h-2"/><path d="m9 13 2 2 4-4"/>',
     ajuste: '<path d="M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1"/><circle cx="15" cy="6" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="18" r="2"/>',
     movimientos: '<path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v4h4"/><path d="M12 7.5V12l3 2"/>',
     productos: '<path d="M3 12.6V4.5A1.5 1.5 0 0 1 4.5 3h8.1a1.5 1.5 0 0 1 1 .4l7 7a1.5 1.5 0 0 1 0 2.1l-8.1 8.1a1.5 1.5 0 0 1-2.1 0l-7-7a1.5 1.5 0 0 1-.4-1Z"/><circle cx="8" cy="8" r="1.5"/>',
@@ -203,12 +204,13 @@
     { sec: 'Compras', ok: () => puede('compras') || puede('verCompras') || puede('proveedores') },
     { id: 'compras', lbl: 'Pedidos a proveedores', ok: () => puede('compras') || puede('verCompras'), pillOc: true },
     { id: 'proveedores', lbl: 'Proveedores', ok: () => puede('proveedores') },
-    { sec: 'Operaciones', ok: () => ['recibir', 'transferir', 'consumir', 'ajustar', 'producir', 'verMovimientos'].some(puede) },
+    { sec: 'Operaciones', ok: () => ['recibir', 'transferir', 'consumir', 'ajustar', 'contar', 'producir', 'verMovimientos'].some(puede) },
     { id: 'recepcion', lbl: 'Recepción', ok: () => puede('recibir') },
     { id: 'transferencia', lbl: 'Transferencia', ok: () => puede('transferir') },
     { id: 'consumo', lbl: 'Consumo', ok: () => puede('consumir') },
     { id: 'consumos-fudo', lbl: 'Consumos desde Fudo', ok: () => puede('consumir') || puede('verMovimientos'), pillCf: true },
     { id: 'produccion', lbl: 'Producción', ok: () => puede('producir') },
+    { id: 'conteo', lbl: 'Conteo de inventario', ok: () => puede('contar') || puede('ajustar') },
     { id: 'ajuste', lbl: 'Ajuste de inventario', ok: () => puede('ajustar') },
     { id: 'movimientos', lbl: 'Movimientos', ok: () => puede('verMovimientos') },
     { sec: 'Personal', ok: () => puede('solicitudes') || puede('misHoras') || puede('gestionarSolicitudes') || puede('verHoras') || puede('programacion') },
@@ -293,6 +295,7 @@
     const id = (location.hash.replace(/^#\/?/, '') || 'panel').split('?')[0];
     const nav = NAV.find((n) => n.id === id && (!n.ok || n.ok()));
     const view = nav ? id : 'panel';
+    document.body.classList.toggle('contando', view === 'conteo' && /[?&]id=/.test(location.hash));
     $$('#side a.nav').forEach((a) => a.classList.toggle('on', a.dataset.nav === view));
     const main = $('#main');
     main.innerHTML = '<p class="muted">Cargando…</p>';
@@ -1334,6 +1337,222 @@
     } catch (_) { /* sin datos */ }
   }
 
+  // ---------- Conteo de inventario (celular) ----------
+  VIEWS.conteo = async (main) => {
+    const id = new URLSearchParams(location.hash.split('?')[1] || '').get('id');
+    if (id) return vistaContar(main, Number(id));
+    const lista = await api('/api/conteos');
+    const enCurso = lista.filter((c) => c.estado === 'EN_CURSO'), hist = lista.filter((c) => c.estado !== 'EN_CURSO');
+    const pct = (c) => (c.total ? Math.min(100, Math.round((c.contados / c.total) * 100)) : 0);
+    main.innerHTML = `<h1>Conteo de inventario</h1><p class="sub">Contá el stock desde el celular. Pueden contar varias personas a la vez: cada producto se guarda al instante.${puede('ajustar') ? ' Al terminar, revisás las diferencias y aplicás el conteo.' : ''}</p>
+      ${puede('contar') ? '<div class="toolbar"><div class="spacer"></div><button class="btn" id="ct-new">+ Nuevo conteo</button></div>' : ''}
+      ${enCurso.length ? `<div class="ct-cards">${enCurso.map((c) => `<a class="card ct-card" href="#/conteo?id=${c.id}">
+          <div class="ct-card-top"><b>${esc(c.almacen)}</b><span class="badge b-PENDIENTE">En curso</span></div>
+          <div class="muted" style="font-size:.85rem">${c.categoria ? esc(c.categoria) + ' · ' : 'Todos los productos · '}${c.ciego ? 'ciego' : 'con stock visible'} · por ${esc(c.creado_por)}, ${fmtFecha(c.creado_en)}</div>
+          <div class="ct-bar"><i style="width:${pct(c)}%"></i></div><div class="ct-card-foot"><span><b>${c.contados}</b> de ${c.total} contados${c.personas ? ` · ${c.personas} ${c.personas === 1 ? 'persona' : 'personas'}` : ''}</span><span class="btn sm">Contar →</span></div></a>`).join('')}</div>`
+        : '<div class="card empty">No hay conteos en curso.</div>'}
+      ${hist.length ? `<h2 class="mt" style="margin-top:22px">Historial</h2><div class="tbl-wrap"><table><thead><tr><th>#</th><th>Almacén</th><th>Alcance</th><th>Estado</th><th class="num">Contados</th><th>Cerrado</th><th></th></tr></thead><tbody>
+        ${hist.map((c) => `<tr><td>${c.id}</td><td><b>${esc(c.almacen)}</b></td><td>${esc(c.categoria || 'Todos')}</td><td><span class="badge ${c.estado === 'APLICADO' ? 'b-COMPLETADO' : ''}">${c.estado === 'APLICADO' ? 'Aplicado' : 'Anulado'}</span></td>
+          <td class="num">${c.contados}</td><td class="muted">${c.cerrado_en ? fmtFecha(c.cerrado_en) : ''}${c.cerrado_por ? ' · ' + esc(c.cerrado_por) : ''}</td>
+          <td class="num"><a class="btn ghost sm" href="#/conteo?id=${c.id}">Ver</a></td></tr>`).join('')}</tbody></table></div>` : ''}`;
+    if ($('#ct-new')) $('#ct-new').onclick = async () => {
+      const prods = await api('/api/productos');
+      const cats = [...new Set(prods.map((p) => p.categoria).filter(Boolean))].sort();
+      const alms = S.almacenes.filter((a) => a.activo);
+      const m = modal(`<h2>Nuevo conteo</h2><form id="f-ct">
+        <div class="f"><label>Almacén</label><select name="almacen_id">${alms.map((a) => `<option value="${a.id}">${esc(a.nombre)}</option>`).join('')}</select></div>
+        <div class="f mt"><label>Qué se cuenta</label><select name="categoria"><option value="">Todos los productos con gestión de stock</option>${cats.map((c) => `<option>${esc(c)}</option>`).join('')}</select></div>
+        ${puede('ajustar') ? '<label class="check mt"><input type="checkbox" name="ciego" checked> Conteo ciego: quien cuenta no ve el stock del sistema (recomendado)</label>' : ''}
+        <div class="f mt"><label>Observación</label><input name="observacion" maxlength="500" placeholder="Ej.: conteo mensual, cierre de noviembre"></div>
+        <p class="stock-hint mt">Conviene contar con el local cerrado o sin movimientos: al aplicar, el stock pasa a ser lo contado.</p>
+        <div class="form-actions"><button type="button" class="btn sec" data-close>Cancelar</button><button class="btn">Empezar a contar</button></div></form>`);
+      $('#f-ct', m).addEventListener('submit', async (e) => {
+        e.preventDefault(); const f = e.target;
+        try {
+          const r = await api('/api/conteos', { method: 'POST', body: { almacen_id: Number(f.almacen_id.value), categoria: f.categoria.value, ciego: f.ciego ? f.ciego.checked : true, observacion: f.observacion.value } });
+          closeModal(); location.hash = '#/conteo?id=' + r.id;
+        } catch (err) { toast(err.message, true); }
+      });
+    };
+  };
+
+  async function vistaContar(main, id) {
+    let d = await api('/api/conteos/' + id);
+    const abierto = d.estado === 'EN_CURSO';
+    const st = { filtro: abierto ? 'pend' : 'todos', q: '', cat: '' };
+    const pend = new Map(); // producto_id → timeout de guardado
+    const prodPorId = () => new Map(d.productos.map((p) => [p.id, p]));
+    const cats = [...new Set(d.productos.map((p) => p.categoria).filter(Boolean))];
+    const scan = 'BarcodeDetector' in window;
+    main.innerHTML = `<div class="ct-top">
+        <div class="ct-titulo"><a href="#/conteo" class="ct-back">←</a><div><b>${esc(d.almacen)}</b><small>Conteo #${d.id}${d.categoria ? ' · ' + esc(d.categoria) : ''}${abierto ? (d.ciego && !d.ve_sistema ? ' · ciego' : '') : ` · ${d.estado === 'APLICADO' ? 'Aplicado' : 'Anulado'}`}</small></div>
+          ${abierto ? '<button class="btn ghost sm" id="ct-ref" title="Actualizar">🔄</button>' : ''}</div>
+        <div class="ct-bar"><i id="ct-bar"></i></div><div class="ct-prog" id="ct-prog"></div>
+        ${abierto ? `<div class="ct-busca"><input id="ct-q" type="search" placeholder="Buscar o escanear código…" autocomplete="off" enterkeyhint="search">${scan ? '<button class="btn" id="ct-scan" title="Escanear con la cámara">📷</button>' : ''}</div>` : ''}
+        <div class="ct-chips" id="ct-chips"></div>
+        ${cats.length > 1 ? `<select id="ct-cat" class="ct-cat"><option value="">Todas las categorías</option>${cats.map((c) => `<option>${esc(c)}</option>`).join('')}</select>` : ''}
+      </div>
+      <div id="ct-list" class="ct-list"></div>
+      ${abierto ? `<div class="ct-pie">${d.puede_aplicar ? '<button class="btn" id="ct-aplicar">Revisar y aplicar</button>' : '<a class="btn" href="#/conteo">Terminé de contar</a>'}
+        <button class="btn ghost sm" id="ct-anular">Anular</button></div>` : ''}`;
+    const conDif = (p) => p.contado !== null && p.sistema !== null && p.contado !== p.sistema;
+    const chips = () => {
+      const c = d.productos.filter((p) => p.contado !== null).length, tot = d.productos.length;
+      const dif = d.productos.filter(conDif).length;
+      const opts = [['pend', `Pendientes ${tot - c}`], ['cont', `Contados ${c}`], ['todos', 'Todos']];
+      if (d.ve_sistema) opts.push(['dif', `Con diferencia ${dif}`]);
+      $('#ct-chips').innerHTML = opts.map(([k, l]) => `<button class="ct-chip ${st.filtro === k ? 'on' : ''}" data-f="${k}">${l}</button>`).join('');
+      $$('[data-f]').forEach((b) => b.onclick = () => { st.filtro = b.dataset.f; pintar(); });
+      const enAl = d.productos.filter((p) => p.en_alcance), cc = enAl.filter((p) => p.contado !== null).length;
+      $('#ct-bar').style.width = (enAl.length ? Math.round((cc / enAl.length) * 100) : 0) + '%';
+      $('#ct-prog').innerHTML = `<b>${cc}</b> de ${enAl.length} productos contados${dif && d.ve_sistema ? ` · <span style="color:var(--accent)">${dif} con diferencia</span>` : ''}`;
+    };
+    const fila = (p) => {
+      const dif = conDif(p) ? p.contado - p.sistema : 0;
+      return `<div class="ct-row ${p.contado !== null ? 'ok' : ''} ${dif ? 'dif' : ''}" data-p="${p.id}">
+        <div class="ct-info"><b>${esc(p.nombre)}</b><small>${esc(p.codigo)}${p.categoria ? ' · ' + esc(p.categoria) : ''}${p.sistema !== null ? ` · sistema <b>${p.sistema}</b>` : ''}</small>
+          <small class="ct-est">${p.contado !== null ? `✓ ${esc(p.contado_por || '')}${dif ? ` · <b>${dif > 0 ? '+' : ''}${dif}</b>` : ''}` : ''}</small></div>
+        ${abierto ? `<div class="ct-qty"><button class="ct-b" data-a="-1" aria-label="Restar">−</button><input type="number" inputmode="numeric" min="0" step="1" value="${p.contado ?? ''}" placeholder="—" aria-label="Cantidad contada de ${esc(p.nombre)}"><button class="ct-b" data-a="1" aria-label="Sumar">+</button>
+          <button class="ct-mas" data-sum title="Sumar lo encontrado en otro lugar">＋ sumar</button></div>`
+          : `<div class="ct-final"><b>${p.contado ?? '—'}</b>${dif ? `<small style="color:var(--accent)">${dif > 0 ? '+' : ''}${dif}</small>` : ''}</div>`}</div>`;
+    };
+    const visibles = () => {
+      const q = st.q.toLowerCase();
+      return d.productos.filter((p) => (!st.cat || p.categoria === st.cat)
+        && (!q || p.nombre.toLowerCase().includes(q) || p.codigo.toLowerCase().includes(q) || (p.codigo_barras || '').includes(q))
+        && (st.filtro === 'todos' || (st.filtro === 'pend' && p.contado === null) || (st.filtro === 'cont' && p.contado !== null) || (st.filtro === 'dif' && conDif(p))));
+    };
+    const pintar = () => {
+      chips();
+      const v = visibles();
+      $('#ct-list').innerHTML = v.length ? v.slice(0, 300).map(fila).join('') + (v.length > 300 ? `<p class="muted">Y ${v.length - 300} más: buscá para encontrarlos.</p>` : '')
+        : `<div class="card empty">${st.filtro === 'pend' && !st.q ? '🎉 No quedan productos pendientes.' : 'Nada para mostrar con este filtro.'}</div>`;
+      if (abierto) enlazar();
+    };
+    const guardar = (p, valor, sumar = false) => {
+      const row = $(`.ct-row[data-p="${p.id}"]`);
+      clearTimeout(pend.get(p.id));
+      pend.set(p.id, setTimeout(async () => {
+        if (row) row.classList.add('guardando');
+        try {
+          if (valor === null) { await api(`/api/conteos/${id}/items/${p.id}`, { method: 'DELETE' }); p.contado = null; p.contado_por = null; }
+          else { const r = await api(`/api/conteos/${id}/items`, { method: 'PUT', body: { producto_id: p.id, cantidad: valor, sumar } }); p.contado = r.cantidad; p.contado_por = S.user.nombre; }
+          pend.delete(p.id);
+          const nr = $(`.ct-row[data-p="${p.id}"]`);
+          if (nr) { const foco = document.activeElement && nr.contains(document.activeElement); nr.outerHTML = fila(p); if (abierto) enlazar(); if (foco) { const i = $(`.ct-row[data-p="${p.id}"] input`); if (i) i.focus(); } }
+          chips();
+        } catch (err) { toast(err.message, true); if (row) row.classList.remove('guardando'); }
+      }, sumar ? 0 : 600));
+    };
+    const enlazar = () => {
+      const pm = prodPorId();
+      $$('.ct-row').forEach((row) => {
+        if (row.dataset.ok) return; row.dataset.ok = 1;
+        const p = pm.get(Number(row.dataset.p)); const inp = $('input', row);
+        inp.addEventListener('input', () => { const v = inp.value === '' ? null : Math.max(0, Math.floor(Number(inp.value))); if (v === null || Number.isFinite(v)) guardar(p, v); });
+        inp.addEventListener('focus', () => inp.select());
+        inp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); const sig = row.nextElementSibling && $('input', row.nextElementSibling); if (sig) sig.focus(); else inp.blur(); } });
+        $$('.ct-b', row).forEach((b) => b.addEventListener('click', () => { const v = Math.max(0, (Number(inp.value) || 0) + Number(b.dataset.a)); inp.value = v; guardar(p, v); }));
+        $('[data-sum]', row).addEventListener('click', () => sumarModal(p));
+      });
+    };
+    const sumarModal = (p) => {
+      const m = modal(`<h2>Sumar a ${esc(p.nombre)}</h2><p class="sub" style="margin-top:-6px">Ya contados: <b>${p.contado ?? 0}</b>. ¿Cuántos más encontraste (otra heladera, estante, depósito)?</p>
+        <form id="f-sum"><input name="n" type="number" inputmode="numeric" min="1" step="1" required autofocus style="font-size:1.4rem;text-align:center">
+        <div class="form-actions"><button type="button" class="btn sec" data-close>Cancelar</button><button class="btn">Sumar</button></div></form>`);
+      setTimeout(() => $('input', m).focus(), 50);
+      $('#f-sum', m).addEventListener('submit', (e) => { e.preventDefault(); const n = Math.floor(Number(e.target.n.value)); if (n > 0) { closeModal(); guardar(p, n, true); toast(`+${n} ${p.nombre}`); } });
+    };
+    const irA = (p) => {
+      st.q = ''; if ($('#ct-q')) $('#ct-q').value = ''; st.cat = ''; if ($('#ct-cat')) $('#ct-cat').value = '';
+      if (!visibles().includes(p)) st.filtro = 'todos';
+      pintar();
+      const row = $(`.ct-row[data-p="${p.id}"]`);
+      if (row) { row.scrollIntoView({ block: 'center' }); row.classList.add('resaltar'); setTimeout(() => row.classList.remove('resaltar'), 1600); const i = $('input', row); if (i) setTimeout(() => i.focus(), 250); }
+    };
+    const porCodigo = async (cod) => {
+      cod = String(cod || '').trim(); if (!cod) return;
+      const local = d.productos.find((p) => p.codigo_barras === cod || p.codigo.toUpperCase() === cod.toUpperCase());
+      if (local) return irA(local);
+      const r = await api('/api/productos/barras/' + encodeURIComponent(cod));
+      if (r.encontrado) {
+        const p = prodPorId().get(r.producto.id);
+        if (p) return irA(p);
+        return toast(`${r.producto.nombre} no tiene gestión de stock`, true);
+      }
+      if (!/^\d{6,}$/.test(cod)) return; // no parece un código de barras: queda como búsqueda
+      const m = modal(`<h2>Código ${esc(cod)}</h2><p class="sub" style="margin-top:-6px">No está asociado a ningún producto. Elegí cuál es y queda guardado para la próxima.</p>
+        <input id="as-q" type="search" placeholder="Buscar producto…" autofocus><div id="as-l" class="as-lista"></div>
+        <div class="form-actions"><button class="btn sec" data-close>Cancelar</button></div>`);
+      const pintarL = () => { const q = $('#as-q', m).value.toLowerCase(); $('#as-l', m).innerHTML = d.productos.filter((p) => !q || p.nombre.toLowerCase().includes(q) || p.codigo.toLowerCase().includes(q)).slice(0, 40)
+        .map((p) => `<button class="as-it" data-id="${p.id}"><b>${esc(p.nombre)}</b><small>${esc(p.codigo)}${p.codigo_barras ? ' · ya tiene ' + esc(p.codigo_barras) : ''}</small></button>`).join('');
+        $$('.as-it', m).forEach((b) => b.onclick = async () => { try { await api(`/api/productos/${b.dataset.id}/barras`, { method: 'PUT', body: { codigo_barras: cod } }); const p = prodPorId().get(Number(b.dataset.id)); p.codigo_barras = cod; closeModal(); toast('Código asociado'); irA(p); } catch (err) { toast(err.message, true); } }); };
+      $('#as-q', m).addEventListener('input', pintarL); pintarL();
+    };
+    const escanear = async () => {
+      let stream, activo = true;
+      const m = modal(`<h2>Escanear código</h2><div class="scan-box"><video id="sc-v" playsinline muted></video><i></i></div><p class="stock-hint" style="text-align:center">Apuntá al código de barras del producto.</p>
+        <div class="form-actions"><button class="btn sec" data-close id="sc-x">Cerrar</button></div>`);
+      const parar = () => { activo = false; if (stream) stream.getTracks().forEach((t) => t.stop()); };
+      $$('[data-close]', m).forEach((b) => b.addEventListener('click', parar));
+      $('.modal-bg').addEventListener('mousedown', (e) => { if (e.target.classList.contains('modal-bg')) parar(); });
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
+        const v = $('#sc-v', m); v.srcObject = stream; await v.play();
+        const det = new window.BarcodeDetector({ formats: ['ean_13', 'ean_8', 'upc_a', 'upc_e', 'code_128', 'code_39', 'itf', 'qr_code'] });
+        const loop = async () => {
+          if (!activo) return;
+          try { const r = await det.detect(v); if (r.length) { parar(); closeModal(); if (navigator.vibrate) navigator.vibrate(80); return porCodigo(r[0].rawValue); } } catch (_) { /* cuadro sin leer */ }
+          setTimeout(loop, 250);
+        };
+        loop();
+      } catch (err) { parar(); closeModal(); toast('No se pudo abrir la cámara: ' + err.message, true); }
+    };
+    const recargar = async () => {
+      if (pend.size || (document.activeElement && document.activeElement.closest && document.activeElement.closest('.ct-row'))) return;
+      const y = window.scrollY; d = await api('/api/conteos/' + id); pintar(); window.scrollTo(0, y);
+    };
+    if (abierto) {
+      $('#ct-q').addEventListener('input', (e) => { st.q = e.target.value.trim(); if (st.q && st.filtro === 'pend') st.filtro = 'todos'; pintar(); });
+      $('#ct-q').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); const v = visibles(); if (v.length === 1) irA(v[0]); else porCodigo(e.target.value).catch((err) => toast(err.message, true)); } });
+      if ($('#ct-scan')) $('#ct-scan').onclick = escanear;
+      $('#ct-ref').onclick = () => recargar().then(() => toast('Actualizado'));
+      clearInterval(VIEWS.conteo._t); VIEWS.conteo._t = setInterval(() => { if (!location.hash.startsWith('#/conteo?id=' + id)) return clearInterval(VIEWS.conteo._t); recargar().catch(() => {}); }, 20000);
+      $('#ct-anular').onclick = async () => {
+        if (!confirm('¿Anular este conteo? Se descarta lo contado y el stock no cambia.')) return;
+        try { await api(`/api/conteos/${id}/anular`, { method: 'POST' }); toast('Conteo anulado'); location.hash = '#/conteo'; } catch (err) { toast(err.message, true); }
+      };
+      if ($('#ct-aplicar')) $('#ct-aplicar').onclick = async () => {
+        await recargar();
+        const contados = d.productos.filter((p) => p.contado !== null);
+        const difs = contados.filter(conDif).sort((a, b) => Math.abs(b.contado - b.sistema) - Math.abs(a.contado - a.sistema));
+        const sinContar = d.productos.filter((p) => p.en_alcance && p.contado === null && p.sistema > 0);
+        const neto = difs.reduce((a, p) => a + (p.contado - p.sistema), 0);
+        const m = modal(`<h2>Revisar y aplicar el conteo</h2>
+          <div class="resumen" style="margin-bottom:12px"><a><span>Contados</span><b>${contados.length}</b></a><a><span>Con diferencia</span><b style="${difs.length ? 'color:var(--accent)' : ''}">${difs.length}</b></a>
+            <a><span>Diferencia neta</span><b>${neto > 0 ? '+' : ''}${neto}</b><small>unidades</small></a><a><span>Sin contar con stock</span><b>${sinContar.length}</b></a></div>
+          ${difs.length ? `<div class="tbl-wrap" style="max-height:300px;overflow:auto"><table><thead><tr><th>Producto</th><th class="num">Sistema</th><th class="num">Contado</th><th class="num">Diferencia</th></tr></thead><tbody>
+            ${difs.map((p) => `<tr><td>${esc(p.nombre)}</td><td class="num">${p.sistema}</td><td class="num"><b>${p.contado}</b></td><td class="num" style="color:${p.contado < p.sistema ? 'var(--accent)' : 'var(--ok)'}"><b>${p.contado > p.sistema ? '+' : ''}${p.contado - p.sistema}</b></td></tr>`).join('')}</tbody></table></div>`
+            : '<div class="card" style="background:#e9f5ee;border-color:#b9dcc6">✅ Lo contado coincide con el sistema.</div>'}
+          ${sinContar.length ? `<div class="f mt"><label>Productos sin contar que tienen stock en el sistema (${sinContar.length})</label>
+            <label class="check"><input type="radio" name="nc" value="MANTENER" checked> Dejarlos como están</label>
+            <label class="check"><input type="radio" name="nc" value="CERO"> Ponerlos en 0 (no hay ninguno)</label>
+            <div class="stock-hint">${sinContar.slice(0, 8).map((p) => esc(p.nombre) + ' (' + p.sistema + ')').join(', ')}${sinContar.length > 8 ? '…' : ''}</div></div>` : ''}
+          <p class="stock-hint mt">Al aplicar, el stock de ${esc(d.almacen)} pasa a ser lo contado y queda un movimiento de <b>Ajuste</b>. El stock del sistema se toma en este momento.</p>
+          <div class="form-actions"><button class="btn sec" data-close>Seguir contando</button><button class="btn" id="ap-ok">Aplicar conteo</button></div>`, { wide: true });
+        $('#ap-ok', m).onclick = async () => {
+          const nc = $('input[name=nc]:checked', m);
+          try {
+            const r = await api(`/api/conteos/${id}/aplicar`, { method: 'POST', body: { no_contados: nc ? nc.value : 'MANTENER' } });
+            closeModal(); toast(r.movimiento_id ? `Conteo aplicado: ${r.productos_ajustados} productos ajustados` : 'Conteo aplicado: no había diferencias'); location.hash = '#/conteo';
+          } catch (err) { toast(err.message, true); }
+        };
+      };
+    }
+    if ($('#ct-cat')) $('#ct-cat').addEventListener('change', (e) => { st.cat = e.target.value; pintar(); });
+    pintar();
+  }
+
   // ---------- Mis horas (empleado) ----------
   VIEWS['mis-horas'] = async (main) => {
     const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
@@ -1709,7 +1928,8 @@
         <div class="row"><div class="f s"><label>Código *</label><input name="codigo" value="${esc(p.codigo)}" required maxlength="40"></div>
           <div class="f w"><label>Nombre *</label><input name="nombre" value="${esc(p.nombre)}" required maxlength="200"></div></div>
         <div class="row mt"><div class="f"><label>Categoría</label><input name="categoria" value="${esc(p.categoria || '')}" maxlength="80"></div>
-          <div class="f s"><label>Unidad</label><input name="unidad" value="${esc(p.unidad)}" maxlength="20"></div></div>
+          <div class="f s"><label>Unidad</label><input name="unidad" value="${esc(p.unidad)}" maxlength="20"></div>
+          <div class="f"><label>Código de barras</label><input name="codigo_barras" value="${esc(p.codigo_barras || '')}" maxlength="40" inputmode="numeric" placeholder="EAN, opcional"></div></div>
         <div class="card mt" style="background:#faf8f5">
           <h2 style="font-size:1rem">Alertas</h2>
           <div class="row"><label class="check"><input type="checkbox" name="alerta_vencimiento" ${p.alerta_vencimiento ? 'checked' : ''}> ⏳ Vencimiento próximo</label>
@@ -1742,6 +1962,7 @@
       };
       try {
         const r = await api(n ? '/api/productos' : '/api/productos/' + p.id, { method: n ? 'POST' : 'PUT', body });
+        if ((f.codigo_barras.value || '') !== (p.codigo_barras || '')) await api(`/api/productos/${n ? r.id : p.id}/barras`, { method: 'PUT', body: { codigo_barras: f.codigo_barras.value } });
         closeModal(); toast('Producto guardado');
         if (body.gestion_produccion && !p.gestion_produccion) {
           const todos = await api('/api/productos?todos=1');

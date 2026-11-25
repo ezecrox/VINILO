@@ -457,3 +457,38 @@ CREATE TABLE IF NOT EXISTS notificaciones (
   enviado_en   TIMESTAMPTZ
 );
 CREATE INDEX IF NOT EXISTS notificaciones_creado_idx ON notificaciones (creado_en DESC);
+
+-- ===== Conteo de inventario desde el celular =====
+ALTER TABLE productos ADD COLUMN IF NOT EXISTS codigo_barras VARCHAR(40);
+CREATE UNIQUE INDEX IF NOT EXISTS productos_codigo_barras_uq ON productos (codigo_barras) WHERE codigo_barras IS NOT NULL;
+CREATE TABLE IF NOT EXISTS conteos (
+  id            SERIAL PRIMARY KEY,
+  almacen_id    INT NOT NULL REFERENCES almacenes(id),
+  estado        VARCHAR(20) NOT NULL DEFAULT 'EN_CURSO' CHECK (estado IN ('EN_CURSO','APLICADO','ANULADO')),
+  categoria     VARCHAR(80),                       -- NULL = todos los productos con gestión de stock
+  ciego         BOOLEAN NOT NULL DEFAULT TRUE,     -- quien cuenta no ve el stock del sistema
+  observacion   TEXT,
+  creado_por    INT NOT NULL REFERENCES usuarios(id),
+  creado_en     TIMESTAMPTZ NOT NULL DEFAULT now(),
+  cerrado_por   INT REFERENCES usuarios(id),
+  cerrado_en    TIMESTAMPTZ,
+  no_contados   VARCHAR(10),                       -- MANTENER | CERO (al aplicar)
+  movimiento_id INT REFERENCES movimientos(id)
+);
+CREATE UNIQUE INDEX IF NOT EXISTS conteos_uno_en_curso ON conteos (almacen_id) WHERE estado = 'EN_CURSO';
+CREATE TABLE IF NOT EXISTS conteo_items (
+  conteo_id   INT NOT NULL REFERENCES conteos(id) ON DELETE CASCADE,
+  producto_id INT NOT NULL REFERENCES productos(id),
+  cantidad    INT NOT NULL CHECK (cantidad >= 0),
+  contado_por INT REFERENCES usuarios(id),
+  contado_en  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (conteo_id, producto_id)
+);
+-- Una sola vez: quien ya podía ajustar inventario también puede contar
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM app_config WHERE clave = 'permiso_contar') THEN
+    UPDATE roles SET permisos = permisos || ',contar' WHERE (',' || permisos || ',') LIKE '%,ajustar,%' AND (',' || permisos || ',') NOT LIKE '%,contar,%';
+    INSERT INTO app_config (clave, valor) VALUES ('permiso_contar', '1');
+  END IF;
+END $$;
