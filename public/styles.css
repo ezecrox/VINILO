@@ -458,3 +458,24 @@ tbody tr:hover { background: #fffaf2; }
 .md-ev { color: var(--accent) !important; font-weight: 600; }
 .top-user { margin-left: auto; width: 38px; height: 38px; border-radius: 50% !important; background: rgba(255,255,255,.12) !important; display: grid; place-items: center; color: #fff; }
 .top-user .ico { width: 18px; height: 18px; }
+/* Calendario hoy/mañana en el panel */
+.cal-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin: 4px 0 8px; }
+.cal-head h2 { margin: 0; }
+.cal-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; margin-bottom: 22px; }
+.cal-dia { background: #fff; border: 1px solid var(--line); border-radius: 14px; padding: 12px 14px; box-shadow: 0 1px 2px rgba(15,53,87,.05); }
+.cal-dia.hoy { border-top: 4px solid var(--accent); }
+.cal-dia header { display: flex; align-items: baseline; gap: 8px; margin-bottom: 8px; }
+.cal-dia header b { font-size: 1.1rem; color: var(--side); }
+.cal-dia header span { color: var(--muted); font-size: .85rem; }
+.cal-dia header em { margin-left: auto; font-style: normal; font-size: .78rem; background: var(--cream-2); border-radius: 99px; padding: 2px 9px; color: var(--side); font-weight: 600; }
+.cal-ev { border: 1.5px solid var(--c); border-radius: 8px; padding: 5px 8px; font-size: .84rem; margin-bottom: 8px; background: color-mix(in srgb, var(--c) 6%, #fff); }
+.cal-suc { border-left: 4px solid var(--c); padding-left: 10px; margin-top: 8px; }
+.cal-suc h4 { margin: 0 0 4px; font-size: .78rem; letter-spacing: .05em; color: var(--c); }
+.cal-suc h4 small { background: var(--c); color: #fff; border-radius: 99px; padding: 0 7px; margin-left: 4px; font-size: .72rem; }
+.cal-suc ul { list-style: none; margin: 0; padding: 0; }
+.cal-suc li { display: flex; gap: 8px; align-items: baseline; padding: 3px 0; border-bottom: 1px dashed var(--line); font-size: .88rem; }
+.cal-suc li:last-child { border-bottom: 0; }
+.cal-suc li span { flex: 1; }
+.cal-suc li b { font-variant-numeric: tabular-nums; font-weight: 600; color: var(--side); }
+.cal-suc li i { font-style: normal; }
+.cal-head h2 { font-size: 1.1rem; }

@@ -330,6 +330,7 @@
     let html = `<h1>Hola, ${esc(S.user.nombre.split(' ')[0])}</h1>
       <p class="sub">${esc(S.user.rol_nombre || ROL_LBL[S.user.rol] || S.user.rol)}${S.user.proveedor ? ' · ' + esc(S.user.proveedor) : ''} · ${new Date().toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' })}
       · ${total ? `<b>${total} ${total === 1 ? 'tarea pendiente' : 'tareas pendientes'}</b>` : 'sin tareas pendientes'}</p>`;
+    if (puede('programacion')) html += `<div id="panel-cal"></div>`;
     html += tareas.length ? `<div class="tareas">${tareas.map((t) => `
       <section class="tarea pri-${t.prioridad}">
         <header><span class="tarea-n">${t.cantidad > 1 || t.items.length ? fmtN(t.cantidad) : '!'}</span>
@@ -358,6 +359,7 @@
       html += `<div class="form-actions" style="justify-content:flex-start"><a class="btn" href="#/pedidos?nuevo=1" style="text-decoration:none">+ Nueva nota de pedido</a></div>`;
     }
     main.innerHTML = html;
+    if ($('#panel-cal')) calendarioHoyManiana($('#panel-cal'));
     if ($('#panel-prog')) misProximosDias($('#panel-prog'), { titulo: 'Tus próximos días de trabajo', dias: 7 });
     if ($('#panel-horas')) api('/api/horas/mias').then((h) => {
       if (!h.vinculado || !$('#panel-horas')) return;
@@ -1241,6 +1243,28 @@
     });
     await cargar();
   };
+
+  // Calendario de hoy y mañana (panel de quien programa): eventos y personal por sucursal
+  async function calendarioHoyManiana(cont) {
+    try {
+      const hoy = hoyISO(), man = addDias(hoy, 1);
+      const [d, sucs] = await Promise.all([api(`/api/programacion?desde=${hoy}&hasta=${man}`), api('/api/sucursales')]);
+      if (!document.body.contains(cont)) return;
+      const nom = new Map(d.empleados.map((e) => [e.id, e.nombre]));
+      const dia = (f, titulo) => {
+        const evs = d.eventos.filter((e) => e.fecha === f);
+        const ts = d.turnos.filter((t) => t.fecha === f);
+        const porSuc = sucs.map((s) => [s, ts.filter((t) => t.sucursal_id === s.id).sort((a, b) => String(a.hora_desde || '99').localeCompare(String(b.hora_desde || '99')))]).filter(([, l]) => l.length);
+        return `<div class="cal-dia ${f === hoy ? 'hoy' : ''}"><header><b>${titulo}</b><span>${diaSem(f)} ${fmtDia(f)}</span><em>${ts.length} ${ts.length === 1 ? 'persona' : 'personas'}</em></header>
+          ${evs.map((e) => `<div class="cal-ev" style="--c:${sucColor(e.sucursal_id, sucs)}">🎉 <b>${esc(e.nombre)}</b> · ${esc(sucCorto(e.sucursal))}${e.hora_desde ? ' · ' + horario(e) : ''} · 👥 ${e.personal.length}</div>`).join('')}
+          ${porSuc.length ? porSuc.map(([s, l]) => `<div class="cal-suc" style="--c:${sucColor(s.id, sucs)}"><h4>${esc(s.nombre)} <small>${l.length}</small></h4>
+            <ul>${l.map((t) => `<li><span>${esc(nom.get(t.usuario_id) || '')}</span><b>${horario(t)}</b>${t.evento ? '<i title="Evento">🎉</i>' : ''}</li>`).join('')}</ul></div>`).join('')
+            : '<p class="muted" style="margin:6px 0">Nadie programado.</p>'}</div>`;
+      };
+      cont.innerHTML = `<div class="cal-head"><h2>Calendario del personal</h2><a href="#/programacion" style="white-space:nowrap">Ver programación →</a></div>
+        <div class="cal-grid">${dia(hoy, 'Hoy')}${dia(man, 'Mañana')}</div>`;
+    } catch (_) { cont.innerHTML = ''; }
+  }
 
   // Próximos días programados del propio usuario (Mis horas y panel)
   async function misProximosDias(cont, { titulo = 'Mis próximos días de trabajo', dias = 14 } = {}) {
