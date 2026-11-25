@@ -152,7 +152,13 @@ module.exports = function registrarPersonal({ route, query, tx, fail, permitir, 
       }
       await client.query('UPDATE solicitudes SET estado = $2, respuesta = $3, monto_aprobado = $4, resuelto_por = $5, resuelto_en = now() WHERE id = $1',
         [id, aprobar ? 'APROBADA' : 'RECHAZADA', respuesta, montoAp, user.id]);
-      return { ok: true };
+      // Licencia aprobada: se quitan de la programación los días en que no va a trabajar
+      let quitados = 0;
+      if (aprobar && s.tipo !== 'ADELANTO' && s.desde) {
+        const { rows: q } = await client.query('DELETE FROM programacion WHERE usuario_id = $1 AND fecha BETWEEN $2 AND $3 RETURNING id', [s.usuario_id, s.desde, s.hasta || s.desde]);
+        quitados = q.length;
+      }
+      return { ok: true, programacion_quitada: quitados };
     });
   });
 

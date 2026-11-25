@@ -479,3 +479,15 @@ tbody tr:hover { background: #fffaf2; }
 .cal-suc li b { font-variant-numeric: tabular-nums; font-weight: 600; color: var(--side); }
 .cal-suc li i { font-style: normal; }
 .cal-head h2 { font-size: 1.1rem; }
+/* Licencias en la programación */
+.pg-cel.lic { background: repeating-linear-gradient(135deg, #eef6ee, #eef6ee 8px, #e3f0e4 8px, #e3f0e4 16px); }
+.pg-lic { border-radius: 6px; padding: 4px 6px; margin-bottom: 4px; font-size: .74rem; font-weight: 700; color: #1f5a37; background: #dff1e6; border: 1px solid #b9dcc6; line-height: 1.25; }
+.pg-lic.pend { color: #8a5a0b; background: #fff6e5; border: 1px dashed #e0b866; font-weight: 600; }
+.pg-lic small { display: block; font-weight: 500; }
+.pg-tot-lic { color: #1f5a37 !important; }
+.pg-pie-lic { color: #1f5a37; }
+.pg-leyenda i.lg-lic { background: #b9dcc6; }
+.pg-leyenda i.lg-pend { background: #fff6e5; border: 1px dashed #e0b866; }
+.tip-lic { background: #fff6e5; border-left: 4px solid #b7791f; border-radius: 0 8px 8px 0; padding: 8px 10px; font-size: .88rem; margin: 0 0 12px; }
+.cal-lic { margin-top: 10px; padding-top: 8px; border-top: 1px dashed var(--line); font-size: .86rem; color: #1f5a37; }
+.md-lic b { color: #1f5a37; }

@@ -994,8 +994,8 @@
     $$('[data-dl]', m).forEach((b) => b.addEventListener('click', () => descargarAdjSol(x.id, x.adjuntos.find((a) => a.id == b.dataset.dl))));
     const resolver = async (decision) => {
       try {
-        await api(`/api/solicitudes/${id}/resolver`, { method: 'POST', body: { decision, respuesta: $('#rs-resp', m).value, monto_aprobado: $('#rs-monto', m) ? $('#rs-monto', m).value : undefined } });
-        closeModal(); toast(decision === 'APROBAR' ? 'Solicitud aprobada' : 'Solicitud rechazada'); onDone(); actualizarPill();
+        const r = await api(`/api/solicitudes/${id}/resolver`, { method: 'POST', body: { decision, respuesta: $('#rs-resp', m).value, monto_aprobado: $('#rs-monto', m) ? $('#rs-monto', m).value : undefined } });
+        closeModal(); toast(decision === 'APROBAR' ? `Solicitud aprobada${r.programacion_quitada ? ` · se ${r.programacion_quitada === 1 ? 'quitó 1 día' : `quitaron ${r.programacion_quitada} días`} de la programación` : ''}` : 'Solicitud rechazada'); onDone(); actualizarPill();
       } catch (err) { toast(err.message, true); }
     };
     if ($('#rs-si', m)) $('#rs-si', m).onclick = () => resolver('APROBAR');
@@ -1050,7 +1050,7 @@
         <button class="btn sec" id="pg-evento">🎉 Nuevo evento</button>
         <button class="btn" id="pg-varios">Programar varios días</button>
       </div>
-      <div class="pg-leyenda">${activas.map((s) => `<span><i style="background:${sucColor(s.id, sucs)}"></i>${esc(s.nombre)}</span>`).join('')}</div>
+      <div class="pg-leyenda">${activas.map((s) => `<span><i style="background:${sucColor(s.id, sucs)}"></i>${esc(s.nombre)}</span>`).join('')}<span><i class="lg-lic"></i>Vacaciones / licencia aprobada</span><span><i class="lg-pend"></i>Pedida, sin aprobar</span></div>
       <div id="pg-tbl"><p class="muted">Cargando…</p></div>`;
     let data = null;
     const cargar = async () => {
@@ -1064,23 +1064,27 @@
       }
       const porCelda = new Map();
       for (const t of data.turnos) { const k = t.usuario_id + '|' + t.fecha; if (!porCelda.has(k)) porCelda.set(k, []); porCelda.get(k).push(t); }
+      const licDe = (u, f) => { const ls = data.licencias.filter((l) => l.usuario_id === u && l.desde <= f && l.hasta >= f); return ls.find((l) => l.estado === 'APROBADA') || ls[0]; };
       const sucsEmp = (e) => e.sucursales.filter((id) => activas.some((s) => s.id === id) && (!st.suc || String(id) === String(st.suc)));
       const filas = data.empleados.map((e) => {
-        let dTot = 0, mTot = 0;
+        let dTot = 0, mTot = 0, dLic = 0;
         const celdas = dias.map((f) => {
           const ts = porCelda.get(e.id + '|' + f) || [];
           if (ts.length) dTot++; ts.forEach((t) => { mTot += minTurno(t); });
-          const libres = sucsEmp(e).filter((id) => !ts.some((t) => t.sucursal_id === id));
-          return `<td class="pg-cel ${f === hoy ? 'hoy' : ''} ${f < hoy ? 'pasado' : ''}">${ts.map((t) => `<button class="pg-chip" style="--c:${sucColor(t.sucursal_id, sucs)}" data-t="${t.id}" title="${esc(t.sucursal)}${t.evento ? ' · Evento: ' + esc(t.evento) : ''}${t.nota ? ' · ' + esc(t.nota) : ''}"><b>${esc(sucCorto(t.sucursal))}</b><span>${horario(t)}</span>${t.evento ? `<em>🎉 ${esc(t.evento)}</em>` : ''}</button>`).join('')}
+          const lic = licDe(e.id, f);
+          if (lic && lic.estado === 'APROBADA') dLic++;
+          const libres = lic && lic.estado === 'APROBADA' ? [] : sucsEmp(e).filter((id) => !ts.some((t) => t.sucursal_id === id));
+          return `<td class="pg-cel ${f === hoy ? 'hoy' : ''} ${f < hoy ? 'pasado' : ''} ${lic && lic.estado === 'APROBADA' ? 'lic' : ''}">${lic ? `<div class="pg-lic ${lic.estado === 'APROBADA' ? '' : 'pend'}" title="${esc(lic.tipo_nombre)} del ${fmtDia(lic.desde)} al ${fmtDia(lic.hasta)}${lic.estado === 'APROBADA' ? '' : ' · pendiente de aprobación'}">${SOL_ICO[lic.tipo] || '📝'} ${esc(lic.tipo_nombre)}${lic.estado === 'APROBADA' ? '' : '<small>pendiente</small>'}</div>` : ''}${ts.map((t) => `<button class="pg-chip" style="--c:${sucColor(t.sucursal_id, sucs)}" data-t="${t.id}" title="${esc(t.sucursal)}${t.evento ? ' · Evento: ' + esc(t.evento) : ''}${t.nota ? ' · ' + esc(t.nota) : ''}"><b>${esc(sucCorto(t.sucursal))}</b><span>${horario(t)}</span>${t.evento ? `<em>🎉 ${esc(t.evento)}</em>` : ''}</button>`).join('')}
             ${libres.length ? `<button class="pg-add" data-u="${e.id}" data-f="${f}" title="Programar">${ts.length ? '+' : '<span>+</span>'}</button>` : ''}</td>`;
         }).join('');
         return `<tr><th class="pg-emp"><b>${esc(e.nombre)}</b><small>${esc(e.rol_nombre)} · ${e.sucursales.map((id) => esc(sucCorto((sucs.find((s) => s.id === id) || {}).nombre))).join(', ') || 'sin sucursal'}</small></th>${celdas}
-          <td class="num pg-tot"><b>${dTot}</b> ${dTot === 1 ? 'día' : 'días'}${mTot ? `<small>${hm(mTot)} h</small>` : ''}</td></tr>`;
+          <td class="num pg-tot"><b>${dTot}</b> ${dTot === 1 ? 'día' : 'días'}${mTot ? `<small>${hm(mTot)} h</small>` : ''}${dLic ? `<small class="pg-tot-lic">${dLic} de licencia</small>` : ''}</td></tr>`;
       }).join('');
       const pie = dias.map((f) => {
         const ts = data.turnos.filter((t) => t.fecha === f);
         const cnt = activas.map((s) => [s, ts.filter((t) => t.sucursal_id === s.id).length]).filter(([, n]) => n);
-        return `<td class="pg-pie">${cnt.map(([s, n]) => `<span style="color:${sucColor(s.id, sucs)}">${esc(sucCorto(s.nombre))} <b>${n}</b></span>`).join('') || '<span class="muted">—</span>'}</td>`;
+        const nl = new Set(data.licencias.filter((l) => l.estado === 'APROBADA' && l.desde <= f && l.hasta >= f && data.empleados.some((e) => e.id === l.usuario_id)).map((l) => l.usuario_id)).size;
+        return `<td class="pg-pie">${cnt.map(([s, n]) => `<span style="color:${sucColor(s.id, sucs)}">${esc(sucCorto(s.nombre))} <b>${n}</b></span>`).join('') || '<span class="muted">—</span>'}${nl ? `<span class="pg-pie-lic">🏖️ ${nl} de licencia</span>` : ''}</td>`;
       }).join('');
       const filaEv = `<tr class="pg-evrow"><th class="pg-emp"><b>🎉 Eventos</b><small>Tocá + para crear uno</small></th>${dias.map((f) => `<td class="pg-cel ${f === hoy ? 'hoy' : ''}">
         ${data.eventos.filter((e) => e.fecha === f).map((e) => `<button class="pg-ev" style="--c:${sucColor(e.sucursal_id, sucs)}" data-ev="${e.id}" title="${esc(e.sucursal)}${e.descripcion ? ' · ' + esc(e.descripcion) : ''}">
@@ -1101,7 +1105,9 @@
       const ids = e.sucursales.filter((id) => !ocupadas.includes(id) && (!st.suc || !t ? (!st.suc || String(id) === String(st.suc)) : true));
       const sel = t ? t.sucursal_id : ids[0];
       const h = t || ultHorario[sel] || {};
-      const m = modal(`<h2>${esc(e.nombre)}</h2><p class="sub" style="margin-top:-6px">${diaSem(f)} ${fmtDia(f)}</p><form id="f-pg">
+      const lp = data.licencias.find((l) => l.usuario_id === e.id && l.desde <= f && l.hasta >= f);
+      const m = modal(`<h2>${esc(e.nombre)}</h2><p class="sub" style="margin-top:-6px">${diaSem(f)} ${fmtDia(f)}</p>
+        ${lp ? `<div class="tip-lic">${SOL_ICO[lp.tipo] || '📝'} Pidió <b>${esc(lp.tipo_nombre.toLowerCase())}</b> del ${fmtDia(lp.desde)} al ${fmtDia(lp.hasta)}${lp.estado === 'APROBADA' ? ' (aprobada)' : ', todavía sin aprobar'}. Si se aprueba, este día se quita de la programación.</div>` : ''}<form id="f-pg">
         <div class="f"><label>Sucursal</label><select name="sucursal_id">${opcSuc(t ? [...new Set([t.sucursal_id, ...e.sucursales.filter((id) => !ocupadas.includes(id))])] : ids, sel)}</select></div>
         <div class="row mt"><div class="f"><label>Entra</label><input type="time" name="hora_desde" value="${esc(h.hora_desde || '')}"></div>
           <div class="f"><label>Sale</label><input type="time" name="hora_hasta" value="${esc(h.hora_hasta || '')}"></div></div>
@@ -1147,11 +1153,13 @@
         $$('input[name=emp]:checked', fm).forEach((c) => marcados.add(Number(c.value)));
         $$('input[name=emp]:not(:checked)', fm).forEach((c) => marcados.delete(Number(c.value)));
         const s = Number(fm.sucursal_id.value), f = fm.fecha.value;
-        let ocup = data.turnos;
-        if (f && (f < data.desde || f > data.hasta)) { try { ocup = (await api(`/api/programacion?desde=${f}&hasta=${f}`)).turnos; } catch (_) { ocup = []; } }
+        let ocup = data.turnos, licsF = data.licencias;
+        if (f && (f < data.desde || f > data.hasta)) { try { const r = await api(`/api/programacion?desde=${f}&hasta=${f}`); ocup = r.turnos; licsF = r.licencias; } catch (_) { ocup = []; licsF = []; } }
         const lista = data.empleados.filter((e) => e.sucursales.includes(s));
         $('#ev-emp', m).innerHTML = lista.map((e) => {
           const otros = ocup.filter((t) => t.usuario_id === e.id && t.fecha === f && (!ev || t.evento_id !== ev.id));
+          const lic = licsF.find((l) => l.usuario_id === e.id && l.estado === 'APROBADA' && l.desde <= f && l.hasta >= f);
+          if (lic) return `<label class="check" style="opacity:.6"><input type="checkbox" disabled> ${esc(e.nombre)} <span class="muted" style="font-size:.8rem">· ${SOL_ICO[lic.tipo] || ''} ${esc(lic.tipo_nombre.toLowerCase())}</span></label>`;
           return `<label class="check"><input type="checkbox" name="emp" value="${e.id}" ${marcados.has(e.id) ? 'checked' : ''}> ${esc(e.nombre)}
             ${otros.length ? `<span class="muted" style="font-size:.8rem">· ya programado: ${otros.map((t) => `${esc(sucCorto(t.sucursal))} ${horario(t)}`).join(', ')}</span>` : ''}</label>`;
         }).join('') || '<span class="muted">Nadie asignado a esta sucursal.</span>';
@@ -1224,7 +1232,7 @@
           } else {
             const r = await api('/api/programacion', { method: 'POST', body: { usuario_ids: emp, fechas: fs, sucursal_id: Number(fm.sucursal_id.value),
               hora_desde: fm.hora_desde.value, hora_hasta: fm.hora_hasta.value, nota: fm.nota.value, reemplazar: fm.reemplazar.checked } });
-            toast(`Listo: ${r.creados} nuevos${r.actualizados ? `, ${r.actualizados} actualizados` : ''}${r.quitados ? `, ${r.quitados} reemplazados` : ''}`);
+            toast(`Listo: ${r.creados} nuevos${r.actualizados ? `, ${r.actualizados} actualizados` : ''}${r.quitados ? `, ${r.quitados} reemplazados` : ''}${r.omitidos ? ` · ${r.omitidos} ${r.omitidos === 1 ? 'día salteado' : 'días salteados'} por vacaciones o licencia` : ''}`);
           }
           closeModal(); cargar();
         } catch (err) { toast(err.message, true); }
@@ -1255,11 +1263,13 @@
         const evs = d.eventos.filter((e) => e.fecha === f);
         const ts = d.turnos.filter((t) => t.fecha === f);
         const porSuc = sucs.map((s) => [s, ts.filter((t) => t.sucursal_id === s.id).sort((a, b) => String(a.hora_desde || '99').localeCompare(String(b.hora_desde || '99')))]).filter(([, l]) => l.length);
+        const lics = [...new Map(d.licencias.filter((l) => l.estado === 'APROBADA' && l.desde <= f && l.hasta >= f).map((l) => [l.usuario_id, l])).values()];
+        const licHtml = lics.length ? `<div class="cal-lic">🏖️ <b>De licencia:</b> ${lics.map((l) => `${esc(nom.get(l.usuario_id) || 'Empleado')} <span class="muted">(${esc(l.tipo_nombre.toLowerCase())})</span>`).join(', ')}</div>` : '';
         return `<div class="cal-dia ${f === hoy ? 'hoy' : ''}"><header><b>${titulo}</b><span>${diaSem(f)} ${fmtDia(f)}</span><em>${ts.length} ${ts.length === 1 ? 'persona' : 'personas'}</em></header>
           ${evs.map((e) => `<div class="cal-ev" style="--c:${sucColor(e.sucursal_id, sucs)}">🎉 <b>${esc(e.nombre)}</b> · ${esc(sucCorto(e.sucursal))}${e.hora_desde ? ' · ' + horario(e) : ''} · 👥 ${e.personal.length}</div>`).join('')}
           ${porSuc.length ? porSuc.map(([s, l]) => `<div class="cal-suc" style="--c:${sucColor(s.id, sucs)}"><h4>${esc(s.nombre)} <small>${l.length}</small></h4>
             <ul>${l.map((t) => `<li><span>${esc(nom.get(t.usuario_id) || '')}</span><b>${horario(t)}</b>${t.evento ? '<i title="Evento">🎉</i>' : ''}</li>`).join('')}</ul></div>`).join('')
-            : '<p class="muted" style="margin:6px 0">Nadie programado.</p>'}</div>`;
+            : '<p class="muted" style="margin:6px 0">Nadie programado.</p>'}${licHtml}</div>`;
       };
       cont.innerHTML = `<div class="cal-head"><h2>Calendario del personal</h2><a href="#/programacion" style="white-space:nowrap">Ver programación →</a></div>
         <div class="cal-grid">${dia(hoy, 'Hoy')}${dia(man, 'Mañana')}</div>`;
@@ -1272,11 +1282,15 @@
       const hoy = hoyISO();
       const r = await api(`/api/programacion/mia?desde=${hoy}&hasta=${addDias(hoy, dias - 1)}`);
       if (!cont || !document.body.contains(cont)) return;
-      if (!r.turnos.length) { cont.innerHTML = ''; return; }
+      const licDia = new Map();
+      (r.licencias || []).forEach((l) => { for (let f = l.desde < hoy ? hoy : l.desde; f <= l.hasta && f <= r.hasta; f = addDias(f, 1)) if (!licDia.has(f) || l.estado === 'APROBADA') licDia.set(f, l); });
+      if (!r.turnos.length && !licDia.size) { cont.innerHTML = ''; return; }
       const porDia = new Map(); r.turnos.forEach((t) => { if (!porDia.has(t.fecha)) porDia.set(t.fecha, []); porDia.get(t.fecha).push(t); });
-      cont.innerHTML = `<h2 class="mt" style="margin-top:22px">${titulo}</h2><div class="mis-dias">${[...porDia].map(([f, ts]) => `
+      [...licDia.keys()].forEach((f) => { if (!porDia.has(f)) porDia.set(f, []); });
+      const ordenados = [...porDia].sort(([a], [b]) => a.localeCompare(b));
+      cont.innerHTML = `<h2 class="mt" style="margin-top:22px">${titulo}</h2><div class="mis-dias">${ordenados.map(([f, ts]) => `
         <div class="mis-dia ${f === hoy ? 'hoy' : ''}"><div class="md-f"><span>${f === hoy ? 'Hoy' : f === addDias(hoy, 1) ? 'Mañana' : diaSem(f)}</span><b>${fmtDia(f).slice(0, 5)}</b></div>
-          <div>${ts.map((t) => `<div class="md-t"><b>${esc(t.sucursal)}</b> ${horario(t)}${t.evento ? `<small class="md-ev">🎉 Evento: ${esc(t.evento)}</small>` : ''}${t.nota ? `<small>${esc(t.nota)}</small>` : ''}</div>`).join('')}</div></div>`).join('')}</div>
+          <div>${licDia.has(f) ? `<div class="md-t md-lic">${SOL_ICO[licDia.get(f).tipo] || '📝'} <b>${esc(licDia.get(f).tipo_nombre)}</b>${licDia.get(f).estado === 'APROBADA' ? '' : '<small>Pedida, sin aprobar</small>'}</div>` : ''}${ts.map((t) => `<div class="md-t"><b>${esc(t.sucursal)}</b> ${horario(t)}${t.evento ? `<small class="md-ev">🎉 Evento: ${esc(t.evento)}</small>` : ''}${t.nota ? `<small>${esc(t.nota)}</small>` : ''}</div>`).join('')}</div></div>`).join('')}</div>
         <p class="stock-hint">Los días que no aparecen son franco.</p>`;
     } catch (_) { /* sin datos */ }
   }

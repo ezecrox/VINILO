@@ -1,5 +1,19 @@
 // Sucursales (ABM), asignación de empleados y programación de días de trabajo.
+const { TIPOS } = require('./personal');
+
 module.exports = function registrarProgramacion({ route, query, tx, fail, permitir, permitirAlguno, isTrue, toInt, str, fechaOk }) {
+  // Vacaciones y licencias (aprobadas y pendientes) que tocan un período
+  const licencias = async (desde, hasta, usuarios = null, soloAprobadas = false) => {
+    const { rows } = await query(
+      `SELECT s.id, s.usuario_id, s.tipo, s.desde, coalesce(s.hasta, s.desde) AS hasta, s.estado FROM solicitudes s
+       WHERE s.tipo <> 'ADELANTO' AND s.desde IS NOT NULL AND s.estado IN (${soloAprobadas ? "'APROBADA'" : "'APROBADA','PENDIENTE'"})
+         AND s.desde <= $2 AND coalesce(s.hasta, s.desde) >= $1 ${usuarios ? 'AND s.usuario_id = ANY($3::int[])' : ''}
+       ORDER BY s.desde`, usuarios ? [desde, hasta, `{${usuarios.join(',')}}`] : [desde, hasta]);
+    return rows.map((r) => ({ id: Number(r.id), usuario_id: Number(r.usuario_id), tipo: r.tipo, tipo_nombre: (TIPOS[r.tipo] || {}).nombre || r.tipo,
+      desde: r.desde, hasta: r.hasta, estado: r.estado }));
+  };
+  const deLicencia = (lics, u, f) => lics.find((l) => l.usuario_id === u && l.estado === 'APROBADA' && l.desde <= f && l.hasta >= f);
+
   const hora = (v) => {
     if (v === undefined || v === null || v === '') return null;
     const m = /^(\d{1,2}):(\d{2})/.exec(String(v));
@@ -108,7 +122,7 @@ module.exports = function registrarProgramacion({ route, query, tx, fail, permit
       const pers = turnos.filter((t) => t.evento_id === e.id);
       return { ...e, personal: pers.map((t) => t.usuario_id), personal_desde: pers[0] ? pers[0].hora_desde : null, personal_hasta: pers[0] ? pers[0].hora_hasta : null };
     });
-    return { desde, hasta, empleados, turnos, eventos };
+    return { desde, hasta, empleados, turnos, eventos, licencias: await licencias(desde, hasta) };
   });
 
   // ---------- Eventos ----------
@@ -135,6 +149,9 @@ module.exports = function registrarProgramacion({ route, query, tx, fail, permit
       if (a.length !== empleados.length) fail(400, 'Algún empleado no existe o está inactivo');
       const fuera = a.filter((x) => !isTrue(x.asignado)).map((x) => x.nombre);
       if (fuera.length) fail(400, `${fuera.join(', ')} no ${fuera.length === 1 ? 'está asignado' : 'están asignados'} a ${s[0].nombre}`);
+      const lics = await licencias(fecha, fecha, empleados, true);
+      const ausentes = a.filter((x) => deLicencia(lics, Number(x.id), fecha)).map((x) => `${x.nombre} (${deLicencia(lics, Number(x.id), fecha).tipo_nombre.toLowerCase()})`);
+      if (ausentes.length) fail(409, `Ese día no ${ausentes.length === 1 ? 'trabaja' : 'trabajan'}: ${ausentes.join(', ')}`);
     }
     return tx(async (c) => {
       let eid = id;
@@ -189,14 +206,21 @@ module.exports = function registrarProgramacion({ route, query, tx, fail, permit
     const fuera = asig.filter((a) => !isTrue(a.asignado)).map((a) => a.nombre);
     if (fuera.length) fail(400, `${fuera.join(', ')} no ${fuera.length === 1 ? 'está asignado' : 'están asignados'} a ${s[0].nombre}. Asignalo en Sucursales o en Usuarios.`);
     const reemplazar = !!body.reemplazar;
+    const lics = await licencias(fechas[0], fechas[fechas.length - 1], usuarios, true);
+    const nombres = new Map(asig.map((a) => [Number(a.id), a.nombre]));
+    if (usuarios.length * fechas.length === 1 && deLicencia(lics, usuarios[0], fechas[0])) {
+      const l = deLicencia(lics, usuarios[0], fechas[0]);
+      fail(409, `${nombres.get(usuarios[0])} no trabaja ese día: tiene ${l.tipo_nombre.toLowerCase()} con solicitud aprobada`);
+    }
     return tx(async (c) => {
-      let creados = 0, actualizados = 0, quitados = 0;
+      let creados = 0, actualizados = 0, quitados = 0, omitidos = 0;
       for (const u of usuarios) {
         if (reemplazar) {
           const { rows: q } = await c.query('DELETE FROM programacion WHERE usuario_id = $1 AND fecha = ANY($2::date[]) AND sucursal_id <> $3 RETURNING id', [u, pgArr(fechas), sucursal]);
           quitados += q.length;
         }
         for (const f of fechas) {
+          if (deLicencia(lics, u, f)) { omitidos++; continue; }
           const { rows } = await c.query(
             `INSERT INTO programacion (usuario_id, sucursal_id, fecha, hora_desde, hora_hasta, nota, creado_por) VALUES ($1,$2,$3,$4,$5,$6,$7)
              ON CONFLICT (usuario_id, fecha, sucursal_id) DO UPDATE SET hora_desde = EXCLUDED.hora_desde, hora_hasta = EXCLUDED.hora_hasta, nota = EXCLUDED.nota
@@ -204,7 +228,7 @@ module.exports = function registrarProgramacion({ route, query, tx, fail, permit
           if (rows[0] && (rows[0].nuevo === true || rows[0].nuevo === 't')) creados++; else actualizados++;
         }
       }
-      return { creados, actualizados, quitados };
+      return { creados, actualizados, quitados, omitidos };
     });
   });
 
@@ -260,6 +284,8 @@ module.exports = function registrarProgramacion({ route, query, tx, fail, permit
        JOIN sucursales s ON s.id = p.sucursal_id AND s.activo
        JOIN usuario_sucursales us ON us.usuario_id = p.usuario_id AND us.sucursal_id = p.sucursal_id
        WHERE p.evento_id IS NULL AND p.fecha BETWEEN $1::date - 7 AND $1::date - 1 AND ($2::int IS NULL OR p.sucursal_id = $2::int)
+         AND NOT EXISTS (SELECT 1 FROM solicitudes so WHERE so.usuario_id = p.usuario_id AND so.tipo <> 'ADELANTO' AND so.estado = 'APROBADA'
+                           AND p.fecha + 7 BETWEEN so.desde AND coalesce(so.hasta, so.desde))
        ON CONFLICT (usuario_id, fecha, sucursal_id) DO NOTHING RETURNING id`, [desde, (suc !== null) ? suc : null, user.id]);
     return { copiados: rows.length };
   });
@@ -274,6 +300,6 @@ module.exports = function registrarProgramacion({ route, query, tx, fail, permit
     const { rows } = await query(
       `SELECT p.*, s.nombre AS sucursal, ev.nombre AS evento FROM programacion p JOIN sucursales s ON s.id = p.sucursal_id LEFT JOIN eventos ev ON ev.id = p.evento_id
        WHERE p.usuario_id = $1 AND p.fecha BETWEEN $2 AND $3 ORDER BY p.fecha, p.hora_desde NULLS FIRST`, [user.id, desde, hasta]);
-    return { desde, hasta, turnos: rows.map(turno) };
+    return { desde, hasta, turnos: rows.map(turno), licencias: await licencias(desde, hasta, [user.id]) };
   });
 };
