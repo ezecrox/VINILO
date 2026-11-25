@@ -229,7 +229,7 @@
       ? `<div class="sec">${n.sec}</div>`
       : `<a class="nav" href="#/${n.id}" data-nav="${n.id}">${icono(n.id)}<span class="lbl">${n.lbl}</span>${n.pill ? '<span class="pill" id="pill-ped" hidden></span>' : ''}${n.pillOc ? '<span class="pill" id="pill-oc" hidden></span>' : ''}${n.pillCf ? '<span class="pill" id="pill-cf" hidden></span>' : ''}${n.pillSolG ? '<span class="pill" id="pill-solg" hidden></span>' : ''}</a>`).join('');
     $('#app').innerHTML = `
-      <div class="topbar"><button id="menu-btn" aria-label="Menú">☰</button><span class="logo-tile sm"><img src="/logo.png" alt=""></span><b>VINILO</b></div>
+      <div class="topbar"><button id="menu-btn" aria-label="Menú">☰</button><span class="logo-tile sm"><img src="/logo.png" alt=""></span><b>VINILO</b><button id="user-btn" class="top-user" aria-label="Mi cuenta">${icono('clave')}</button></div>
       <div class="layout">
         <nav class="side" id="side">
           <div class="brand"><span class="logo-tile"><img src="/logo.png" alt="Vinilo"></span><div><b>VINILO</b><small>Gestión de Almacén</small></div></div>
@@ -241,6 +241,15 @@
       </div>`;
     $('#out-btn').onclick = async () => { try { await api('/api/logout', { method: 'POST' }); } catch (_) { /* igual salimos */ } logout(); };
     $('#pwd-btn').onclick = cambiarPassword;
+    $('#user-btn').onclick = () => {
+      const m = modal(`<h2>${esc(S.user.nombre)}</h2><p class="sub" style="margin-top:-6px">${esc(S.user.rol_nombre || S.user.rol)} · usuario <b>${esc(S.user.username)}</b></p>
+        <div class="form-actions" style="justify-content:stretch;flex-direction:column;gap:10px">
+          <button class="btn" id="um-pwd" style="width:100%">Cambiar contraseña</button>
+          <button class="btn sec" id="um-out" style="width:100%">Salir</button>
+          <button class="btn ghost" data-close style="width:100%">Cerrar</button></div>`);
+      $('#um-pwd', m).onclick = () => { closeModal(); cambiarPassword(); };
+      $('#um-out', m).onclick = () => $('#out-btn').click();
+    };
     $('#menu-btn').onclick = () => $('#side').classList.toggle('open');
     $$('#side a.nav').forEach((a) => a.addEventListener('click', () => $('#side').classList.remove('open')));
   }
