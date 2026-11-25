@@ -15,6 +15,7 @@ const CATALOGO = [
   { grupo: 'Operaciones', clave: 'producir', menu: 'Producción', desc: 'Producir productos con receta (descuenta insumos y suma lo producido)' },
   { grupo: 'Operaciones', clave: 'verMovimientos', menu: 'Movimientos', desc: 'Ver el historial de movimientos' },
   { grupo: 'Personal', clave: 'solicitudes', menu: 'Mis solicitudes', desc: 'Pedir adelantos de sueldo, vacaciones y licencias (examen, enfermedad, etc.)' },
+  { grupo: 'Personal', clave: 'misHoras', menu: 'Mis horas', desc: 'Ver las propias horas trabajadas y fichadas del reloj (requiere N° en el reloj en el usuario)' },
   { grupo: 'Personal', clave: 'gestionarSolicitudes', menu: 'Solicitudes del personal', desc: 'Ver, aprobar o rechazar las solicitudes de los empleados' },
   { grupo: 'Personal', clave: 'verHoras', menu: 'Horas del personal', desc: 'Ver fichadas y horas trabajadas (CrossChex) y sincronizar el reloj' },
   { grupo: 'Parametrización', clave: 'productos', menu: 'Productos', desc: 'Maestro de productos, alertas e importación' },

@@ -296,8 +296,13 @@ ALTER TABLE movimientos ADD CONSTRAINT movimientos_tipo_check CHECK (tipo IN ('R
 
 -- ===== Personal: solicitudes de empleados =====
 INSERT INTO roles (codigo, nombre, descripcion, permisos, sistema) VALUES
-  ('EMPLEADO', 'Empleado', 'Pide adelantos de sueldo, vacaciones y licencias', 'solicitudes', TRUE)
+  ('EMPLEADO', 'Empleado', 'Pide adelantos de sueldo, vacaciones y licencias y ve sus horas', 'solicitudes,misHoras', TRUE)
 ON CONFLICT (codigo) DO NOTHING;
+-- Una sola vez: el rol Empleado existente pasa a ver "Mis horas"
+UPDATE roles SET permisos = permisos || ',misHoras', descripcion = 'Pide adelantos de sueldo, vacaciones y licencias y ve sus horas'
+ WHERE codigo = 'EMPLEADO' AND (',' || permisos || ',') NOT LIKE '%,misHoras,%'
+   AND NOT EXISTS (SELECT 1 FROM app_config WHERE clave = 'rol_empleado_mis_horas');
+INSERT INTO app_config (clave, valor) VALUES ('rol_empleado_mis_horas', '1') ON CONFLICT (clave) DO NOTHING;
 
 CREATE TABLE IF NOT EXISTS solicitudes (
   id             SERIAL PRIMARY KEY,

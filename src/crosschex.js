@@ -218,13 +218,16 @@ module.exports = function registrarCrossChex({ route, query, fail, permitir, per
 
   // Horas propias (para el empleado con legajo vinculado)
   route('GET', '/api/horas/mias', async ({ user, url }) => {
-    permitirAlguno(user, 'solicitudes', 'verHoras');
+    permitirAlguno(user, 'misHoras', 'solicitudes', 'verHoras');
     const { rows } = await query('SELECT legajo FROM usuarios WHERE id = $1', [user.id]);
     const legajo = rows[0] && rows[0].legajo;
-    if (!legajo) return { vinculado: false };
+    const { rows: lg } = await query("SELECT fin FROM fudo_sync_log WHERE entidad = 'crosschex' AND ok IS TRUE ORDER BY id DESC LIMIT 1");
+    const actualizado = lg[0] ? lg[0].fin : null;
+    if (!legajo) return { vinculado: false, configurado: configurado(), actualizado };
     const { desde, hasta } = rango(url);
     const e = (await horas(desde, hasta, legajo))[0] || { dias: [], minutos: 0, dias_trabajados: 0, incompletas: 0 };
-    return { vinculado: true, desde, hasta, corte: CORTE(), ...e };
+    const { rows: uf } = await query('SELECT max(checktime) AS ultima FROM fichadas WHERE workno = $1', [legajo]);
+    return { vinculado: true, legajo, desde, hasta, corte: CORTE(), configurado: configurado(), actualizado, ultima_fichada: uf[0].ultima, ...e };
   });
 
   route('POST', '/api/horas/sincronizar', async ({ user, body }) => {

@@ -129,7 +129,7 @@ La app trae las fichadas del reloj Anviz desde **CrossChex Cloud** y calcula las
 
 - **Personal → Horas del personal** (permiso `Horas del personal`, ADMIN por defecto): horas por empleado en el período (atajos: semana, quincena, mes, mes anterior), días trabajados, promedio, jornadas incompletas (fichada sin par) y detalle por día con entradas/salidas; exportación CSV.
 - **Turnos nocturnos:** lo fichado antes de las 6:00 cuenta para la jornada del día anterior (configurable con `CROSSCHEX_CORTE_HORA`). Las fichadas del mismo empleado a menos de 2 minutos se toman como una sola.
-- **Vínculo con usuarios:** en cada usuario se carga su **N° en el reloj** (workno). Con eso el empleado ve **Mis horas** en Mis solicitudes, y el panel avisa qué números del reloj no tienen usuario.
+- **Vínculo con usuarios:** en cada usuario se carga su **N° en el reloj** (workno). Con eso el empleado ve su propia pantalla **Personal → Mis horas** (permiso `misHoras`, incluido en el rol Empleado): horas por mes o quincena, días trabajados, promedio, detalle de fichadas por jornada y aviso de fichadas incompletas; también un resumen del mes en su panel, y el panel avisa qué números del reloj no tienen usuario.
 - **Sincronización:** al arrancar, cada `CROSSCHEX_SYNC_MINUTES` (60 por defecto) y con el botón *Sincronizar*; la primera vez trae 31 días. No duplica fichadas.
 
 | Variable | Valor |

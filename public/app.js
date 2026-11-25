@@ -174,6 +174,7 @@
     produccion: '<path d="M6 13h12v6a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2v-6Z"/><path d="M4 13h16"/><path d="M8 9c0-2 1.5-2 1.5-4M12 9c0-2 1.5-2 1.5-4M16 9c0-2 1.5-2 1.5-4"/>',
     'mis-solicitudes': '<rect x="4" y="5" width="16" height="16" rx="2"/><path d="M8 3v4M16 3v4M4 10h16"/><path d="m9 15 2 2 4-4"/>',
     solicitudes: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="m16 11 2 2 4-4"/>',
+    'mis-horas': '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
     horas: '<circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5"/><path d="M9 2h6M12 2v3"/>',
     salir: '<path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3"/><path d="M10 16l-4-4 4-4"/><path d="M6 12h10"/>',
     clave: '<circle cx="8" cy="15" r="4"/><path d="m11 12 9-9"/><path d="m17 6 3 3"/>',
@@ -197,8 +198,9 @@
     { id: 'produccion', lbl: 'Producción', ok: () => puede('producir') },
     { id: 'ajuste', lbl: 'Ajuste de inventario', ok: () => puede('ajustar') },
     { id: 'movimientos', lbl: 'Movimientos', ok: () => puede('verMovimientos') },
-    { sec: 'Personal', ok: () => puede('solicitudes') || puede('gestionarSolicitudes') || puede('verHoras') },
+    { sec: 'Personal', ok: () => puede('solicitudes') || puede('misHoras') || puede('gestionarSolicitudes') || puede('verHoras') },
     { id: 'mis-solicitudes', lbl: 'Mis solicitudes', ok: () => puede('solicitudes'), pillSol: true },
+    { id: 'mis-horas', lbl: 'Mis horas', ok: () => puede('misHoras') },
     { id: 'solicitudes', lbl: 'Solicitudes del personal', ok: () => puede('gestionarSolicitudes'), pillSolG: true },
     { id: 'horas', lbl: 'Horas del personal', ok: () => puede('verHoras') },
     { sec: 'Parametrización', ok: () => puede('productos') || puede('almacenes') || puede('usuarios') },
@@ -325,10 +327,17 @@
         <a href="#/mis-solicitudes?nueva=ENFERMEDAD" class="sol-tipo"><span>🤒</span>Enfermedad</a>
         <a href="#/mis-solicitudes?nueva=OTRAS" class="sol-tipo"><span>📝</span>Otra licencia</a></div>`;
     }
+    if (puede('misHoras') && !puede('verStock')) html += `<div id="panel-horas"></div>`;
     if (S.user.rol === 'REQUIRENTE') {
       html += `<div class="form-actions" style="justify-content:flex-start"><a class="btn" href="#/pedidos?nuevo=1" style="text-decoration:none">+ Nueva nota de pedido</a></div>`;
     }
     main.innerHTML = html;
+    if ($('#panel-horas')) api('/api/horas/mias').then((h) => {
+      if (!h.vinculado || !$('#panel-horas')) return;
+      $('#panel-horas').innerHTML = `<h2 class="mt" style="margin-top:28px">Mis horas de este mes</h2><div class="resumen">
+        <a href="#/mis-horas"><span>Horas trabajadas</span><b>${hm(h.minutos)}</b><small>${h.dias_trabajados} ${h.dias_trabajados === 1 ? 'día' : 'días'} · ver detalle →</small></a>
+        ${h.incompletas ? `<a href="#/mis-horas"><span>Fichadas incompletas</span><b style="color:var(--accent)">${h.incompletas}</b><small>avisá a tu encargado</small></a>` : ''}</div>`;
+    }).catch(() => {});
   };
 
   // ---------- Stock ----------
@@ -872,7 +881,6 @@
         <a><span>Licencias ${new Date().getFullYear()}</span><b>${r.licencias}</b><small>días aprobados</small></a>
         <a><span>Adelantos del mes</span><b>${fmt$(r.adelantos_mes)}</b><small>aprobados</small></a>
         <a><span>En espera</span><b>${r.pendientes}</b><small>sin respuesta</small></a></div>
-      <div id="mis-horas"></div>
       <h2 class="mt" style="margin-top:24px">Historial</h2>
       ${d.solicitudes.length ? `<div class="sol-lista">${d.solicitudes.map((x) => `
         <div class="sol-card est-${x.estado}"><div class="sol-ico">${SOL_ICO[x.tipo] || '📝'}</div>
@@ -897,13 +905,6 @@
       catch (err) { toast(err.message, true); }
     }));
     if (params.get('nueva')) nuevaSolicitud(params.get('nueva'), tipos, recargar);
-    api('/api/horas/mias').then((h) => {
-      if (!h.vinculado || !$('#mis-horas')) return;
-      $('#mis-horas').innerHTML = `<h2 class="mt" style="margin-top:24px">Mis horas de este mes</h2>
-        <div class="resumen"><a><span>Horas trabajadas</span><b>${hm(h.minutos)}</b><small>del ${fmtDia(h.desde)} al ${fmtDia(h.hasta)}</small></a>
-          <a><span>Días</span><b>${h.dias_trabajados}</b><small>con fichadas</small></a>${h.incompletas ? `<a><span>Jornadas incompletas</span><b style="color:var(--accent)">${h.incompletas}</b><small>falta una fichada</small></a>` : ''}</div>
-        ${h.dias.length ? `<details class="mt"><summary style="cursor:pointer;font-weight:600;color:var(--brand-blue)">Ver detalle por día</summary><div class="tbl-wrap mt">${tablaDias([...h.dias].reverse())}</div></details>` : ''}`;
-    }).catch(() => {});
   };
 
   VIEWS.solicitudes = async (main) => {
@@ -994,6 +995,63 @@
         <td>${d.tramos.map((t) => `${t.entrada}–${t.salida || '<b class="bad">sin salida</b>'}`).join(', ')}</td>
         <td class="num">${hm(d.minutos)}${d.incompleta ? ' <span class="badge b-PENDIENTE">incompleta</span>' : ''}</td></tr>`).join('')}</tbody></table>`;
   }
+
+  // ---------- Mis horas (empleado) ----------
+  VIEWS['mis-horas'] = async (main) => {
+    const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+    const hoy = new Date();
+    let y = hoy.getFullYear(), m = hoy.getMonth(), vista = 'mes';
+    main.innerHTML = `<h1>Mis horas</h1><p class="sub">Tus fichadas del reloj y las horas trabajadas en cada jornada.</p>
+      <div class="toolbar">
+        <div style="display:flex;gap:6px;align-items:center">
+          <button class="btn ghost sm" id="mh-prev" title="Mes anterior">◀</button>
+          <b id="mh-tit" style="min-width:150px;text-align:center;text-transform:capitalize"></b>
+          <button class="btn ghost sm" id="mh-next" title="Mes siguiente">▶</button></div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          <button class="btn ghost sm" data-v="semana">Esta semana</button><button class="btn ghost sm" data-v="q1">1ª quincena</button>
+          <button class="btn ghost sm" data-v="q2">2ª quincena</button><button class="btn ghost sm" data-v="mes">Mes completo</button></div>
+      </div><div id="mh-res"><p class="muted">Cargando…</p></div>`;
+    const rangoVista = () => {
+      const fin = new Date(y, m + 1, 0); const lim = (d) => isoLocal(d > hoy ? hoy : d);
+      if (vista === 'semana') { const l = new Date(hoy); l.setDate(hoy.getDate() - ((hoy.getDay() + 6) % 7)); return [isoLocal(l), isoLocal(hoy), 'Esta semana']; }
+      if (vista === 'q1') return [isoLocal(new Date(y, m, 1)), lim(new Date(y, m, 15)), `1ª quincena de ${MESES[m]}`];
+      if (vista === 'q2') return [isoLocal(new Date(y, m, 16)), lim(fin), `2ª quincena de ${MESES[m]}`];
+      return [isoLocal(new Date(y, m, 1)), lim(fin), `${MESES[m]} ${y}`];
+    };
+    const cargar = async () => {
+      const futuro = new Date(y, m, vista === 'q2' ? 16 : 1) > hoy;
+      $('#mh-tit').textContent = `${MESES[m]} ${y}`;
+      $('#mh-next').disabled = y === hoy.getFullYear() && m === hoy.getMonth();
+      $$('[data-v]').forEach((b) => b.classList.toggle('sec', b.dataset.v === vista));
+      if (futuro) { $('#mh-res').innerHTML = '<div class="card empty">Ese período todavía no empezó.</div>'; return; }
+      const [desde, hasta, nombre] = rangoVista();
+      $('#mh-res').innerHTML = '<p class="muted">Cargando…</p>';
+      let h;
+      try { h = await api(`/api/horas/mias?desde=${desde}&hasta=${hasta}`); } catch (err) { $('#mh-res').innerHTML = `<div class="card empty">${esc(err.message)}</div>`; return; }
+      const act = h.actualizado ? `Datos del reloj actualizados ${fmtFecha(h.actualizado)}.` : '';
+      if (!h.vinculado) {
+        $('#mh-res').innerHTML = `<div class="card empty" style="padding:32px"><div style="font-size:2rem">⏱️</div>
+          <b>Todavía no tenés tu número del reloj vinculado.</b><br>Pedile al administrador que cargue tu N° en el reloj en tu usuario y vas a ver acá tus horas.</div>`;
+        return;
+      }
+      const prom = h.dias_trabajados ? Math.round(h.minutos / h.dias_trabajados) : 0;
+      $('#mh-res').innerHTML = `<div class="resumen" style="margin-bottom:14px">
+          <a><span>Horas trabajadas</span><b>${hm(h.minutos)}</b><small>${esc(nombre)} · del ${fmtDia(h.desde)} al ${fmtDia(h.hasta)}</small></a>
+          <a><span>Días trabajados</span><b>${h.dias_trabajados}</b><small>con fichadas</small></a>
+          <a><span>Promedio por día</span><b>${prom ? hm(prom) : '—'}</b><small>jornadas completas</small></a>
+          ${h.incompletas ? `<a><span>Jornadas incompletas</span><b style="color:var(--accent)">${h.incompletas}</b><small>falta una fichada</small></a>` : ''}</div>
+        ${h.incompletas ? `<div class="card" style="background:#fff6e5;border-color:#f3d9a4">⚠️ Hay ${h.incompletas === 1 ? 'una jornada' : h.incompletas + ' jornadas'} con una fichada de menos (entrada sin salida o al revés). Esas horas no se cuentan: avisale a tu encargado para que la corrija.</div>` : ''}
+        ${h.dias.length ? `<div class="tbl-wrap">${tablaDias([...h.dias].reverse())}</div>` : '<div class="card empty">No hay fichadas en este período.</div>'}
+        <p class="stock-hint mt">N° en el reloj: <b>${esc(h.legajo)}</b>${h.ultima_fichada ? ` · tu última fichada: ${fmtFecha(h.ultima_fichada)}` : ''}. ${act}
+          Los turnos que pasan la medianoche cuentan para el día en que empezaron.</p>`;
+    };
+    $('#mh-prev').addEventListener('click', () => { if (--m < 0) { m = 11; y--; } if (vista === 'semana') vista = 'mes'; cargar(); });
+    $('#mh-next').addEventListener('click', () => { if (++m > 11) { m = 0; y++; } if (vista === 'semana') vista = 'mes'; cargar(); });
+    $$('[data-v]').forEach((b) => b.addEventListener('click', () => {
+      vista = b.dataset.v; if (vista === 'semana') { y = hoy.getFullYear(); m = hoy.getMonth(); } cargar();
+    }));
+    cargar();
+  };
 
   VIEWS.horas = async (main) => {
     const pre = presetsPeriodo();
