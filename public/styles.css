@@ -673,3 +673,8 @@ body.tv .side, body.tv .topbar, body.tv .vn-fab, body.tv #vn-fab { display: none
 body.tv .layout { grid-template-columns: 1fr !important; display: block !important; }
 body.tv .main, body.tv main { margin-left: 0 !important; max-width: none !important; padding: 18px 26px !important; }
 body.tv .tb-kpi > b { font-size: 2.6rem; }
+.tb-largas > div { display: grid; grid-template-columns: 110px 1fr 60px 90px 120px; gap: 8px; align-items: center; padding: 9px 10px; border-bottom: 1px solid var(--line); font-size: .92rem; }
+.tb-largas > div:last-child { border-bottom: 0; }
+.tb-largas span { color: var(--muted); } .tb-largas .t { color: var(--side); font-weight: 700; font-variant-numeric: tabular-nums; } .tb-largas .m { text-align: right; font-variant-numeric: tabular-nums; color: var(--ink, #1f2933); }
+.tb-largas > div.muy { background: #fff6e5; border-left: 4px solid #b7791f; border-radius: 6px; } .tb-largas > div.muy .t { color: #8a5a12; }
+@media (max-width: 600px) { .tb-largas > div { grid-template-columns: 1fr auto auto; gap: 14px; } .tb-largas > div > span:nth-of-type(1), .tb-largas > div > span:nth-of-type(2) { display: none; } }

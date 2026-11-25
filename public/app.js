@@ -1498,7 +1498,6 @@
           <div class="tb-kpi"><span>Gasto por comensal</span><b>${k.por_comensal ? pesosK(k.por_comensal) : '—'}</b><small>${k.comensales_jornada} comensales en la jornada</small></div>
           <div class="tb-kpi"><span>Permanencia promedio</span><b>${durTxt(k.permanencia_min)}</b><small>mesas ya cerradas</small></div>
         </div>
-        ${d.largas.length ? `<div class="tb-alerta">⏱️ <b>${d.largas.length} ${d.largas.length === 1 ? 'mesa abierta' : 'mesas abiertas'} hace más de 2 h 30:</b> ${d.largas.map((m) => `mesa ${esc(m.numero)} (${durTxt(m.minutos)}, ${pesos(m.total)})`).join(' · ')}</div>` : ''}
         <div class="tb-fila2">
           <div class="card tb-card"><div class="tb-ct"><h3>Comensales en el salón</h3><div class="tb-ley"><span><i style="background:#165f96"></i>Hoy</span>${comp ? `<span><i class="pt"></i>${esc(diaSem(comp.fecha))} pasado</span>` : ''}</div></div><div id="tb-g1" class="tb-graf"></div></div>
           <div class="card tb-card"><div class="tb-ct"><h3>Mesas ocupadas</h3><div class="tb-ley"><span><i style="background:#165f96"></i>Hoy</span>${comp ? `<span><i class="pt"></i>${esc(diaSem(comp.fecha))} pasado</span>` : ''}</div></div><div id="tb-g2" class="tb-graf"></div></div>
@@ -1508,14 +1507,10 @@
           <div class="card tb-card"><h3>Lo más vendido hoy</h3>${d.top.length ? `<div class="tb-top">${d.top.map((t) => `<div><span>${esc(t.producto)}</span><b>${t.cantidad.toLocaleString('es-AR')}</b><i style="width:${Math.round((t.cantidad / d.top[0].cantidad) * 100)}%"></i></div>`).join('')}</div>` : '<div class="tb-vacio">Sin ítems todavía</div>'}</div>
           <div class="card tb-card"><h3>Cómo se vende</h3>${d.mix.length ? `<div class="tb-mix">${d.mix.map((m) => { const p = ventasHoy ? Math.round((m.total / ventasHoy) * 100) : 0; return `<div><span>${esc(m.tipo)}</span><b>${p}%</b><div class="tb-meter"><i style="width:${p}%"></i></div><small>${pesos(m.total)} · ${m.tickets} tickets</small></div>`; }).join('')}</div>` : '<div class="tb-vacio">Sin ventas todavía</div>'}</div>
         </div>
-        <div class="card tb-card"><div class="tb-ct"><h3>Mapa de mesas</h3><div class="tb-ley"><span><i class="lib"></i>Libre</span><span><i style="background:#165f96"></i>Ocupada</span><span><i style="background:#b7791f"></i>⏱ Más de 2 h 30</span></div></div>
-          ${(d.salas.length ? d.salas : [{ id: null, nombre: 'Salón' }]).map((s) => { const ms = d.mapa.filter((m) => (s.id ? m.sala_id === s.id : true)); if (!ms.length) return '';
-            const conGrilla = ms.some((m) => m.fila || m.columna); const cols = conGrilla ? Math.max(...ms.map((m) => m.columna)) + 1 : 0, filas = conGrilla ? Math.max(...ms.map((m) => m.fila)) + 1 : 0;
-            return `<div class="tb-sala"><h4>${esc(s.nombre)} <small>${ms.filter((m) => m.ocupada).length}/${ms.length} ocupadas</small></h4>
-              <div class="tb-plano ${conGrilla ? 'grilla' : ''}" style="${conGrilla ? `grid-template-columns:repeat(${cols},minmax(58px,104px));grid-template-rows:repeat(${filas},auto)` : ''}">
-              ${ms.sort((a, b) => Number(a.numero) - Number(b.numero)).map((m) => `<div class="tb-mesa ${m.ocupada ? (m.minutos >= 150 ? 'larga' : 'ocu') : ''} ${m.forma === '1' ? 'red' : ''} ${m.tam === 'l' ? 'gr' : ''}" style="${conGrilla ? `grid-column:${m.columna + 1};grid-row:${m.fila + 1}` : ''}"
-                title="Mesa ${esc(m.numero)}${m.ocupada ? ` · ${m.personas} personas · ${durTxt(m.minutos)} · ${pesos(m.total)}` : ' · libre'}"><b>${esc(m.numero)}</b>${m.ocupada ? `<small>${m.personas ? '👥' + m.personas : ''} ${durTxt(m.minutos)}</small><small>${pesosK(m.total)}</small>` : ''}</div>`).join('')}</div></div>`; }).join('')}
-        </div>`;
+        ${(() => { const salaN = new Map(d.salas.map((x) => [x.id, x.nombre])); const ls = d.mapa.filter((m) => m.ocupada && m.minutos >= 90).sort((x, y) => y.minutos - x.minutos);
+          return `<div class="card tb-card"><div class="tb-ct"><h3>Mesas con más de 1 h 30</h3><small class="muted">${ls.length ? `${ls.length} de ${k.mesas_ocupadas} ocupadas` : ''}</small></div>
+          ${ls.length ? `<div class="tb-largas">${ls.map((m) => `<div class="${m.minutos >= 150 ? 'muy' : ''}"><b>Mesa ${esc(m.numero)}</b><span>${esc(salaN.get(m.sala_id) || '')}</span><span>${m.personas ? `👥 ${m.personas}` : ''}</span><span class="t">⏱ ${durTxt(m.minutos)}</span><span class="m">${pesos(m.total)}</span></div>`).join('')}</div>`
+            : '<div class="tb-vacio">Ninguna mesa lleva más de 1 h 30 abierta</div>'}</div>`; })()}`;
       const pts = (arr, k) => arr.map((p) => ({ x: new Date(p.t).getTime(), y: p[k] }));
       const ahoraMs = Date.now();
       const compPts = (k) => (comp ? pts(comp.serie, k).filter((p) => p.x >= new Date(d.serie[0] ? d.serie[0].t : d.desde).getTime() && p.x <= Math.max(ahoraMs + 2 * 3600e3, ahoraMs)) : []);
