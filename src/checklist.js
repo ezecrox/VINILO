@@ -156,12 +156,13 @@ module.exports = function registrarChecklist({ route, query, tx, fail, permitir,
        WHERE r.jornada BETWEEN $1 AND $2 ${suc ? 'AND r.sucursal_id = $3' : ''} ORDER BY r.jornada DESC, s.nombre, p.orden`, suc ? [desde, hasta, suc] : [desde, hasta]);
     // Jornadas sin checklist hecho (faltantes)
     const { rows: sucs } = await query(`SELECT id, nombre FROM sucursales WHERE activo ${suc ? 'AND id = $1' : ''}`, suc ? [suc] : []);
-    const { rows: pls } = await query(`SELECT id, nombre, tipo, sucursal_id, (creado_en AT TIME ZONE '${TZ}')::date::text AS desde FROM checklist_plantillas WHERE activo`);
+    const { rows: pls } = await query(`SELECT id, nombre, tipo, sucursal_id, hora_limite, (creado_en AT TIME ZONE '${TZ}')::date::text AS desde FROM checklist_plantillas WHERE activo`);
     const faltantes = [];
     for (let f = hasta; f >= desde; f = new Date(Date.parse(f) - 86400e3).toISOString().slice(0, 10)) {
       for (const s of sucs) for (const p of pls) {
         if (p.sucursal_id && Number(p.sucursal_id) !== Number(s.id)) continue;
         if (f < p.desde || f > jornadaActual()) continue; // antes de existir la plantilla no cuenta como faltante
+        if (f === jornadaActual() && !vencida(f, p.hora_limite)) continue; // hoy todavía está a tiempo
         if (!rows.some((r) => r.jornada === f && r.sucursal === s.nombre && r.nombre === p.nombre)) faltantes.push({ jornada: f, sucursal: s.nombre, nombre: p.nombre, tipo: p.tipo });
       }
     }

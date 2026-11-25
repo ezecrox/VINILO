@@ -230,8 +230,8 @@
     { id: 'sucursales', lbl: 'Sucursales', ok: () => puede('sucursales') },
     { id: 'notificaciones', lbl: 'Notificaciones push', ok: () => puede('notificaciones') },
     { id: 'usuarios', lbl: 'Usuarios y roles', ok: () => puede('usuarios') },
-    { sec: 'Ayuda', ok: () => !puede('portalProveedor') },
-    { id: 'manuales', lbl: 'Manuales', ok: () => !puede('portalProveedor') },
+    { sec: 'Ayuda' },
+    { id: 'manuales', lbl: 'Manuales', ok: () => true },
   ];
 
   function renderShell() {
@@ -1417,9 +1417,10 @@
     { id: 'empleado', titulo: 'Manual del Empleado', para: 'Todo el personal', desc: 'Ingresar a la app, pedir adelantos, vacaciones y licencias, seguir las solicitudes y ver las horas trabajadas.', paginas: 7, ok: () => true },
     { id: 'programador', titulo: 'Manual del Programador de días', para: 'Quien arma la programación', desc: 'Sucursales, asignación de empleados, grilla semanal, programar uno o varios días y copiar la semana.', paginas: 9, ok: () => puede('programacion') || puede('sucursales') },
     { id: 'conteo', titulo: 'Manual de Conteo de Inventario', para: 'Quien cuenta y quien aplica', desc: 'Crear un conteo, contar desde el celular entre varios, sumar, escanear códigos y revisar y aplicar las diferencias.', paginas: 7, ok: () => puede('contar') || puede('ajustar') },
+    { id: 'checklist', titulo: 'Manual de Checklist de Apertura y Cierre', para: 'Personal del local y encargados', desc: 'Completar la apertura y el cierre desde el celular, anotar temperaturas y caja, finalizar, historial y plantillas.', paginas: 8, ok: () => true },
   ];
   VIEWS.manuales = async (main) => {
-    const lista = MANUALES.filter((m) => S.user.rol === 'ADMIN' || m.ok());
+    const lista = MANUALES; // todos los manuales son públicos para todos los usuarios
     main.innerHTML = `<h1>Manuales</h1><p class="sub">Guías paso a paso de la app, con capturas de las pantallas. Se pueden ver en el celular, descargar o imprimir.</p>
       <div class="man-grid">${lista.map((m) => `<div class="card man-card">
         <a class="man-tapa" href="/manuales/manual-${m.id}.pdf" target="_blank" rel="noopener"><img src="/manuales/tapa-${m.id}.png" alt="Tapa del ${esc(m.titulo)}" loading="lazy"></a>
@@ -1532,7 +1533,7 @@
     const d = await api('/api/checklist/historial?' + new URLSearchParams({ desde: q.get('desde') || '', hasta: q.get('hasta') || '' }));
     main.innerHTML = `${tabsCk('historial')}<h1>Historial de checklists</h1><p class="sub">Del ${fmtDia(d.desde)} al ${fmtDia(d.hasta)}.</p>
       <div class="toolbar"><div class="f"><label>Desde</label><input type="date" id="hc-d" value="${d.desde}"></div><div class="f"><label>Hasta</label><input type="date" id="hc-h" value="${d.hasta}"></div><button class="btn sec" id="hc-ok">Ver</button></div>
-      ${d.faltantes.length ? `<div class="card" style="background:#fdeceb;border-color:#f3c5c2"><b>⚠️ ${d.faltantes.length} checklists sin hacer</b><div class="stock-hint" style="margin-top:4px">${d.faltantes.slice(0, 12).map((f) => `${fmtDia(f.jornada).slice(0, 5)} ${esc(f.nombre)} ${esc(f.sucursal)}`).join(' · ')}${d.faltantes.length > 12 ? '…' : ''}</div></div>` : ''}
+      ${d.faltantes.length ? `<div class="card" style="background:#fdeceb;border-color:#f3c5c2"><b>⚠️ ${d.faltantes.length} ${d.faltantes.length === 1 ? 'checklist sin hacer' : 'checklists sin hacer'}</b><div class="stock-hint" style="margin-top:4px">${d.faltantes.slice(0, 12).map((f) => `${fmtDia(f.jornada).slice(0, 5)} ${esc(f.nombre)} ${esc(f.sucursal)}`).join(' · ')}${d.faltantes.length > 12 ? '…' : ''}</div></div>` : ''}
       ${d.registros.length ? `<div class="tbl-wrap mt"><table><thead><tr><th>Jornada</th><th>Sucursal</th><th>Checklist</th><th>Estado</th><th class="num">Hechas</th><th>Finalizado</th><th>Valores</th><th></th></tr></thead><tbody>
         ${d.registros.map((r) => `<tr><td style="white-space:nowrap">${diaSem(r.jornada)} ${fmtDia(r.jornada)}</td><td>${esc(r.sucursal)}</td><td>${CK_ICO[r.tipo]} ${esc(r.nombre)}</td>
           <td><span class="badge ${r.estado === 'COMPLETO' ? 'b-COMPLETADO' : 'b-PENDIENTE'}">${r.estado === 'COMPLETO' ? 'Completo' : 'Incompleto'}</span></td><td class="num">${r.hechos}/${r.items}</td>
