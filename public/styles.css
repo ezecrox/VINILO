@@ -565,3 +565,4 @@ tbody tr:hover { background: #fffaf2; }
 body.contando .vn-fab, body.contando #vn-fab { display: none !important; }
 .ct-pie #ct-anular { color: var(--muted); }
 .modal .resumen a { min-width: 0; flex: 1 1 40%; }
+.ct-pie a.btn { text-decoration: none; }

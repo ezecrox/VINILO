@@ -492,3 +492,14 @@ BEGIN
     INSERT INTO app_config (clave, valor) VALUES ('permiso_contar', '1');
   END IF;
 END $$;
+
+-- Limpieza única (pedido del 25/11/2026): conteos de prueba y la solicitud de vacaciones de Nico Aguilar
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM app_config WHERE clave = 'limpieza_conteos_solicitud_20261125') THEN
+    DELETE FROM conteos WHERE movimiento_id IS NULL;   -- ninguno fue aplicado: no hay stock que revertir
+    DELETE FROM solicitudes s USING usuarios u
+     WHERE u.id = s.usuario_id AND u.nombre = 'Nico Aguilar' AND s.tipo = 'VACACIONES' AND s.desde = DATE '2026-12-01' AND s.hasta = DATE '2026-12-08';
+    INSERT INTO app_config (clave, valor) VALUES ('limpieza_conteos_solicitud_20261125', now()::text);
+  END IF;
+END $$;
