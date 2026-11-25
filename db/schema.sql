@@ -352,3 +352,19 @@ CREATE TABLE IF NOT EXISTS fichadas (
 );
 CREATE INDEX IF NOT EXISTS idx_fichadas_time ON fichadas (checktime);
 CREATE INDEX IF NOT EXISTS idx_fichadas_workno ON fichadas (workno, checktime);
+
+-- ===== Limpieza única de datos de prueba (pedido del 25/11/2026) =====
+-- Borra notas de pedido, pedidos a proveedores, movimientos (recepción, transferencia, consumo,
+-- producción, ajuste), importaciones de consumos de Fudo y solicitudes del personal; deja el stock en cero.
+-- Se ejecuta una sola vez (marca en app_config). No toca productos, proveedores, usuarios, roles,
+-- almacenes, mínimos, recetas ni fichadas del reloj.
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM app_config WHERE clave = 'limpieza_transacciones_20261125') THEN
+    TRUNCATE consumo_import_items, consumo_importaciones, movimiento_items, movimientos,
+             pedido_items, pedidos, oc_archivos, oc_items, ordenes_compra,
+             solicitud_archivos, solicitudes, stock RESTART IDENTITY;
+    INSERT INTO app_config (clave, valor) VALUES ('limpieza_transacciones_20261125', now()::text);
+    RAISE NOTICE 'Limpieza de transacciones realizada';
+  END IF;
+END $$;
