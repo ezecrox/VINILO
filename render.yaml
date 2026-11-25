@@ -33,6 +33,10 @@ services:
         sync: false     # reloj CrossChex Cloud (opcional)
       - key: CROSSCHEX_API_SECRET
         sync: false
+      - key: WHATSAPP_TOKEN
+        sync: false
+      - key: WHATSAPP_PHONE_ID
+        sync: false
       - key: ANTHROPIC_API_KEY
         sync: false     # opcional: activa Vinilito con IA (Claude)
       - key: NODE_VERSION

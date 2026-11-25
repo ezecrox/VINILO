@@ -169,7 +169,7 @@ module.exports = function registrarCompras({ route, query, tx, fail, permitir, r
 
   route('POST', '/api/oc', async ({ user, body }) => {
     permitir(user, 'compras');
-    return tx(async (client) => {
+    const res = await tx(async (client) => {
       const cab = await validarCabecera(client, body);
       exigirAlmacen(user, cab[1], 'entrega');
       const { rows } = await client.query(
@@ -182,6 +182,8 @@ module.exports = function registrarCompras({ route, query, tx, fail, permitir, r
       }
       return { id };
     });
+    if (body.confirmar) require('./whatsapp').pedidoConfirmado(res.id);
+    return res;
   });
 
   async function ocBloqueada(client, id, estados, user) {
@@ -211,13 +213,15 @@ module.exports = function registrarCompras({ route, query, tx, fail, permitir, r
   route('POST', '/api/oc/:id/confirmar', async ({ user, params }) => {
     permitir(user, 'compras');
     const id = toInt(params.id);
-    return tx(async (client) => {
+    const res = await tx(async (client) => {
       await ocBloqueada(client, id, ['BORRADOR'], user);
       const { rows } = await client.query('SELECT count(*)::int AS n FROM oc_items WHERE oc_id = $1', [id]);
       if (!Number(rows[0].n)) fail(400, 'El pedido no tiene productos');
       await client.query("UPDATE ordenes_compra SET estado = 'CONFIRMADA', confirmado_por = $2, confirmado_en = now() WHERE id = $1", [id, user.id]);
       return { ok: true };
     });
+    require('./whatsapp').pedidoConfirmado(id);
+    return res;
   });
 
   route('POST', '/api/oc/:id/anular', async ({ user, body, params }) => {

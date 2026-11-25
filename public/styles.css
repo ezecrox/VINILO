@@ -511,3 +511,5 @@ tbody tr:hover { background: #fffaf2; }
 .clima-horas small { display: block; font-size: .68rem; color: #b9cde0; }
 .clima-src { grid-column: 1 / -1; margin: 0; font-size: .68rem; color: #8fb0cf; text-align: right; }
 @media (max-width: 860px) { .clima { grid-template-columns: 1fr; } }
+.wa-pl { border-top: 1px solid var(--line); padding: 10px 0; }
+.wa-pl pre { white-space: pre-wrap; background: #f6f8fa; border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; font-size: .85rem; margin: 6px 0; font-family: inherit; }

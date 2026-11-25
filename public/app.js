@@ -235,19 +235,22 @@
           <div class="brand"><span class="logo-tile"><img src="/logo.png" alt="Vinilo"></span><div><b>VINILO</b><small>Gestión de Almacén</small></div></div>
           ${links}
           <div class="who"><b>${esc(S.user.nombre)}</b>${esc(S.user.rol_nombre || ROL_LBL[S.user.rol] || S.user.rol)}${S.user.proveedor ? ' · ' + esc(S.user.proveedor) : ''}${S.user.permiso_compras && S.user.rol !== 'ADMIN' ? ' · Compras' : ''}
-            <div class="links"><button id="pwd-btn">${icono('clave')}Contraseña</button><button id="out-btn">${icono('salir')}Salir</button></div></div>
+            <div class="links"><button id="pwd-btn">${icono('clave')}Contraseña</button><button id="wa-btn" title="Mi celular para avisos por WhatsApp">📱 WhatsApp</button><button id="out-btn">${icono('salir')}Salir</button></div></div>
         </nav>
         <main id="main"></main>
       </div>`;
     $('#out-btn').onclick = async () => { try { await api('/api/logout', { method: 'POST' }); } catch (_) { /* igual salimos */ } logout(); };
     $('#pwd-btn').onclick = cambiarPassword;
+    $('#wa-btn').onclick = miWhatsapp;
     $('#user-btn').onclick = () => {
       const m = modal(`<h2>${esc(S.user.nombre)}</h2><p class="sub" style="margin-top:-6px">${esc(S.user.rol_nombre || S.user.rol)} · usuario <b>${esc(S.user.username)}</b></p>
         <div class="form-actions" style="justify-content:stretch;flex-direction:column;gap:10px">
           <button class="btn" id="um-pwd" style="width:100%">Cambiar contraseña</button>
+          <button class="btn sec" id="um-wa" style="width:100%">📱 Mi WhatsApp para avisos</button>
           <button class="btn sec" id="um-out" style="width:100%">Salir</button>
           <button class="btn ghost" data-close style="width:100%">Cerrar</button></div>`);
       $('#um-pwd', m).onclick = () => { closeModal(); cambiarPassword(); };
+      $('#um-wa', m).onclick = () => { closeModal(); miWhatsapp(); };
       $('#um-out', m).onclick = () => $('#out-btn').click();
     };
     $('#menu-btn').onclick = () => $('#side').classList.toggle('open');
@@ -298,6 +301,20 @@
     actualizarPill();
   }
   window.addEventListener('hashchange', router);
+
+  async function miWhatsapp() {
+    let d; try { d = await api('/api/me/whatsapp'); } catch (err) { return toast(err.message, true); }
+    const m = modal(`<h2>📱 Mi WhatsApp</h2><p class="sub" style="margin-top:-6px">Te avisamos por WhatsApp cuando respondan tus solicitudes${puede('gestionarSolicitudes') ? ' y cuando llegue una solicitud para aprobar' : ''}${puede('portalProveedor') ? ' y cuando Vinilo te confirme un pedido' : ''}.</p>
+      <form id="f-wa"><div class="f"><label>Celular</label><input name="telefono" value="${esc(d.telefono || '')}" maxlength="30" placeholder="Ej.: 236 4123456" inputmode="tel" autofocus>
+        <div class="stock-hint">Con código de área, sin 0 ni 15.</div></div>
+        <label class="check mt"><input type="checkbox" name="ok" ${d.whatsapp_ok ? 'checked' : ''}> Quiero recibir avisos por WhatsApp</label>
+        <div class="form-actions"><button type="button" class="btn sec" data-close>Cancelar</button><button class="btn">Guardar</button></div></form>`);
+    $('#f-wa', m).addEventListener('submit', async (e) => {
+      e.preventDefault();
+      try { await api('/api/me/whatsapp', { method: 'PUT', body: { telefono: e.target.telefono.value, whatsapp_ok: e.target.ok.checked } }); closeModal(); toast('Listo, guardamos tu WhatsApp'); }
+      catch (err) { toast(err.message, true); }
+    });
+  }
 
   function cambiarPassword() {
     const m = modal(`
@@ -1865,13 +1882,14 @@
     const tab = new URLSearchParams(location.hash.split('?')[1] || '').get('tab');
     if (tab === 'roles') return vistaRoles(main);
     if (tab === 'accesos' && S.user.rol === 'ADMIN') return vistaAccesos(main);
+    if (tab === 'whatsapp') return vistaWhatsapp(main);
     const [us, provs, roles, sucs] = await Promise.all([api('/api/usuarios'), api('/api/proveedores'), api('/api/roles'), api('/api/sucursales')]);
     const nomSuc = (ids) => (ids || []).map((i) => (sucs.find((s) => s.id === i) || {}).nombre).filter(Boolean).map((n) => n.replace(/^VINILO\s+/i, '')).join(', ');
     main.innerHTML = `${tabsUsuarios('usuarios')}<h1>Usuarios</h1><p class="sub">Cada usuario tiene un <b>rol</b>, que define qué opciones del menú y qué almacenes ve (se configuran en la pestaña <a href="#/usuarios?tab=roles">Roles</a>). El permiso <b>Compras</b> se puede sumar a cualquier usuario.</p>
       <div class="toolbar"><div class="spacer"></div><button class="btn" id="us-new">+ Nuevo usuario</button></div>
-      <div class="tbl-wrap"><table><thead><tr><th>Usuario</th><th>Nombre</th><th>Rol</th><th>Compras</th><th>Proveedor</th><th>N° reloj</th><th>Sucursales</th><th>Último ingreso</th><th>Estado</th><th></th></tr></thead><tbody>
+      <div class="tbl-wrap"><table><thead><tr><th>Usuario</th><th>Nombre</th><th>Rol</th><th>Compras</th><th>Proveedor</th><th>N° reloj</th><th>WhatsApp</th><th>Sucursales</th><th>Último ingreso</th><th>Estado</th><th></th></tr></thead><tbody>
       ${us.map((u) => `<tr class="${u.activo ? '' : 'inactive'}"><td class="code">${esc(u.username)}</td><td>${esc(u.nombre)}</td><td><span class="badge b-rol">${esc(u.rol_nombre || u.rol)}</span></td>
-        <td>${u.rol === 'ADMIN' || u.permiso_compras ? '<span class="badge b-COMPLETADO">Sí</span>' : ''}</td><td>${esc(u.proveedor || '')}</td><td class="code">${esc(u.legajo || '')}</td><td>${esc(nomSuc(u.sucursales))}</td>
+        <td>${u.rol === 'ADMIN' || u.permiso_compras ? '<span class="badge b-COMPLETADO">Sí</span>' : ''}</td><td>${esc(u.proveedor || '')}</td><td class="code">${esc(u.legajo || '')}</td><td>${u.telefono ? `<span title="${esc(u.telefono)}${u.whatsapp_ok ? '' : ' · avisos desactivados'}">${u.whatsapp_ok ? '📱' : '🔕'}</span>` : ''}</td><td>${esc(nomSuc(u.sucursales))}</td>
         <td class="muted">${u.ultimo_ingreso ? fmtFecha(u.ultimo_ingreso) : 'Nunca'}</td>
         <td>${u.activo ? 'Activo' : 'Inactivo'}</td><td class="num"><button class="btn ghost sm" data-ed="${u.id}">Editar</button></td></tr>`).join('')}
       </tbody></table></div>`;
@@ -1883,6 +1901,8 @@
           <div class="f"><label>${u ? 'Nueva contraseña (dejar vacío para no cambiar)' : 'Contraseña (mín. 6)'}</label><input type="password" name="password" ${u ? '' : 'required'} minlength="6" autocomplete="new-password"></div></div>
         <div class="row mt"><div class="f"><label>N° en el reloj (CrossChex)</label><input name="legajo" value="${esc(u ? u.legajo || '' : '')}" maxlength="30" placeholder="Ej.: 12"></div>
           <div class="f"><p class="stock-hint" style="margin:24px 0 0">Vincula al usuario con sus fichadas para ver sus horas.</p></div></div>
+        <div class="row mt"><div class="f"><label>Celular para WhatsApp</label><input name="telefono" value="${esc(u ? u.telefono || '' : '')}" maxlength="30" placeholder="Ej.: 236 4123456" inputmode="tel"></div>
+          <div class="f"><label class="check" style="margin-top:26px"><input type="checkbox" name="whatsapp_ok" ${!u || u.whatsapp_ok !== false ? 'checked' : ''}> Recibir avisos por WhatsApp</label></div></div>
         <div class="f mt" id="us-suc"><label>Sucursales donde trabaja</label><div class="chk-grupo">${sucs.filter((s) => s.activo || (u && (u.sucursales || []).includes(s.id))).map((s) => `<label class="check"><input type="checkbox" name="suc" value="${s.id}" ${u && (u.sucursales || []).includes(s.id) ? 'checked' : ''}> ${esc(s.nombre)}</label>`).join('') || '<span class="muted">No hay sucursales cargadas.</span>'}</div></div>
         <div class="row mt" id="us-prov"><div class="f"><label>Proveedor vinculado *</label><select name="proveedor_id"><option value="">Seleccionar…</option>
           ${provs.filter((p) => p.activo || (u && u.proveedor_id === p.id)).map((p) => `<option value="${p.id}" ${u && u.proveedor_id === p.id ? 'selected' : ''}>${esc(p.nombre)}</option>`).join('')}</select>
@@ -1902,7 +1922,7 @@
         e.preventDefault();
         const body = { nombre: f.nombre.value, rol: f.rol.value, password: f.password.value || undefined, legajo: f.legajo.value,
           proveedor_id: f.rol.value === 'PROVEEDOR' ? f.proveedor_id.value : null, permiso_compras: f.permiso_compras.checked,
-          sucursales: $$('input[name=suc]:checked', f).map((c) => Number(c.value)) };
+          sucursales: $$('input[name=suc]:checked', f).map((c) => Number(c.value)), telefono: f.telefono.value, whatsapp_ok: f.whatsapp_ok.checked };
         if (u) body.activo = f.activo.checked; else body.username = f.username.value;
         try {
           await api(u ? '/api/usuarios/' + u.id : '/api/usuarios', { method: u ? 'PUT' : 'POST', body });
@@ -1915,8 +1935,48 @@
   };
 
 
+  // ---------- WhatsApp ----------
+  async function vistaWhatsapp(main) {
+    const est = new URLSearchParams(location.hash.split('?')[1] || '').get('estado') || '';
+    const d = await api('/api/whatsapp' + (est ? '?estado=' + est : ''));
+    const EST = { ENVIADA: ['Enviado', 'b-COMPLETADO'], ERROR: ['Error', 'b-RECHAZADO'], OMITIDA: ['No enviado', ''], PENDIENTE: ['Enviando…', 'b-PENDIENTE'] };
+    const EVT = { SOLICITUD_NUEVA: 'Nueva solicitud', SOLICITUD_RESUELTA: 'Solicitud respondida', PEDIDO_CONFIRMADO: 'Pedido a proveedor', PRUEBA: 'Prueba' };
+    const c = d.contadores;
+    main.innerHTML = `${tabsUsuarios('whatsapp')}<h1>Avisos por WhatsApp</h1><p class="sub">Se mandan solos: al empleado cuando le responden una solicitud, a quien aprueba cuando llega una nueva y al proveedor cuando se le confirma un pedido.</p>
+      <div class="card" style="${d.configurado ? 'background:#e9f5ee;border-color:#b9dcc6' : 'background:#fff6e5;border-color:#f3d9a4'}">
+        ${d.configurado ? `✅ <b>Conectado</b> a WhatsApp Cloud API (número ${esc(d.phone_id)}, idioma ${esc(d.idioma)}).`
+          : `⚠️ <b>Falta conectar WhatsApp.</b> Cargá <span class="code">WHATSAPP_TOKEN</span> y <span class="code">WHATSAPP_PHONE_ID</span> en Render → Environment. Mientras tanto los avisos quedan registrados como “No enviado”.`}
+        ${d.usuarios_sin_telefono ? `<div class="stock-hint" style="margin-top:6px">${d.usuarios_sin_telefono} usuarios activos no tienen celular cargado: no van a recibir avisos. Se carga en Usuarios → Editar, o cada uno desde 📱 WhatsApp en su menú.</div>` : ''}</div>
+      <div class="resumen" style="margin:14px 0"><a href="#/usuarios?tab=whatsapp&estado=ENVIADA"><span>Enviados (30 días)</span><b>${c.ENVIADA || 0}</b></a>
+        <a href="#/usuarios?tab=whatsapp&estado=ERROR"><span>Con error</span><b style="${c.ERROR ? 'color:var(--accent)' : ''}">${c.ERROR || 0}</b></a>
+        <a href="#/usuarios?tab=whatsapp&estado=OMITIDA"><span>No enviados</span><b>${c.OMITIDA || 0}</b></a><a href="#/usuarios?tab=whatsapp"><span>Todos</span><b>→</b></a></div>
+      <div class="toolbar"><div class="f"><label>Mandar un mensaje de prueba a</label><input id="wa-tel" placeholder="Celular, ej.: 236 4123456" inputmode="tel"></div>
+        <div class="f"><label>Plantilla</label><select id="wa-pl"><option value="">hello_world (prueba de Meta)</option>${Object.entries({ solicitud_nueva: 'vinilo_solicitud_nueva', solicitud_resuelta: 'vinilo_solicitud_resuelta', pedido_proveedor: 'vinilo_pedido_proveedor' }).map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select></div>
+        <button class="btn" id="wa-test" ${d.configurado ? '' : 'disabled'}>Enviar prueba</button></div>
+      <details class="card mt" ${d.configurado ? '' : 'open'}><summary style="cursor:pointer;font-weight:700;color:var(--side)">Plantillas que hay que crear en WhatsApp Manager</summary>
+        <p class="stock-hint">Creá cada una con <b>categoría Utilidad</b>, idioma <b>Español (ARG)</b>, el <b>mismo nombre</b> y el texto tal cual (las variables {{1}}, {{2}}… las completa la app). Meta tiene que aprobarlas antes de usarlas.</p>
+        ${d.plantillas.map((p) => `<div class="wa-pl"><div><b class="code">${esc(p.nombre)}</b> <span class="muted">· para ${esc(p.para.toLowerCase())}</span></div>
+          <pre>${esc(p.texto)}</pre><div class="stock-hint">Ejemplo: ${esc(p.ejemplo_texto)}</div><button class="btn ghost sm" data-copy="${esc(p.texto)}">Copiar texto</button></div>`).join('')}</details>
+      <h2 class="mt" style="margin-top:20px">Últimos avisos${est ? ` · ${EST[est] ? EST[est][0] : est}` : ''}</h2>
+      ${d.notificaciones.length ? `<div class="tbl-wrap"><table><thead><tr><th>Fecha</th><th>Aviso</th><th>Para</th><th>Mensaje</th><th>Estado</th><th></th></tr></thead><tbody>
+        ${d.notificaciones.map((n) => `<tr><td class="muted" style="white-space:nowrap">${fmtFecha(n.creado_en)}</td><td>${esc(EVT[n.evento] || n.evento)}</td>
+          <td><b>${esc(n.destinatario || '')}</b><div class="code">${esc(n.telefono || '—')}</div></td><td style="max-width:420px;font-size:.85rem">${esc(n.texto || '')}</td>
+          <td><span class="badge ${EST[n.estado][1]}">${EST[n.estado][0]}</span>${n.detalle ? `<div class="stock-hint" style="max-width:240px">${esc(n.detalle)}</div>` : ''}</td>
+          <td>${['ERROR', 'OMITIDA'].includes(n.estado) && d.configurado && /^\d{10,15}$/.test(n.telefono || '') ? `<button class="btn ghost sm" data-re="${n.id}">Reintentar</button>` : ''}</td></tr>`).join('')}</tbody></table></div>`
+        : '<div class="card empty">Todavía no se mandó ningún aviso.</div>'}`;
+    $('#wa-test').addEventListener('click', async () => {
+      try { const r = await api('/api/whatsapp/prueba', { method: 'POST', body: { telefono: $('#wa-tel').value, plantilla: $('#wa-pl').value } }); toast(`Mensaje enviado a +${r.telefono}`); router(); }
+      catch (err) { toast(err.message, true); }
+    });
+    $$('[data-copy]').forEach((b) => b.addEventListener('click', async () => { try { await navigator.clipboard.writeText(b.dataset.copy); toast('Texto copiado'); } catch (_) { toast('No se pudo copiar', true); } }));
+    $$('[data-re]').forEach((b) => b.addEventListener('click', async () => {
+      try { const r = await api(`/api/whatsapp/${b.dataset.re}/reintentar`, { method: 'POST' }); toast(r.estado === 'ENVIADA' ? 'Enviado' : `No se pudo: ${r.detalle || ''}`, r.estado !== 'ENVIADA'); router(); }
+      catch (err) { toast(err.message, true); }
+    }));
+  }
+
   // ---------- Roles ----------
-  const tabsUsuarios = (act) => `<div class="tabs"><a href="#/usuarios" class="${act === 'usuarios' ? 'on' : ''}">Usuarios</a><a href="#/usuarios?tab=roles" class="${act === 'roles' ? 'on' : ''}">Roles</a>${S.user.rol === 'ADMIN' ? `<a href="#/usuarios?tab=accesos" class="${act === 'accesos' ? 'on' : ''}">Accesos</a>` : ''}</div>`;
+  const tabsUsuarios = (act) => `<div class="tabs"><a href="#/usuarios" class="${act === 'usuarios' ? 'on' : ''}">Usuarios</a><a href="#/usuarios?tab=roles" class="${act === 'roles' ? 'on' : ''}">Roles</a>${S.user.rol === 'ADMIN' ? `<a href="#/usuarios?tab=accesos" class="${act === 'accesos' ? 'on' : ''}">Accesos</a>` : ''}<a href="#/usuarios?tab=whatsapp" class="${act === 'whatsapp' ? 'on' : ''}">WhatsApp</a></div>`;
 
   async function vistaRoles(main) {
     const [roles, cat] = await Promise.all([api('/api/roles'), api('/api/roles/catalogo')]);
@@ -2055,7 +2115,7 @@
         <div class="row mt"><div class="f"><label>CUIT</label><input name="cuit" value="${esc(p ? p.cuit || '' : '')}" maxlength="20"></div>
           <div class="f"><label>Contacto</label><input name="contacto" value="${esc(p ? p.contacto || '' : '')}" maxlength="120"></div></div>
         <div class="row mt"><div class="f"><label>Email</label><input type="email" name="email" value="${esc(p ? p.email || '' : '')}" maxlength="150"></div>
-          <div class="f"><label>Teléfono</label><input name="telefono" value="${esc(p ? p.telefono || '' : '')}" maxlength="50"></div></div>
+          <div class="f"><label>Teléfono / WhatsApp</label><input name="telefono" value="${esc(p ? p.telefono || '' : '')}" maxlength="50" placeholder="Celular con código de área: 236 4123456"></div></div>
         <div class="f mt"><label>Dirección</label><input name="direccion" value="${esc(p ? p.direccion || '' : '')}" maxlength="200"></div>
         <div class="f mt"><label>Comentario</label><input name="comentario" value="${esc(p ? p.comentario || '' : '')}" maxlength="1000" placeholder="Ej.: vinos y espumantes"></div>
         ${p ? `<label class="check mt"><input type="checkbox" name="activo" ${p.activo ? 'checked' : ''}> Activo</label>` : ''}

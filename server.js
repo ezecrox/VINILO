@@ -274,15 +274,22 @@ route('POST', '/api/me/password', async ({ user, body }) => {
 route('GET', '/api/usuarios', async ({ user }) => {
   permitir(user, 'usuarios');
   const { rows } = await query(
-    `SELECT u.id, u.username, u.nombre, u.rol, u.activo, u.permiso_compras, u.proveedor_id, p.nombre AS proveedor, u.creado_en, r.nombre AS rol_nombre, u.legajo,
+    `SELECT u.id, u.username, u.nombre, u.rol, u.activo, u.permiso_compras, u.proveedor_id, p.nombre AS proveedor, u.creado_en, r.nombre AS rol_nombre, u.legajo, u.telefono, u.whatsapp_ok,
             (SELECT coalesce(array_agg(us.sucursal_id ORDER BY us.sucursal_id), '{}') FROM usuario_sucursales us WHERE us.usuario_id = u.id) AS sucursales,
             (SELECT max(l.fecha) FROM login_log l WHERE l.usuario_id = u.id AND l.evento = 'INGRESO') AS ultimo_ingreso
      FROM usuarios u LEFT JOIN proveedores p ON p.id = u.proveedor_id LEFT JOIN roles r ON r.codigo = u.rol ORDER BY u.nombre`);
-  return rows.map((r) => ({ ...r, id: Number(r.id), activo: isTrue(r.activo), permiso_compras: isTrue(r.permiso_compras), proveedor_id: r.proveedor_id ? Number(r.proveedor_id) : null, sucursales: arrInt(r.sucursales) }));
+  return rows.map((r) => ({ ...r, id: Number(r.id), activo: isTrue(r.activo), permiso_compras: isTrue(r.permiso_compras), proveedor_id: r.proveedor_id ? Number(r.proveedor_id) : null, sucursales: arrInt(r.sucursales), whatsapp_ok: r.whatsapp_ok === null || r.whatsapp_ok === undefined ? true : isTrue(r.whatsapp_ok) }));
 });
 
 // int[] de Postgres (array o texto '{1,2}', según el driver)
 const arrInt = (v) => (Array.isArray(v) ? v : String(v || '').replace(/[{}]/g, '').split(',')).map(Number).filter(Number.isInteger);
+
+// Celular para WhatsApp: vacío o un número argentino válido (se guarda como se escribió)
+function telValido(t) {
+  const v = str(t, 30);
+  if (v && !require('./src/whatsapp').normTel(v)) fail(400, 'Celular inválido. Escribilo con código de área, sin 0 ni 15 (ej.: 236 4123456).');
+  return v;
+}
 
 // Sucursales en las que trabaja el usuario (una o varias)
 async function guardarSucursalesUsuario(id, rol, sucursales) {
@@ -319,9 +326,9 @@ route('POST', '/api/usuarios', async ({ user, body }) => {
   if (!body.password || String(body.password).length < 6) fail(400, 'La contraseña debe tener al menos 6 caracteres');
   try {
     const { rows } = await query(
-      `INSERT INTO usuarios (username, nombre, password_hash, rol, proveedor_id, permiso_compras, legajo)
-       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
-      [username, nombre, hashPassword(body.password), rol, proveedorId, compras, str(body.legajo, 30)]
+      `INSERT INTO usuarios (username, nombre, password_hash, rol, proveedor_id, permiso_compras, legajo, telefono, whatsapp_ok)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
+      [username, nombre, hashPassword(body.password), rol, proveedorId, compras, str(body.legajo, 30), telValido(body.telefono), body.whatsapp_ok === undefined ? true : bool(body.whatsapp_ok)]
     );
     await guardarSucursalesUsuario(Number(rows[0].id), rol, body.sucursales);
     return { id: Number(rows[0].id) };
@@ -341,8 +348,9 @@ route('PUT', '/api/usuarios/:id', async ({ user, body, params }) => {
   const activo = body.activo === undefined ? isTrue(u.activo) : bool(body.activo);
   if (id === user.id && (!activo || rol !== 'ADMIN')) fail(400, 'No podés quitarte el rol ADMIN ni desactivarte a vos mismo');
   try {
-    await query('UPDATE usuarios SET nombre = $2, rol = $3, activo = $4, proveedor_id = $5, permiso_compras = $6, legajo = $7 WHERE id = $1',
-      [id, str(body.nombre, 120) || u.nombre, rol, activo, proveedorId, compras, body.legajo === undefined ? u.legajo : str(body.legajo, 30)]);
+    await query('UPDATE usuarios SET nombre = $2, rol = $3, activo = $4, proveedor_id = $5, permiso_compras = $6, legajo = $7, telefono = $8, whatsapp_ok = $9 WHERE id = $1',
+      [id, str(body.nombre, 120) || u.nombre, rol, activo, proveedorId, compras, body.legajo === undefined ? u.legajo : str(body.legajo, 30),
+        body.telefono === undefined ? u.telefono : telValido(body.telefono), body.whatsapp_ok === undefined ? isTrue(u.whatsapp_ok) : bool(body.whatsapp_ok)]);
   } catch (e) {
     if (e.code === '23505' || /duplicate|unique/i.test(e.message)) fail(409, 'Ese N° de reloj ya está asignado a otro usuario');
     throw e;
@@ -851,6 +859,9 @@ require('./src/produccion')({ route, query, tx, fail, permitir, permitirAlguno, 
 // ---------- Personal (solicitudes de empleados) ----------
 require('./src/personal')({ route, query, tx, fail, permitir, permitirAlguno, isTrue, toInt, str, fechaOk });
 require('./src/clima')({ route });
+const whatsapp = require('./src/whatsapp');
+whatsapp.init({ query });
+whatsapp.registrar({ route, fail, permitir, isTrue, toInt, str });
 require('./src/programacion')({ route, query, tx, fail, permitir, permitirAlguno, isTrue, toInt, str, fechaOk });
 
 // ---------- CrossChex (reloj de asistencia) ----------

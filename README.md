@@ -181,3 +181,19 @@ render.yaml        Blueprint de Render
 ## Pronóstico en el panel
 
 Todos los usuarios ven en su panel el pronóstico de la noche (18 a 3 h) de Junín (Bs. As.): temperatura, lluvia, viento y avisos (lluvia probable, tormenta, ráfagas, frío o calor), hora por hora. Fuente: Open-Meteo, sin clave; se actualiza cada 30 minutos. Entre las 0 y las 6 h muestra la noche en curso. La ubicación se puede cambiar con `CLIMA_LAT`, `CLIMA_LON` y `CLIMA_CIUDAD`.
+
+## Avisos por WhatsApp (WhatsApp Cloud API de Meta)
+
+Avisos automáticos:
+- **Nueva solicitud del personal** → a quienes pueden aprobarlas (Administrador y roles con *Solicitudes del personal*).
+- **Solicitud aprobada o rechazada** → al empleado, con el comentario.
+- **Pedido a proveedor confirmado** → al teléfono del proveedor y a los usuarios de su portal.
+
+Configuración:
+1. En Meta for Developers creá una app de tipo *Business* con el producto **WhatsApp**, y registrá un número propio (que no esté en WhatsApp común).
+2. Generá un **token permanente** (usuario del sistema con permiso `whatsapp_business_messaging`) y copiá el **Phone number ID**.
+3. En Render → Environment cargá `WHATSAPP_TOKEN` y `WHATSAPP_PHONE_ID` (opcionales: `WHATSAPP_LANG`, por defecto `es_AR`; `APP_URL`).
+4. En WhatsApp Manager creá las plantillas `vinilo_solicitud_nueva`, `vinilo_solicitud_resuelta` y `vinilo_pedido_proveedor` (categoría **Utilidad**, idioma **Español (ARG)**), con el texto que muestra **Usuarios → WhatsApp**.
+5. Cargá los celulares: en **Usuarios → Editar** (o cada uno desde **📱 WhatsApp** en su menú) y el teléfono de cada proveedor. Formato: código de área + número, sin 0 ni 15.
+
+En **Usuarios → WhatsApp** se ve el estado de la conexión, se manda un mensaje de prueba y está el registro de cada aviso (enviado, con error o no enviado) con opción de reintentar.

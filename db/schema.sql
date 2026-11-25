@@ -432,3 +432,28 @@ BEGIN
     INSERT INTO app_config (clave, valor) VALUES ('limpieza_programacion_20261125', now()::text);
   END IF;
 END $$;
+
+-- ===== Avisos por WhatsApp (WhatsApp Cloud API de Meta) =====
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS telefono VARCHAR(30);
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS whatsapp_ok BOOLEAN NOT NULL DEFAULT TRUE;
+ALTER TABLE proveedores ADD COLUMN IF NOT EXISTS whatsapp_ok BOOLEAN NOT NULL DEFAULT TRUE;
+CREATE TABLE IF NOT EXISTS notificaciones (
+  id           SERIAL PRIMARY KEY,
+  canal        VARCHAR(20) NOT NULL DEFAULT 'WHATSAPP',
+  evento       VARCHAR(40) NOT NULL,
+  referencia   VARCHAR(60),
+  usuario_id   INT REFERENCES usuarios(id) ON DELETE SET NULL,
+  proveedor_id INT REFERENCES proveedores(id) ON DELETE SET NULL,
+  destinatario VARCHAR(150),
+  telefono     VARCHAR(30),
+  plantilla    VARCHAR(80),
+  parametros   TEXT,
+  texto        TEXT,
+  estado       VARCHAR(20) NOT NULL DEFAULT 'PENDIENTE' CHECK (estado IN ('PENDIENTE','ENVIADA','ERROR','OMITIDA')),
+  detalle      TEXT,
+  mensaje_id   VARCHAR(120),
+  intentos     INT NOT NULL DEFAULT 0,
+  creado_en    TIMESTAMPTZ NOT NULL DEFAULT now(),
+  enviado_en   TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS notificaciones_creado_idx ON notificaciones (creado_en DESC);

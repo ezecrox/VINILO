@@ -118,6 +118,7 @@ module.exports = function registrarPersonal({ route, query, tx, fail, permitir, 
     const { rows } = await query(
       'INSERT INTO solicitudes (usuario_id, tipo, desde, hasta, dias, monto, motivo) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id',
       [user.id, tipo, desde, hasta, n, monto, motivo]);
+    require('./whatsapp').solicitudNueva(Number(rows[0].id));
     return { id: Number(rows[0].id) };
   });
 
@@ -133,7 +134,7 @@ module.exports = function registrarPersonal({ route, query, tx, fail, permitir, 
   route('POST', '/api/solicitudes/:id/resolver', async ({ user, body, params }) => {
     permitir(user, 'gestionarSolicitudes');
     const id = toInt(params.id);
-    return tx(async (client) => {
+    const res = await tx(async (client) => {
       const { rows } = await client.query('SELECT * FROM solicitudes WHERE id = $1 FOR UPDATE', [id]);
       const s = rows[0];
       if (!s) fail(404, 'Solicitud inexistente');
@@ -160,6 +161,8 @@ module.exports = function registrarPersonal({ route, query, tx, fail, permitir, 
       }
       return { ok: true, programacion_quitada: quitados };
     });
+    require('./whatsapp').solicitudResuelta(id);
+    return res;
   });
 
   // Adjuntos (certificados): el empleado en sus solicitudes, quien gestiona en cualquiera
