@@ -614,3 +614,11 @@ body.contando .vn-fab, body.contando #vn-fab { display: none !important; }
 .pl-it input, .pl-it select { padding: 6px 8px; font-size: .88rem; } .pl-it .check { margin: 0; font-size: .8rem; }
 .pl-bt button { border: 1px solid var(--line); background: #fff; border-radius: 6px; width: 26px; height: 28px; cursor: pointer; }
 @media (max-width: 700px) { .pl-it { grid-template-columns: 1fr 1fr; } .pl-it .pl-txt { grid-column: 1 / -1; order: -1; } }
+/* Manuales */
+.man-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; }
+.man-card { display: flex; gap: 14px; align-items: flex-start; }
+.man-tapa { flex: none; width: 96px; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(15,53,87,.25); }
+.man-tapa img { display: block; width: 100%; }
+.man-info { flex: 1; min-width: 0; } .man-info b { display: block; color: var(--side); font-size: 1.05rem; margin-bottom: 4px; }
+.man-info p { font-size: .88rem; color: #3a4250; margin: 6px 0; }
+.man-acc { display: flex; gap: 6px; margin-top: 8px; } .man-acc .btn { text-decoration: none; }

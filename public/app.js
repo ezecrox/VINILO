@@ -177,6 +177,7 @@
     recepcion: '<path d="M12 3v11"/><path d="m7.5 9.5 4.5 4.5 4.5-4.5"/><path d="M3 14v4a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-4"/>',
     transferencia: '<path d="M4 8h14"/><path d="m14 4 4 4-4 4"/><path d="M20 16H6"/><path d="m10 12-4 4 4 4"/>',
     consumo: '<path d="M6 3h12l-1.2 7.2A4.9 4.9 0 0 1 12 14.5a4.9 4.9 0 0 1-4.8-4.3L6 3Z"/><path d="M12 14.5V20"/><path d="M8 21h8"/><path d="M6.6 7h10.8"/>',
+    manuales: '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z"/><path d="M9 7h7M9 11h5"/>',
     checklist: '<rect x="4" y="3" width="16" height="18" rx="2"/><path d="m8 8 1.5 1.5L12 7M8 14l1.5 1.5L12 13"/><path d="M14 8h3M14 14h3"/>',
     notificaciones: '<path d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>',
     conteo: '<path d="M9 4h6a1 1 0 0 1 1 1v1H8V5a1 1 0 0 1 1-1Z"/><path d="M8 5H6a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1h-2"/><path d="m9 13 2 2 4-4"/>',
@@ -229,6 +230,8 @@
     { id: 'sucursales', lbl: 'Sucursales', ok: () => puede('sucursales') },
     { id: 'notificaciones', lbl: 'Notificaciones push', ok: () => puede('notificaciones') },
     { id: 'usuarios', lbl: 'Usuarios y roles', ok: () => puede('usuarios') },
+    { sec: 'Ayuda', ok: () => !puede('portalProveedor') },
+    { id: 'manuales', lbl: 'Manuales', ok: () => !puede('portalProveedor') },
   ];
 
   function renderShell() {
@@ -1408,6 +1411,21 @@
         <p class="stock-hint">Los días que no aparecen son franco.</p>`;
     } catch (_) { /* sin datos */ }
   }
+
+  // ---------- Manuales ----------
+  const MANUALES = [
+    { id: 'empleado', titulo: 'Manual del Empleado', para: 'Todo el personal', desc: 'Ingresar a la app, pedir adelantos, vacaciones y licencias, seguir las solicitudes y ver las horas trabajadas.', paginas: 7, ok: () => true },
+    { id: 'programador', titulo: 'Manual del Programador de días', para: 'Quien arma la programación', desc: 'Sucursales, asignación de empleados, grilla semanal, programar uno o varios días y copiar la semana.', paginas: 9, ok: () => puede('programacion') || puede('sucursales') },
+    { id: 'conteo', titulo: 'Manual de Conteo de Inventario', para: 'Quien cuenta y quien aplica', desc: 'Crear un conteo, contar desde el celular entre varios, sumar, escanear códigos y revisar y aplicar las diferencias.', paginas: 7, ok: () => puede('contar') || puede('ajustar') },
+  ];
+  VIEWS.manuales = async (main) => {
+    const lista = MANUALES.filter((m) => S.user.rol === 'ADMIN' || m.ok());
+    main.innerHTML = `<h1>Manuales</h1><p class="sub">Guías paso a paso de la app, con capturas de las pantallas. Se pueden ver en el celular, descargar o imprimir.</p>
+      <div class="man-grid">${lista.map((m) => `<div class="card man-card">
+        <a class="man-tapa" href="/manuales/manual-${m.id}.pdf" target="_blank" rel="noopener"><img src="/manuales/tapa-${m.id}.png" alt="Tapa del ${esc(m.titulo)}" loading="lazy"></a>
+        <div class="man-info"><b>${esc(m.titulo)}</b><span class="badge">${esc(m.para)}</span><p>${esc(m.desc)}</p><small class="muted">PDF · ${m.paginas} páginas</small>
+          <div class="man-acc"><a class="btn sm" href="/manuales/manual-${m.id}.pdf" target="_blank" rel="noopener">Ver</a><a class="btn sm sec" href="/manuales/manual-${m.id}.pdf" download="Vinilo - ${esc(m.titulo)}.pdf">Descargar</a></div></div></div>`).join('')}</div>`;
+  };
 
   // ---------- Checklist de apertura y cierre ----------
   const CK_ICO = { APERTURA: '🌅', CIERRE: '🌙', OTRO: '📋' };
