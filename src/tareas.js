@@ -53,6 +53,21 @@ async function calcularTareas(user, { query, fudo, sqlAlm }) {
       detalle: 'Todavía no fueron respondidas.', items: [] });
   }
 
+  // ---- Reloj (CrossChex) ----
+  if (p('verHoras')) {
+    const { rows } = await query("SELECT ok, detalle, inicio FROM fudo_sync_log WHERE entidad = 'crosschex' ORDER BY id DESC LIMIT 1");
+    if (rows[0] && (rows[0].ok === false || rows[0].ok === 'f')) {
+      add({ id: 'crosschex-error', prioridad: 'alta', titulo: 'Falló la sincronización con el reloj (CrossChex)', cantidad: 1, link: '#/horas', accion: 'Ver horas',
+        detalle: `${fmt(rows[0].inicio)}: ${String(rows[0].detalle || '').slice(0, 220)}`, items: [] });
+    }
+    const { rows: sv } = await query(
+      `SELECT f.workno, max(f.nombre) AS nombre FROM fichadas f WHERE f.checktime > now() - interval '31 days'
+       AND NOT EXISTS (SELECT 1 FROM usuarios u WHERE u.legajo = f.workno) GROUP BY f.workno ORDER BY 2`);
+    add({ id: 'crosschex-vincular', prioridad: 'baja', titulo: 'Empleados del reloj sin usuario vinculado', cantidad: sv.length, link: '#/horas', accion: 'Ver horas',
+      detalle: 'Cargá su N° de reloj en Usuarios para que cada empleado vea sus horas.',
+      items: sv.slice(0, 6).map((r) => ({ texto: r.nombre || `N° ${r.workno}`, sub: `N° en el reloj: ${r.workno}`, link: '#/usuarios' })) });
+  }
+
   // ---- Consumos desde Fudo ----
   if (p('consumir')) {
     const { rows: bor } = await query(

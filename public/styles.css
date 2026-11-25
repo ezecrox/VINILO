@@ -388,3 +388,8 @@ tbody tr:hover { background: #fffaf2; }
   .sol-body { flex: 1 1 calc(100% - 50px); }
   .sol-acc { flex: 1 1 100%; justify-content: flex-end; border-top: 1px solid var(--line); padding-top: 6px; }
 }
+.hs-det td { background: #fbf7f0; padding: 6px 12px 12px; }
+.dias-tbl { font-size: 0.88rem; background: #fff; border: 1px solid var(--line); border-radius: 8px; }
+.dias-tbl th { position: static; }
+.dias-tbl tr.inc td { background: #fff8ec; }
+.dias-tbl b.bad { color: var(--accent); }

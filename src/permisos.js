@@ -16,6 +16,7 @@ const CATALOGO = [
   { grupo: 'Operaciones', clave: 'verMovimientos', menu: 'Movimientos', desc: 'Ver el historial de movimientos' },
   { grupo: 'Personal', clave: 'solicitudes', menu: 'Mis solicitudes', desc: 'Pedir adelantos de sueldo, vacaciones y licencias (examen, enfermedad, etc.)' },
   { grupo: 'Personal', clave: 'gestionarSolicitudes', menu: 'Solicitudes del personal', desc: 'Ver, aprobar o rechazar las solicitudes de los empleados' },
+  { grupo: 'Personal', clave: 'verHoras', menu: 'Horas del personal', desc: 'Ver fichadas y horas trabajadas (CrossChex) y sincronizar el reloj' },
   { grupo: 'Parametrización', clave: 'productos', menu: 'Productos', desc: 'Maestro de productos, alertas e importación' },
   { grupo: 'Parametrización', clave: 'almacenes', menu: 'Almacenes', desc: 'Alta y edición de almacenes' },
   { grupo: 'Parametrización', clave: 'usuarios', menu: 'Usuarios y roles', desc: 'Usuarios, roles y permisos' },

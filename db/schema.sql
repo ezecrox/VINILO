@@ -330,3 +330,20 @@ CREATE TABLE IF NOT EXISTS solicitud_archivos (
   subido_en      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_solarch ON solicitud_archivos (solicitud_id);
+
+-- ===== CrossChex Cloud (reloj de asistencia) =====
+ALTER TABLE usuarios ADD COLUMN IF NOT EXISTS legajo VARCHAR(30);   -- N° de empleado en el reloj (workno)
+CREATE UNIQUE INDEX IF NOT EXISTS idx_usuarios_legajo ON usuarios (legajo) WHERE legajo IS NOT NULL AND legajo <> '';
+CREATE TABLE IF NOT EXISTS fichadas (
+  id          SERIAL PRIMARY KEY,
+  workno      VARCHAR(30) NOT NULL,
+  nombre      VARCHAR(150),
+  checktime   TIMESTAMPTZ NOT NULL,
+  checktype   INT,
+  device_sn   VARCHAR(60) NOT NULL DEFAULT '',
+  device_name VARCHAR(120),
+  importado_en TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (workno, checktime, device_sn)
+);
+CREATE INDEX IF NOT EXISTS idx_fichadas_time ON fichadas (checktime);
+CREATE INDEX IF NOT EXISTS idx_fichadas_workno ON fichadas (workno, checktime);

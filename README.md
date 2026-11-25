@@ -123,6 +123,22 @@ En **Operaciones → Consumos desde Fudo** (ADMIN y RECEPTOR) se elige un perío
 - Permiso **Solicitudes del personal** (ADMIN por defecto, asignable a cualquier rol): lista con filtros, ausencias aprobadas de los próximos 60 días, aviso de superposición con otras ausencias, aprobación (en adelantos se puede aprobar un monto menor) o rechazo con motivo, y exportación CSV. Nadie resuelve su propia solicitud.
 - Panel: quien aprueba ve las pendientes; el empleado, las respuestas recientes.
 
+## Reloj de asistencia (CrossChex Cloud)
+
+La app trae las fichadas del reloj Anviz desde **CrossChex Cloud** y calcula las horas trabajadas.
+
+- **Personal → Horas del personal** (permiso `Horas del personal`, ADMIN por defecto): horas por empleado en el período (atajos: semana, quincena, mes, mes anterior), días trabajados, promedio, jornadas incompletas (fichada sin par) y detalle por día con entradas/salidas; exportación CSV.
+- **Turnos nocturnos:** lo fichado antes de las 6:00 cuenta para la jornada del día anterior (configurable con `CROSSCHEX_CORTE_HORA`). Las fichadas del mismo empleado a menos de 2 minutos se toman como una sola.
+- **Vínculo con usuarios:** en cada usuario se carga su **N° en el reloj** (workno). Con eso el empleado ve **Mis horas** en Mis solicitudes, y el panel avisa qué números del reloj no tienen usuario.
+- **Sincronización:** al arrancar, cada `CROSSCHEX_SYNC_MINUTES` (60 por defecto) y con el botón *Sincronizar*; la primera vez trae 31 días. No duplica fichadas.
+
+| Variable | Valor |
+|---|---|
+| `CROSSCHEX_API_KEY` / `CROSSCHEX_API_SECRET` | credenciales de la API de CrossChex Cloud (requiere modo desarrollador habilitado por Anviz) |
+| `CROSSCHEX_API_URL` | opcional; por defecto `https://api.us.crosschexcloud.com/` (región US). Para Asia: `https://api.ap.crosschexcloud.com/` |
+| `CROSSCHEX_SYNC_MINUTES` | opcional, minutos entre sincronizaciones (0 = solo manual) |
+| `CROSSCHEX_CORTE_HORA` | opcional, hora de corte de la jornada (por defecto 6) |
+
 ## Vinilito, el asistente
 
 Botón flotante abajo a la derecha (no aparece para proveedores). Responde con los datos de la app y **respeta los permisos y almacenes** del usuario. Es de solo lectura: no registra nada, pero lleva a la pantalla correspondiente.

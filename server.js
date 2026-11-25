@@ -274,7 +274,7 @@ route('POST', '/api/me/password', async ({ user, body }) => {
 route('GET', '/api/usuarios', async ({ user }) => {
   permitir(user, 'usuarios');
   const { rows } = await query(
-    `SELECT u.id, u.username, u.nombre, u.rol, u.activo, u.permiso_compras, u.proveedor_id, p.nombre AS proveedor, u.creado_en, r.nombre AS rol_nombre,
+    `SELECT u.id, u.username, u.nombre, u.rol, u.activo, u.permiso_compras, u.proveedor_id, p.nombre AS proveedor, u.creado_en, r.nombre AS rol_nombre, u.legajo,
             (SELECT max(l.fecha) FROM login_log l WHERE l.usuario_id = u.id AND l.evento = 'INGRESO') AS ultimo_ingreso
      FROM usuarios u LEFT JOIN proveedores p ON p.id = u.proveedor_id LEFT JOIN roles r ON r.codigo = u.rol ORDER BY u.nombre`);
   return rows.map((r) => ({ ...r, id: Number(r.id), activo: isTrue(r.activo), permiso_compras: isTrue(r.permiso_compras), proveedor_id: r.proveedor_id ? Number(r.proveedor_id) : null }));
@@ -306,13 +306,13 @@ route('POST', '/api/usuarios', async ({ user, body }) => {
   if (!body.password || String(body.password).length < 6) fail(400, 'La contraseña debe tener al menos 6 caracteres');
   try {
     const { rows } = await query(
-      `INSERT INTO usuarios (username, nombre, password_hash, rol, proveedor_id, permiso_compras)
-       VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
-      [username, nombre, hashPassword(body.password), rol, proveedorId, compras]
+      `INSERT INTO usuarios (username, nombre, password_hash, rol, proveedor_id, permiso_compras, legajo)
+       VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
+      [username, nombre, hashPassword(body.password), rol, proveedorId, compras, str(body.legajo, 30)]
     );
     return { id: Number(rows[0].id) };
   } catch (e) {
-    if (e.code === '23505' || /duplicate|unique/i.test(e.message)) fail(409, 'Ese nombre de usuario ya existe');
+    if (e.code === '23505' || /duplicate|unique/i.test(e.message)) fail(409, /legajo/.test(e.message) ? 'Ese N° de reloj ya está asignado a otro usuario' : 'Ese nombre de usuario ya existe');
     throw e;
   }
 });
@@ -326,8 +326,13 @@ route('PUT', '/api/usuarios/:id', async ({ user, body, params }) => {
   const { rol, proveedorId, compras } = await datosRolUsuario(body, u);
   const activo = body.activo === undefined ? isTrue(u.activo) : bool(body.activo);
   if (id === user.id && (!activo || rol !== 'ADMIN')) fail(400, 'No podés quitarte el rol ADMIN ni desactivarte a vos mismo');
-  await query('UPDATE usuarios SET nombre = $2, rol = $3, activo = $4, proveedor_id = $5, permiso_compras = $6 WHERE id = $1',
-    [id, str(body.nombre, 120) || u.nombre, rol, activo, proveedorId, compras]);
+  try {
+    await query('UPDATE usuarios SET nombre = $2, rol = $3, activo = $4, proveedor_id = $5, permiso_compras = $6, legajo = $7 WHERE id = $1',
+      [id, str(body.nombre, 120) || u.nombre, rol, activo, proveedorId, compras, body.legajo === undefined ? u.legajo : str(body.legajo, 30)]);
+  } catch (e) {
+    if (e.code === '23505' || /duplicate|unique/i.test(e.message)) fail(409, 'Ese N° de reloj ya está asignado a otro usuario');
+    throw e;
+  }
   if (body.password) {
     if (String(body.password).length < 6) fail(400, 'La contraseña debe tener al menos 6 caracteres');
     await query('UPDATE usuarios SET password_hash = $2 WHERE id = $1', [id, hashPassword(body.password)]);
@@ -831,6 +836,10 @@ require('./src/produccion')({ route, query, tx, fail, permitir, permitirAlguno, 
 // ---------- Personal (solicitudes de empleados) ----------
 require('./src/personal')({ route, query, tx, fail, permitir, permitirAlguno, isTrue, toInt, str, fechaOk });
 
+// ---------- CrossChex (reloj de asistencia) ----------
+const crosschex = require('./src/crosschex');
+crosschex({ route, query, fail, permitir, permitirAlguno, toInt, fechaOk, pool });
+
 // ---------- Panel ----------
 route('GET', '/api/dashboard', async ({ user }) => {
   const res = { rol: user.rol, pedidos_pendientes: 0, tareas: await calcularTareas(user, { query, fudo, sqlAlm }) };
@@ -915,5 +924,6 @@ migrate()
   .then(() => server.listen(PORT, '0.0.0.0', () => {
     console.log(`Vinilo Almacén escuchando en puerto ${PORT}`);
     fudo.iniciarSincronizacionAutomatica(pool);
+    crosschex.iniciarSincronizacionAutomatica(pool);
   }))
   .catch((err) => { console.error('Error al inicializar la base de datos:', err.message || err); process.exit(1); });

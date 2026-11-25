@@ -174,6 +174,7 @@
     produccion: '<path d="M6 13h12v6a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2v-6Z"/><path d="M4 13h16"/><path d="M8 9c0-2 1.5-2 1.5-4M12 9c0-2 1.5-2 1.5-4M16 9c0-2 1.5-2 1.5-4"/>',
     'mis-solicitudes': '<rect x="4" y="5" width="16" height="16" rx="2"/><path d="M8 3v4M16 3v4M4 10h16"/><path d="m9 15 2 2 4-4"/>',
     solicitudes: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="m16 11 2 2 4-4"/>',
+    horas: '<circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2.5"/><path d="M9 2h6M12 2v3"/>',
     salir: '<path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3"/><path d="M10 16l-4-4 4-4"/><path d="M6 12h10"/>',
     clave: '<circle cx="8" cy="15" r="4"/><path d="m11 12 9-9"/><path d="m17 6 3 3"/>',
   };
@@ -196,9 +197,10 @@
     { id: 'produccion', lbl: 'Producción', ok: () => puede('producir') },
     { id: 'ajuste', lbl: 'Ajuste de inventario', ok: () => puede('ajustar') },
     { id: 'movimientos', lbl: 'Movimientos', ok: () => puede('verMovimientos') },
-    { sec: 'Personal', ok: () => puede('solicitudes') || puede('gestionarSolicitudes') },
+    { sec: 'Personal', ok: () => puede('solicitudes') || puede('gestionarSolicitudes') || puede('verHoras') },
     { id: 'mis-solicitudes', lbl: 'Mis solicitudes', ok: () => puede('solicitudes'), pillSol: true },
     { id: 'solicitudes', lbl: 'Solicitudes del personal', ok: () => puede('gestionarSolicitudes'), pillSolG: true },
+    { id: 'horas', lbl: 'Horas del personal', ok: () => puede('verHoras') },
     { sec: 'Parametrización', ok: () => puede('productos') || puede('almacenes') || puede('usuarios') },
     { id: 'productos', lbl: 'Productos', ok: () => puede('productos') },
     { id: 'almacenes', lbl: 'Almacenes', ok: () => puede('almacenes') },
@@ -870,6 +872,7 @@
         <a><span>Licencias ${new Date().getFullYear()}</span><b>${r.licencias}</b><small>días aprobados</small></a>
         <a><span>Adelantos del mes</span><b>${fmt$(r.adelantos_mes)}</b><small>aprobados</small></a>
         <a><span>En espera</span><b>${r.pendientes}</b><small>sin respuesta</small></a></div>
+      <div id="mis-horas"></div>
       <h2 class="mt" style="margin-top:24px">Historial</h2>
       ${d.solicitudes.length ? `<div class="sol-lista">${d.solicitudes.map((x) => `
         <div class="sol-card est-${x.estado}"><div class="sol-ico">${SOL_ICO[x.tipo] || '📝'}</div>
@@ -894,6 +897,13 @@
       catch (err) { toast(err.message, true); }
     }));
     if (params.get('nueva')) nuevaSolicitud(params.get('nueva'), tipos, recargar);
+    api('/api/horas/mias').then((h) => {
+      if (!h.vinculado || !$('#mis-horas')) return;
+      $('#mis-horas').innerHTML = `<h2 class="mt" style="margin-top:24px">Mis horas de este mes</h2>
+        <div class="resumen"><a><span>Horas trabajadas</span><b>${hm(h.minutos)}</b><small>del ${fmtDia(h.desde)} al ${fmtDia(h.hasta)}</small></a>
+          <a><span>Días</span><b>${h.dias_trabajados}</b><small>con fichadas</small></a>${h.incompletas ? `<a><span>Jornadas incompletas</span><b style="color:var(--accent)">${h.incompletas}</b><small>falta una fichada</small></a>` : ''}</div>
+        ${h.dias.length ? `<details class="mt"><summary style="cursor:pointer;font-weight:600;color:var(--brand-blue)">Ver detalle por día</summary><div class="tbl-wrap mt">${tablaDias([...h.dias].reverse())}</div></details>` : ''}`;
+    }).catch(() => {});
   };
 
   VIEWS.solicitudes = async (main) => {
@@ -961,6 +971,81 @@
     if ($('#rs-si', m)) $('#rs-si', m).onclick = () => resolver('APROBAR');
     if ($('#rs-no', m)) $('#rs-no', m).onclick = () => resolver('RECHAZAR');
   }
+
+
+  // ---------- Horas del personal (CrossChex) ----------
+  const hm = (min) => `${Math.floor((min || 0) / 60)}:${String((min || 0) % 60).padStart(2, '0')}`;
+  const DIAS_SEM = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+  const diaSem = (f) => DIAS_SEM[new Date(f + 'T12:00:00').getDay()];
+  const isoLocal = (d) => { const x = new Date(d); x.setMinutes(x.getMinutes() - x.getTimezoneOffset()); return x.toISOString().slice(0, 10); };
+  function presetsPeriodo() {
+    const hoy = new Date(); const y = hoy.getFullYear(), m = hoy.getMonth(), d = hoy.getDate();
+    const lunes = new Date(hoy); lunes.setDate(d - ((hoy.getDay() + 6) % 7));
+    return {
+      semana: [isoLocal(lunes), isoLocal(hoy)],
+      quincena: d <= 15 ? [isoLocal(new Date(y, m, 1)), isoLocal(hoy)] : [isoLocal(new Date(y, m, 16)), isoLocal(hoy)],
+      mes: [isoLocal(new Date(y, m, 1)), isoLocal(hoy)],
+      mesAnt: [isoLocal(new Date(y, m - 1, 1)), isoLocal(new Date(y, m, 0))],
+    };
+  }
+  function tablaDias(dias) {
+    return `<table class="dias-tbl"><thead><tr><th>Jornada</th><th>Fichadas</th><th>Tramos</th><th class="num">Horas</th></tr></thead><tbody>
+      ${dias.map((d) => `<tr class="${d.incompleta ? 'inc' : ''}"><td><b>${diaSem(d.fecha)}</b> ${fmtDia(d.fecha)}</td><td class="code">${d.marcas.join(' · ')}</td>
+        <td>${d.tramos.map((t) => `${t.entrada}–${t.salida || '<b class="bad">sin salida</b>'}`).join(', ')}</td>
+        <td class="num">${hm(d.minutos)}${d.incompleta ? ' <span class="badge b-PENDIENTE">incompleta</span>' : ''}</td></tr>`).join('')}</tbody></table>`;
+  }
+
+  VIEWS.horas = async (main) => {
+    const pre = presetsPeriodo();
+    main.innerHTML = `<h1>Horas del personal</h1><p class="sub">Fichadas del reloj (CrossChex Cloud) y horas trabajadas por empleado.</p>
+      <div id="hs-sync"></div>
+      <div class="toolbar">
+        <div class="f"><label>Desde</label><input type="date" id="hs-d" value="${pre.mes[0]}"></div>
+        <div class="f"><label>Hasta</label><input type="date" id="hs-h" value="${pre.mes[1]}"></div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:4px">
+          <button class="btn ghost sm" data-pre="semana">Esta semana</button><button class="btn ghost sm" data-pre="quincena">Quincena</button>
+          <button class="btn ghost sm" data-pre="mes">Este mes</button><button class="btn ghost sm" data-pre="mesAnt">Mes anterior</button></div>
+        <div class="spacer"></div><button class="btn sec" id="hs-csv">Exportar CSV</button>
+      </div><div id="hs-tbl"><p class="muted">Cargando…</p></div>`;
+    let datos = null;
+    const pintarSync = () => {
+      const u = datos.ultimo;
+      $('#hs-sync').innerHTML = !datos.configurado
+        ? `<div class="card" style="background:#faf8f5">🔌 <b>CrossChex:</b> no configurado. Cargá <span class="code">CROSSCHEX_API_KEY</span> y <span class="code">CROSSCHEX_API_SECRET</span> en Render (Environment) para traer las fichadas del reloj.</div>`
+        : `<div class="card" style="background:#faf8f5;display:flex;gap:14px;align-items:center;flex-wrap:wrap"><div style="flex:1;min-width:260px">⏱️ <b>Reloj conectado</b> · ${fmtN(datos.fichadas_total)} fichadas${datos.ultima_fichada ? ` · última ${fmtFecha(datos.ultima_fichada)}` : ''}<br>
+          <span class="stock-hint">${u ? `Última sincronización: ${fmtFecha(u.fin || u.inicio)} · ${u.ok === false ? `<b class="bad">Error: ${esc(u.detalle || '')}</b>` : u.ok ? `${fmtN(u.leidos)} leídas, ${fmtN(u.creados)} nuevas` : 'en curso…'}` : 'Todavía no se sincronizó.'}
+          · Los turnos que pasan la medianoche cuentan para el día en que empezaron (corte ${datos.corte}:00 h).</span></div>
+          <button class="btn sec" id="hs-sync-btn">Sincronizar</button><button class="btn ghost sm" id="hs-sync-31">Traer últimos 31 días</button></div>`;
+      const sync = async (dias) => {
+        const b = $('#hs-sync-btn'); b.disabled = true; b.textContent = 'Sincronizando…';
+        try { const r = await api('/api/horas/sincronizar', { method: 'POST', body: dias ? { dias } : {} }); toast(`Reloj: ${r.nuevas} fichadas nuevas`); await cargar(); }
+        catch (err) { toast(err.message, true); b.disabled = false; b.textContent = 'Sincronizar'; }
+      };
+      if ($('#hs-sync-btn')) { $('#hs-sync-btn').onclick = () => sync(); $('#hs-sync-31').onclick = () => sync(31); }
+    };
+    const cargar = async () => {
+      datos = await api(`/api/horas?desde=${$('#hs-d').value}&hasta=${$('#hs-h').value}`);
+      pintarSync();
+      const emps = datos.empleados;
+      const total = emps.reduce((a, e) => a + e.minutos, 0);
+      $('#hs-tbl').innerHTML = emps.length ? `<p class="muted">${emps.length} empleados · ${hm(total)} h en el período. Tocá un empleado para ver el detalle por día.</p>
+        <div class="tbl-wrap"><table><thead><tr><th>Empleado</th><th>N° reloj</th><th class="num">Días</th><th class="num">Horas</th><th class="num">Promedio/día</th><th class="num">Incompletas</th></tr></thead><tbody>
+        ${emps.map((e, i) => `<tr class="hs-row" data-i="${i}" style="cursor:pointer"><td><b>${esc(e.usuario || e.nombre || '—')}</b>${e.usuario && e.nombre && e.usuario !== e.nombre ? ` <span class="muted">(${esc(e.nombre)})</span>` : ''}${e.usuario_id ? '' : ' <span class="badge b-CANCELADO" title="Cargá este N° en el usuario">sin usuario</span>'}</td>
+          <td class="code">${esc(e.workno)}</td><td class="num">${e.dias_trabajados}</td><td class="num"><b>${hm(e.minutos)}</b></td>
+          <td class="num">${e.dias_trabajados ? hm(Math.round(e.minutos / e.dias_trabajados)) : '—'}</td><td class="num ${e.incompletas ? 'stock-hint bad' : ''}">${e.incompletas || ''}</td></tr>
+          <tr class="hs-det" data-det="${i}" hidden><td colspan="6">${tablaDias(e.dias)}</td></tr>`).join('')}
+        </tbody></table></div>` : `<div class="card empty">${datos.configurado ? 'No hay fichadas en el período.' : 'Sin datos del reloj todavía.'}</div>`;
+      $$('.hs-row').forEach((r) => r.addEventListener('click', () => { const d = $(`[data-det="${r.dataset.i}"]`); d.hidden = !d.hidden; }));
+    };
+    $$('[data-pre]').forEach((b) => b.addEventListener('click', () => { const [d, h] = pre[b.dataset.pre]; $('#hs-d').value = d; $('#hs-h').value = h; cargar().catch((e) => toast(e.message, true)); }));
+    ['#hs-d', '#hs-h'].forEach((sel) => $(sel).addEventListener('change', () => cargar().catch((e) => toast(e.message, true))));
+    $('#hs-csv').onclick = () => descargarCSV(`horas_${$('#hs-d').value}_${$('#hs-h').value}.csv`, [
+      ['Empleado', 'Nombre en reloj', 'N reloj', 'Jornada', 'Dia', 'Fichadas', 'Tramos', 'Horas', 'Minutos', 'Incompleta'],
+      ...datos.empleados.flatMap((e) => e.dias.map((d) => [e.usuario || '', e.nombre || '', e.workno, d.fecha, diaSem(d.fecha), d.marcas.join(' '),
+        d.tramos.map((t) => `${t.entrada}-${t.salida || '?'}`).join(' '), hm(d.minutos), d.minutos, d.incompleta ? 'SI' : ''])),
+    ]);
+    await cargar();
+  };
 
   // ---------- Movimientos ----------
   VIEWS.movimientos = async (main) => {
@@ -1349,9 +1434,9 @@
     const [us, provs, roles] = await Promise.all([api('/api/usuarios'), api('/api/proveedores'), api('/api/roles')]);
     main.innerHTML = `${tabsUsuarios('usuarios')}<h1>Usuarios</h1><p class="sub">Cada usuario tiene un <b>rol</b>, que define qué opciones del menú y qué almacenes ve (se configuran en la pestaña <a href="#/usuarios?tab=roles">Roles</a>). El permiso <b>Compras</b> se puede sumar a cualquier usuario.</p>
       <div class="toolbar"><div class="spacer"></div><button class="btn" id="us-new">+ Nuevo usuario</button></div>
-      <div class="tbl-wrap"><table><thead><tr><th>Usuario</th><th>Nombre</th><th>Rol</th><th>Compras</th><th>Proveedor</th><th>Último ingreso</th><th>Estado</th><th></th></tr></thead><tbody>
+      <div class="tbl-wrap"><table><thead><tr><th>Usuario</th><th>Nombre</th><th>Rol</th><th>Compras</th><th>Proveedor</th><th>N° reloj</th><th>Último ingreso</th><th>Estado</th><th></th></tr></thead><tbody>
       ${us.map((u) => `<tr class="${u.activo ? '' : 'inactive'}"><td class="code">${esc(u.username)}</td><td>${esc(u.nombre)}</td><td><span class="badge b-rol">${esc(u.rol_nombre || u.rol)}</span></td>
-        <td>${u.rol === 'ADMIN' || u.permiso_compras ? '<span class="badge b-COMPLETADO">Sí</span>' : ''}</td><td>${esc(u.proveedor || '')}</td>
+        <td>${u.rol === 'ADMIN' || u.permiso_compras ? '<span class="badge b-COMPLETADO">Sí</span>' : ''}</td><td>${esc(u.proveedor || '')}</td><td class="code">${esc(u.legajo || '')}</td>
         <td class="muted">${u.ultimo_ingreso ? fmtFecha(u.ultimo_ingreso) : 'Nunca'}</td>
         <td>${u.activo ? 'Activo' : 'Inactivo'}</td><td class="num"><button class="btn ghost sm" data-ed="${u.id}">Editar</button></td></tr>`).join('')}
       </tbody></table></div>`;
@@ -1361,6 +1446,8 @@
           <div class="f"><label>Nombre y apellido</label><input name="nombre" value="${esc(u ? u.nombre : '')}" required maxlength="120"></div></div>
         <div class="row mt"><div class="f"><label>Rol</label><select name="rol">${roles.map((r) => `<option value="${esc(r.codigo)}" ${u && u.rol === r.codigo ? 'selected' : ''}>${esc(r.nombre)}</option>`).join('')}</select></div>
           <div class="f"><label>${u ? 'Nueva contraseña (dejar vacío para no cambiar)' : 'Contraseña (mín. 6)'}</label><input type="password" name="password" ${u ? '' : 'required'} minlength="6" autocomplete="new-password"></div></div>
+        <div class="row mt"><div class="f"><label>N° en el reloj (CrossChex)</label><input name="legajo" value="${esc(u ? u.legajo || '' : '')}" maxlength="30" placeholder="Ej.: 12"></div>
+          <div class="f"><p class="stock-hint" style="margin:24px 0 0">Vincula al usuario con sus fichadas para ver sus horas.</p></div></div>
         <div class="row mt" id="us-prov"><div class="f"><label>Proveedor vinculado *</label><select name="proveedor_id"><option value="">Seleccionar…</option>
           ${provs.filter((p) => p.activo || (u && u.proveedor_id === p.id)).map((p) => `<option value="${p.id}" ${u && u.proveedor_id === p.id ? 'selected' : ''}>${esc(p.nombre)}</option>`).join('')}</select>
           <div class="stock-hint">El usuario solo verá los pedidos confirmados de este proveedor.</div></div></div>
@@ -1376,7 +1463,7 @@
       f.rol.addEventListener('change', sync); sync();
       f.addEventListener('submit', async (e) => {
         e.preventDefault();
-        const body = { nombre: f.nombre.value, rol: f.rol.value, password: f.password.value || undefined,
+        const body = { nombre: f.nombre.value, rol: f.rol.value, password: f.password.value || undefined, legajo: f.legajo.value,
           proveedor_id: f.rol.value === 'PROVEEDOR' ? f.proveedor_id.value : null, permiso_compras: f.permiso_compras.checked };
         if (u) body.activo = f.activo.checked; else body.username = f.username.value;
         try {
