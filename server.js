@@ -90,6 +90,13 @@ async function currentUser(req) {
       ? null : String(u.rol_almacenes).split(',').map(Number).filter(Number.isInteger),
   };
   user.permisos = permisosDe(user, u.rol_permisos);
+  // "Ver como": token emitido por un ADMIN para ver la app como este usuario (solo lectura, 2 h)
+  if (payload.imp) {
+    if (!payload.vc_hasta || payload.vc_hasta < Date.now()) return null;
+    const a = (await query('SELECT id, nombre, rol, activo FROM usuarios WHERE id = $1', [payload.imp])).rows[0];
+    if (!a || !isTrue(a.activo) || a.rol !== 'ADMIN') return null;
+    user.ver_como = { id: Number(a.id), nombre: a.nombre, hasta: new Date(payload.vc_hasta).toISOString() };
+  }
   return user;
 }
 
@@ -230,7 +237,20 @@ route('POST', '/api/login', async ({ req, body }) => {
   return { token: signToken({ uid: Number(u.id) }), user: { id: Number(u.id), username: u.username, nombre: u.nombre, rol: u.rol } };
 }, { auth: false });
 
+// El administrador entra a ver la aplicación como otro usuario (solo lectura)
+route('POST', '/api/usuarios/:id/ver-como', async ({ req, user, params }) => {
+  if (user.rol !== 'ADMIN' || user.ver_como) fail(403, 'Solo el administrador puede ver la aplicación como otro usuario');
+  const id = toInt(params.id);
+  const u = (await query('SELECT id, username, nombre, activo FROM usuarios WHERE id = $1', [id])).rows[0];
+  if (!u) fail(404, 'Usuario inexistente');
+  if (Number(u.id) === user.id) fail(400, 'Ese es tu propio usuario');
+  if (!isTrue(u.activo)) fail(400, 'El usuario está inactivo');
+  await registrarAcceso(req, { usuario_id: user.id, username: user.username, evento: 'VER_COMO', motivo: `Vio la app como ${u.nombre} (${u.username})` });
+  return { token: signToken({ uid: Number(u.id), imp: user.id, vc_hasta: Date.now() + 2 * 3600e3 }), nombre: u.nombre };
+});
+
 route('POST', '/api/logout', async ({ req, user }) => {
+  if (user.ver_como) return { ok: true };
   await registrarAcceso(req, { usuario_id: user.id, username: user.username, evento: 'SALIDA' });
   return { ok: true };
 });
@@ -940,6 +960,8 @@ const server = http.createServer(async (req, res) => {
     if (match.r.auth) {
       user = await currentUser(req);
       if (!user) fail(401, 'Sesión vencida o inválida. Ingresá nuevamente.');
+      if (user.ver_como && req.method !== 'GET' && pathname !== '/api/logout')
+        fail(403, `Estás viendo la aplicación como ${user.nombre}: es solo lectura. Volvé a tu usuario para hacer cambios.`);
     }
     const body = ['POST', 'PUT', 'PATCH'].includes(req.method) ? await readBody(req) : {};
     const data = await match.r.handler({ req, url, params: match.params, body, user });

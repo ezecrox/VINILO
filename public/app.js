@@ -101,7 +101,34 @@
   }
 
   // ---------- Sesión ----------
+  // ---------- Ver como otro usuario (solo ADMIN, solo lectura) ----------
+  async function verComo(u) {
+    try {
+      const r = await api(`/api/usuarios/${u.id}/ver-como`, { method: 'POST' });
+      localStorage.setItem('vinilo_token_admin', S.token);
+      localStorage.setItem('vinilo_token', r.token);
+      try { sessionStorage.removeItem('vinilito_hist'); } catch (_) { /* sin storage */ }
+      location.hash = '#/panel'; location.reload();
+    } catch (err) { toast(err.message, true); }
+  }
+  function volverDeVerComo() {
+    const t = localStorage.getItem('vinilo_token_admin');
+    localStorage.removeItem('vinilo_token_admin');
+    if (t) localStorage.setItem('vinilo_token', t); else localStorage.removeItem('vinilo_token');
+    try { sessionStorage.removeItem('vinilito_hist'); } catch (_) { /* sin storage */ }
+    location.hash = '#/usuarios'; location.reload();
+  }
+  function barraVerComo() {
+    let b = document.getElementById('vc-bar');
+    if (!S.user || !S.user.ver_como) { if (b) b.remove(); document.body.classList.remove('ver-como'); return; }
+    if (!b) { b = document.createElement('div'); b.id = 'vc-bar'; document.body.prepend(b); }
+    document.body.classList.add('ver-como');
+    b.innerHTML = `<span class="vc-l">👁 Estás viendo la aplicación como <b>${esc(S.user.nombre)}</b> · ${esc(S.user.rol_nombre || S.user.rol)} · <em>solo lectura</em></span><span class="vc-c">👁 <b>${esc(S.user.nombre)}</b> <em>solo lectura</em></span><button id="vc-volver"><span class="vc-l">Volver a mi usuario</span><span class="vc-c">Volver</span></button>`;
+    $('#vc-volver').onclick = volverDeVerComo;
+  }
+
   function logout() {
+    if (localStorage.getItem('vinilo_token_admin')) return volverDeVerComo();
     S.token = null; S.user = null;
     localStorage.removeItem('vinilo_token');
     try { sessionStorage.removeItem('vinilito_hist'); } catch (_) { /* sin storage */ }
@@ -151,7 +178,8 @@
       await cargarAlmacenes();
     } catch (_) { return renderLogin(); }
     renderShell();
-    montarVinilito();
+    barraVerComo();
+    if (!S.user.ver_como) montarVinilito();
     router();
     registrarSW();
   }
@@ -163,7 +191,7 @@
       const me = await api('/api/me');
       if (JSON.stringify(me.permisos) === JSON.stringify(S.permisos)) return;
       S.user = me.user; S.permisos = me.permisos;
-      await cargarAlmacenes(); renderShell(); router();
+      await cargarAlmacenes(); renderShell(); barraVerComo(); router();
     } catch (_) { /* sin conexión: se reintenta la próxima vez */ }
   });
 
@@ -369,7 +397,7 @@
   }
   // Aviso en el panel para activar las notificaciones
   async function bannerPush(cont) {
-    if (!cont) return;
+    if (!cont || S.user.ver_como) return;
     try { if (localStorage.getItem('push_no') && Date.now() - Number(localStorage.getItem('push_no')) < 14 * 86400e3) return; } catch (_) { /* sin storage */ }
     const e = await pushEstado();
     let html = '';
@@ -2565,7 +2593,7 @@
       ${us.map((u) => `<tr class="${u.activo ? '' : 'inactive'}"><td class="code">${esc(u.username)}</td><td>${esc(u.nombre)}</td><td><span class="badge b-rol">${esc(u.rol_nombre || u.rol)}</span></td>
         <td>${u.rol === 'ADMIN' || u.permiso_compras ? '<span class="badge b-COMPLETADO">Sí</span>' : ''}</td><td>${esc(u.proveedor || '')}</td><td class="code">${esc(u.legajo || '')}</td><td>${u.telefono ? `<span title="${esc(u.telefono)}${u.whatsapp_ok ? '' : ' · avisos desactivados'}">${u.whatsapp_ok ? '📱' : '🔕'}</span>` : ''}</td><td>${esc(nomSuc(u.sucursales))}</td>
         <td class="muted">${u.ultimo_ingreso ? fmtFecha(u.ultimo_ingreso) : 'Nunca'}</td>
-        <td>${u.activo ? 'Activo' : 'Inactivo'}</td><td class="num"><button class="btn ghost sm" data-ed="${u.id}">Editar</button></td></tr>`).join('')}
+        <td>${u.activo ? 'Activo' : 'Inactivo'}</td><td class="num">${S.user.rol === 'ADMIN' && u.activo && u.id !== S.user.id && !S.user.ver_como ? `<button class="btn ghost sm" data-vc="${u.id}" title="Ver la aplicación como este usuario (solo lectura)">👁 Ver como</button>` : ''}<button class="btn ghost sm" data-ed="${u.id}">Editar</button></td></tr>`).join('')}
       </tbody></table></div>`;
     const editar = (u) => {
       const m = modal(`<h2>${u ? 'Editar' : 'Nuevo'} usuario</h2><form id="f-us">
@@ -2606,6 +2634,11 @@
     };
     $('#us-new').onclick = () => editar(null);
     $$('[data-ed]').forEach((b) => b.addEventListener('click', () => editar(us.find((x) => x.id == b.dataset.ed))));
+    $$('[data-vc]').forEach((b) => b.addEventListener('click', async () => { const u = us.find((x) => x.id == b.dataset.vc);
+      const m = modal(`<h2>Ver como ${esc(u.nombre)}</h2><p>Vas a ver la aplicación exactamente como la ve <b>${esc(u.nombre)}</b> (rol ${esc(u.rol_nombre || u.rol)}): su menú, sus permisos, sus almacenes y sus datos.</p>
+        <p class="stock-hint">Es <b>solo lectura</b>: no se puede guardar ni cambiar nada en su nombre. Dura hasta 2 horas y queda registrado en el registro de accesos. Para salir, tocá <b>Volver a mi usuario</b> en la barra de arriba.</p>
+        <div class="form-actions"><button class="btn sec" data-close>Cancelar</button><button class="btn" id="vc-ok">👁 Ver como ${esc(u.nombre.split(' ')[0])}</button></div>`);
+      $('#vc-ok', m).onclick = () => verComo(u); }));
   };
 
 
@@ -2720,7 +2753,7 @@
   }
   async function vistaAccesos(main) {
     const usuarios = await api('/api/usuarios');
-    const EV = { INGRESO: 'Ingreso', FALLIDO: 'Intento fallido', SALIDA: 'Salida' };
+    const EV = { INGRESO: 'Ingreso', FALLIDO: 'Intento fallido', SALIDA: 'Salida', VER_COMO: 'Ver como' };
     main.innerHTML = `${tabsUsuarios('accesos')}<h1>Registro de accesos</h1>
       <p class="sub">Ingresos, intentos fallidos y salidas de los usuarios. Solo lo ve el administrador. Se guardan los últimos 400 días.</p>
       <div class="resumen" id="ac-res" style="margin-bottom:16px"></div>

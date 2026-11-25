@@ -222,3 +222,8 @@ Muestra: mesas ocupadas, comensales ahora y pico, ventas de la jornada (cobrado 
 La cuenta principal de Fudo (`FUDO_API_KEY`/`FUDO_API_SECRET`) es **VINILO GALPON** y es la que sincroniza productos, proveedores y consumos.
 Para sumar **VINILO BAR** al tablero, cargar en Render `FUDO_BAR_API_KEY` y `FUDO_BAR_API_SECRET` (apiKey/apiSecret de un usuario de Fudo de esa sucursal). Aparecen pestañas para elegir la sucursal (se recuerda la última). Esa cuenta se usa **solo para el tablero**; no sincroniza nada.
 Nombres opcionales: `FUDO_NOMBRE` (default VINILO GALPON) y `FUDO_BAR_NOMBRE` (default VINILO BAR).
+
+## Ver como otro usuario (ADMIN)
+En **Usuarios**, el botón **👁 Ver como** abre la aplicación tal como la ve ese usuario (menú, permisos, almacenes, sus datos).
+Es **solo lectura**: el servidor rechaza cualquier alta, cambio o borrado mientras dure. El token dura 2 h y se invalida si el administrador deja de ser ADMIN o se desactiva.
+Una barra arriba indica a quién se está viendo y tiene el botón **Volver a mi usuario**. Cada uso queda en **Usuarios → Accesos** como evento "Ver como".
