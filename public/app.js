@@ -153,6 +153,7 @@
     renderShell();
     montarVinilito();
     router();
+    registrarSW();
   }
 
   // Si el administrador cambia el rol o sus permisos, se toma al volver a la app (sin recargar)
@@ -176,6 +177,8 @@
     recepcion: '<path d="M12 3v11"/><path d="m7.5 9.5 4.5 4.5 4.5-4.5"/><path d="M3 14v4a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-4"/>',
     transferencia: '<path d="M4 8h14"/><path d="m14 4 4 4-4 4"/><path d="M20 16H6"/><path d="m10 12-4 4 4 4"/>',
     consumo: '<path d="M6 3h12l-1.2 7.2A4.9 4.9 0 0 1 12 14.5a4.9 4.9 0 0 1-4.8-4.3L6 3Z"/><path d="M12 14.5V20"/><path d="M8 21h8"/><path d="M6.6 7h10.8"/>',
+    checklist: '<rect x="4" y="3" width="16" height="18" rx="2"/><path d="m8 8 1.5 1.5L12 7M8 14l1.5 1.5L12 13"/><path d="M14 8h3M14 14h3"/>',
+    notificaciones: '<path d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>',
     conteo: '<path d="M9 4h6a1 1 0 0 1 1 1v1H8V5a1 1 0 0 1 1-1Z"/><path d="M8 5H6a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V6a1 1 0 0 0-1-1h-2"/><path d="m9 13 2 2 4-4"/>',
     ajuste: '<path d="M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1"/><circle cx="15" cy="6" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="18" r="2"/>',
     movimientos: '<path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v4h4"/><path d="M12 7.5V12l3 2"/>',
@@ -204,12 +207,13 @@
     { sec: 'Compras', ok: () => puede('compras') || puede('verCompras') || puede('proveedores') },
     { id: 'compras', lbl: 'Pedidos a proveedores', ok: () => puede('compras') || puede('verCompras'), pillOc: true },
     { id: 'proveedores', lbl: 'Proveedores', ok: () => puede('proveedores') },
-    { sec: 'Operaciones', ok: () => ['recibir', 'transferir', 'consumir', 'ajustar', 'contar', 'producir', 'verMovimientos'].some(puede) },
+    { sec: 'Operaciones', ok: () => ['recibir', 'transferir', 'consumir', 'ajustar', 'contar', 'checklist', 'checklistConfig', 'producir', 'verMovimientos'].some(puede) },
     { id: 'recepcion', lbl: 'Recepción', ok: () => puede('recibir') },
     { id: 'transferencia', lbl: 'Transferencia', ok: () => puede('transferir') },
     { id: 'consumo', lbl: 'Consumo', ok: () => puede('consumir') },
     { id: 'consumos-fudo', lbl: 'Consumos desde Fudo', ok: () => puede('consumir') || puede('verMovimientos'), pillCf: true },
     { id: 'produccion', lbl: 'Producción', ok: () => puede('producir') },
+    { id: 'checklist', lbl: 'Checklist apertura / cierre', ok: () => puede('checklist') || puede('checklistConfig') },
     { id: 'conteo', lbl: 'Conteo de inventario', ok: () => puede('contar') || puede('ajustar') },
     { id: 'ajuste', lbl: 'Ajuste de inventario', ok: () => puede('ajustar') },
     { id: 'movimientos', lbl: 'Movimientos', ok: () => puede('verMovimientos') },
@@ -219,10 +223,11 @@
     { id: 'solicitudes', lbl: 'Solicitudes del personal', ok: () => puede('gestionarSolicitudes'), pillSolG: true },
     { id: 'programacion', lbl: 'Programación', ok: () => puede('programacion') },
     { id: 'horas', lbl: 'Horas del personal', ok: () => puede('verHoras') },
-    { sec: 'Parametrización', ok: () => puede('productos') || puede('almacenes') || puede('sucursales') || puede('usuarios') },
+    { sec: 'Parametrización', ok: () => puede('productos') || puede('almacenes') || puede('sucursales') || puede('notificaciones') || puede('usuarios') },
     { id: 'productos', lbl: 'Productos', ok: () => puede('productos') },
     { id: 'almacenes', lbl: 'Almacenes', ok: () => puede('almacenes') },
     { id: 'sucursales', lbl: 'Sucursales', ok: () => puede('sucursales') },
+    { id: 'notificaciones', lbl: 'Notificaciones push', ok: () => puede('notificaciones') },
     { id: 'usuarios', lbl: 'Usuarios y roles', ok: () => puede('usuarios') },
   ];
 
@@ -237,22 +242,25 @@
           <div class="brand"><span class="logo-tile"><img src="/logo.png" alt="Vinilo"></span><div><b>VINILO</b><small>Gestión de Almacén</small></div></div>
           ${links}
           <div class="who"><b>${esc(S.user.nombre)}</b>${esc(S.user.rol_nombre || ROL_LBL[S.user.rol] || S.user.rol)}${S.user.proveedor ? ' · ' + esc(S.user.proveedor) : ''}${S.user.permiso_compras && S.user.rol !== 'ADMIN' ? ' · Compras' : ''}
-            <div class="links"><button id="pwd-btn">${icono('clave')}Contraseña</button><button id="wa-btn" title="Mi celular para avisos por WhatsApp">📱 WhatsApp</button><button id="out-btn">${icono('salir')}Salir</button></div></div>
+            <div class="links"><button id="pwd-btn">${icono('clave')}Contraseña</button><button id="wa-btn" title="Mi celular para avisos por WhatsApp">📱 WhatsApp</button><button id="push-btn" title="Notificaciones en este dispositivo">🔔 Avisos</button><button id="out-btn">${icono('salir')}Salir</button></div></div>
         </nav>
         <main id="main"></main>
       </div>`;
     $('#out-btn').onclick = async () => { try { await api('/api/logout', { method: 'POST' }); } catch (_) { /* igual salimos */ } logout(); };
     $('#pwd-btn').onclick = cambiarPassword;
     $('#wa-btn').onclick = miWhatsapp;
+    $('#push-btn').onclick = misNotificaciones;
     $('#user-btn').onclick = () => {
       const m = modal(`<h2>${esc(S.user.nombre)}</h2><p class="sub" style="margin-top:-6px">${esc(S.user.rol_nombre || S.user.rol)} · usuario <b>${esc(S.user.username)}</b></p>
         <div class="form-actions" style="justify-content:stretch;flex-direction:column;gap:10px">
           <button class="btn" id="um-pwd" style="width:100%">Cambiar contraseña</button>
+          <button class="btn sec" id="um-push" style="width:100%">🔔 Notificaciones en este celular</button>
           <button class="btn sec" id="um-wa" style="width:100%">📱 Mi WhatsApp para avisos</button>
           <button class="btn sec" id="um-out" style="width:100%">Salir</button>
           <button class="btn ghost" data-close style="width:100%">Cerrar</button></div>`);
       $('#um-pwd', m).onclick = () => { closeModal(); cambiarPassword(); };
       $('#um-wa', m).onclick = () => { closeModal(); miWhatsapp(); };
+      $('#um-push', m).onclick = () => { closeModal(); misNotificaciones(); };
       $('#um-out', m).onclick = () => $('#out-btn').click();
     };
     $('#menu-btn').onclick = () => $('#side').classList.toggle('open');
@@ -295,7 +303,7 @@
     const id = (location.hash.replace(/^#\/?/, '') || 'panel').split('?')[0];
     const nav = NAV.find((n) => n.id === id && (!n.ok || n.ok()));
     const view = nav ? id : 'panel';
-    document.body.classList.toggle('contando', view === 'conteo' && /[?&]id=/.test(location.hash));
+    document.body.classList.toggle('contando', (view === 'conteo' && /[?&]id=/.test(location.hash)) || (view === 'checklist' && /[?&]r=/.test(location.hash)));
     $$('#side a.nav').forEach((a) => a.classList.toggle('on', a.dataset.nav === view));
     const main = $('#main');
     main.innerHTML = '<p class="muted">Cargando…</p>';
@@ -304,6 +312,69 @@
     actualizarPill();
   }
   window.addEventListener('hashchange', router);
+
+  // ---------- Notificaciones push (este dispositivo) ----------
+  const esIOS = () => /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const esInstalada = () => window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+  const pushSoportado = () => 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
+  async function registrarSW() {
+    if (!('serviceWorker' in navigator)) return null;
+    try { return await navigator.serviceWorker.register('/sw.js'); } catch (_) { return null; }
+  }
+  async function pushEstado() {
+    const e = { soportado: pushSoportado(), ios: esIOS(), instalada: esInstalada(), permiso: 'Notification' in window ? Notification.permission : 'no', suscripto: false };
+    if (e.soportado) { try { const reg = await navigator.serviceWorker.getRegistration('/'); const s = reg && await reg.pushManager.getSubscription(); e.suscripto = !!s; } catch (_) { /* nada */ } }
+    return e;
+  }
+  const b64ToU8 = (b) => { const s = atob((b + '='.repeat((4 - (b.length % 4)) % 4)).replace(/-/g, '+').replace(/_/g, '/')); return Uint8Array.from([...s].map((c) => c.charCodeAt(0))); };
+  async function activarPush() {
+    if (!pushSoportado()) throw new Error(esIOS() ? 'En iPhone primero agregá la app a la pantalla de inicio y abrila desde ese ícono.' : 'Este navegador no admite notificaciones.');
+    const perm = await Notification.requestPermission();
+    if (perm !== 'granted') throw new Error(perm === 'denied' ? 'Las notificaciones están bloqueadas para esta app. Habilitalas en los ajustes del navegador o del teléfono.' : 'No se dieron los permisos.');
+    const reg = (await registrarSW()) || await navigator.serviceWorker.ready;
+    await navigator.serviceWorker.ready;
+    const { publicKey } = await api('/api/push/clave');
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToU8(publicKey) });
+    const j = sub.toJSON();
+    await api('/api/push/suscribir', { method: 'POST', body: { endpoint: j.endpoint, keys: j.keys, dispositivo: navigator.userAgent.slice(0, 200) } });
+    try { localStorage.removeItem('push_no'); } catch (_) { /* sin storage */ }
+    return true;
+  }
+  async function desactivarPush() {
+    const reg = await navigator.serviceWorker.getRegistration('/');
+    const sub = reg && await reg.pushManager.getSubscription();
+    if (sub) { await api('/api/push/desuscribir', { method: 'POST', body: { endpoint: sub.endpoint } }); await sub.unsubscribe(); }
+  }
+  const pasosIOS = `<ol class="ios-pasos"><li>Abrí la app en <b>Safari</b>.</li><li>Tocá <b>Compartir</b> <span class="ios-ico">⬆︎</span> (abajo en el centro).</li><li>Elegí <b>Agregar a pantalla de inicio</b> y confirmá.</li><li>Abrí <b>Vinilo</b> desde el ícono nuevo y tocá <b>Activar notificaciones</b>.</li></ol>`;
+  async function misNotificaciones() {
+    const e = await pushEstado();
+    const estado = !e.soportado ? (e.ios && !e.instalada ? 'ios' : 'no') : e.permiso === 'denied' ? 'bloq' : e.suscripto && e.permiso === 'granted' ? 'on' : 'off';
+    const m = modal(`<h2>🔔 Notificaciones</h2>
+      ${estado === 'on' ? '<div class="card" style="background:#e9f5ee;border-color:#b9dcc6">✅ <b>Activadas en este dispositivo.</b> Te van a llegar los avisos de Vinilo aunque la app esté cerrada.</div>'
+        : estado === 'ios' ? `<p>En iPhone las notificaciones funcionan con la app agregada a la pantalla de inicio (iOS 16.4 o más nuevo):</p>${pasosIOS}`
+        : estado === 'bloq' ? '<div class="card" style="background:#fff6e5;border-color:#f3d9a4">⚠️ Las notificaciones están <b>bloqueadas</b> para esta app. Habilitalas en los ajustes del navegador (ícono del candado junto a la dirección) o del teléfono, y volvé a intentar.</div>'
+        : estado === 'no' ? '<p>Este navegador no admite notificaciones. Probá con Chrome en Android o con la app agregada a la pantalla de inicio en iPhone.</p>'
+        : '<p>Activalas para recibir avisos de Vinilo en este celular aunque la app esté cerrada (recordatorios, turnos, conteos).</p>'}
+      <div class="form-actions" style="flex-wrap:wrap">${estado === 'on' ? '<button class="btn ghost" id="pu-off" style="margin-right:auto">Desactivar</button><button class="btn sec" id="pu-test">Mandarme una prueba</button>' : ''}
+        ${estado === 'off' ? '<button class="btn" id="pu-on">Activar notificaciones</button>' : ''}<button class="btn sec" data-close>Cerrar</button></div>`);
+    if ($('#pu-on', m)) $('#pu-on', m).onclick = async () => { try { await activarPush(); closeModal(); toast('Notificaciones activadas 🔔'); try { await api('/api/push/prueba', { method: 'POST' }); } catch (_) { /* sin prueba */ } router(); } catch (err) { toast(err.message, true); } };
+    if ($('#pu-off', m)) $('#pu-off', m).onclick = async () => { try { await desactivarPush(); closeModal(); toast('Notificaciones desactivadas en este dispositivo'); } catch (err) { toast(err.message, true); } };
+    if ($('#pu-test', m)) $('#pu-test', m).onclick = async () => { try { const r = await api('/api/push/prueba', { method: 'POST' }); toast(r.enviados ? 'Prueba enviada: debería llegarte en unos segundos' : 'No se pudo entregar la prueba', !r.enviados); } catch (err) { toast(err.message, true); } };
+  }
+  // Aviso en el panel para activar las notificaciones
+  async function bannerPush(cont) {
+    if (!cont) return;
+    try { if (localStorage.getItem('push_no') && Date.now() - Number(localStorage.getItem('push_no')) < 14 * 86400e3) return; } catch (_) { /* sin storage */ }
+    const e = await pushEstado();
+    let html = '';
+    if (e.soportado && e.permiso !== 'denied' && !(e.suscripto && e.permiso === 'granted')) html = `<div class="push-ban"><span>🔔</span><div><b>Recibí los avisos de Vinilo en tu celular</b><small>Recordatorios, turnos y conteos, aunque la app esté cerrada.</small></div><button class="btn sm" id="pb-on">Activar</button><button class="pb-x" id="pb-no" title="Ahora no">✕</button></div>`;
+    else if (!e.soportado && e.ios && !e.instalada) html = `<div class="push-ban"><span>📲</span><div><b>Instalá Vinilo en tu iPhone para recibir avisos</b><small>Compartir ⬆︎ → Agregar a pantalla de inicio, y abrila desde el ícono.</small></div><button class="btn sm sec" id="pb-ios">Cómo</button><button class="pb-x" id="pb-no" title="Ahora no">✕</button></div>`;
+    cont.innerHTML = html;
+    if ($('#pb-on')) $('#pb-on').onclick = async () => { try { await activarPush(); cont.innerHTML = ''; toast('Notificaciones activadas 🔔'); api('/api/push/prueba', { method: 'POST' }).catch(() => {}); } catch (err) { toast(err.message, true); } };
+    if ($('#pb-ios')) $('#pb-ios').onclick = () => misNotificaciones();
+    if ($('#pb-no')) $('#pb-no').onclick = () => { cont.innerHTML = ''; try { localStorage.setItem('push_no', String(Date.now())); } catch (_) { /* sin storage */ } };
+  }
 
   async function miWhatsapp() {
     let d; try { d = await api('/api/me/whatsapp'); } catch (err) { return toast(err.message, true); }
@@ -350,7 +421,7 @@
     let html = `<h1>Hola, ${esc(S.user.nombre.split(' ')[0])}</h1>
       <p class="sub">${esc(S.user.rol_nombre || ROL_LBL[S.user.rol] || S.user.rol)}${S.user.proveedor ? ' · ' + esc(S.user.proveedor) : ''} · ${new Date().toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' })}
       · ${total ? `<b>${total} ${total === 1 ? 'tarea pendiente' : 'tareas pendientes'}</b>` : 'sin tareas pendientes'}</p>`;
-    html += `<div id="panel-clima"></div>`;
+    html += `<div id="panel-push"></div><div id="panel-clima"></div>`;
     if (puede('programacion')) html += `<div id="panel-cal"></div>`;
     html += tareas.length ? `<div class="tareas">${tareas.map((t) => `
       <section class="tarea pri-${t.prioridad}">
@@ -381,6 +452,7 @@
     }
     main.innerHTML = html;
     climaNoche($('#panel-clima'));
+    bannerPush($('#panel-push'));
     if ($('#panel-cal')) calendarioHoyManiana($('#panel-cal'));
     if ($('#panel-prog')) misProximosDias($('#panel-prog'), { titulo: 'Tus próximos días de trabajo', dias: 7 });
     if ($('#panel-horas')) api('/api/horas/mias').then((h) => {
@@ -1336,6 +1408,233 @@
         <p class="stock-hint">Los días que no aparecen son franco.</p>`;
     } catch (_) { /* sin datos */ }
   }
+
+  // ---------- Checklist de apertura y cierre ----------
+  const CK_ICO = { APERTURA: '🌅', CIERRE: '🌙', OTRO: '📋' };
+  const tabsCk = (act) => (puede('checklistConfig') ? `<div class="tabs"><a href="#/checklist" class="${act === 'hoy' ? 'on' : ''}">Hoy</a><a href="#/checklist?tab=historial" class="${act === 'historial' ? 'on' : ''}">Historial</a><a href="#/checklist?tab=plantillas" class="${act === 'plantillas' ? 'on' : ''}">Plantillas</a></div>` : '');
+  VIEWS.checklist = async (main) => {
+    const q = new URLSearchParams(location.hash.split('?')[1] || '');
+    if (q.get('r')) return vistaRegistroCk(main, Number(q.get('r')));
+    if (q.get('tab') === 'historial' && puede('checklistConfig')) return historialCk(main);
+    if (q.get('tab') === 'plantillas' && puede('checklistConfig')) return plantillasCk(main);
+    let sel = q.get('s') || (() => { try { return localStorage.getItem('ck_suc'); } catch (_) { return null; } })();
+    const d = await api('/api/checklist/hoy' + (sel ? '?sucursal_id=' + sel : ''));
+    try { if (d.sucursal) localStorage.setItem('ck_suc', d.sucursal.id); } catch (_) { /* sin storage */ }
+    const fechaLarga = (f) => new Date(f + 'T12:00:00').toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' });
+    main.innerHTML = `${tabsCk('hoy')}<h1>Checklist del local</h1><p class="sub">Jornada del <b>${fechaLarga(d.jornada)}</b>${d.jornada !== hoyISO() ? ' (el cierre de la madrugada cuenta para el día en que abrió)' : ''}.</p>
+      ${d.sucursales.length > 1 ? `<div class="ct-chips" style="margin-bottom:12px">${d.sucursales.map((s) => `<button class="ct-chip ${s.id === d.sucursal.id ? 'on' : ''}" data-s="${s.id}">${esc(s.nombre)}</button>`).join('')}</div>` : ''}
+      ${!d.sucursales.length ? '<div class="card empty">No hay sucursales cargadas.</div>' : d.checklists.length ? `<div class="ck-cards">${d.checklists.map((c) => {
+        const r = c.registro, pct = r ? Math.round((r.hechos / Math.max(1, c.items)) * 100) : 0, ok = r && r.estado === 'COMPLETO';
+        return `<div class="card ck-card ${ok ? 'ok' : c.vencida ? 'venc' : ''}"><div class="ck-ico">${CK_ICO[c.tipo]}</div>
+          <div class="ck-body"><div class="ck-tit"><b>${esc(c.nombre)}</b>${ok ? '<span class="badge b-COMPLETADO">Completo</span>' : c.vencida ? '<span class="badge b-RECHAZADO">Atrasado</span>' : r ? '<span class="badge b-PENDIENTE">En curso</span>' : ''}</div>
+            <div class="ct-bar"><i style="width:${pct}%"></i></div>
+            <small>${ok ? `✓ Finalizado por ${esc(r.completado_por || '')} · ${fmtFecha(r.completado_en)}` : r ? `${r.hechos} de ${c.items} tareas · empezado por ${esc(r.iniciado_por || '')}` : `${c.items} tareas${c.hora_limite ? ` · hasta las ${esc(c.hora_limite)}` : ''}`}</small></div>
+          <button class="btn ${ok ? 'sec' : ''}" data-ck="${c.plantilla_id}">${ok ? 'Ver' : r ? 'Continuar' : 'Empezar'}</button></div>`; }).join('')}</div>`
+        : '<div class="card empty">No hay checklists para esta sucursal.</div>'}`;
+    $$('[data-s]').forEach((b) => b.onclick = () => { location.hash = '#/checklist?s=' + b.dataset.s; });
+    $$('[data-ck]').forEach((b) => b.onclick = async () => {
+      const c = d.checklists.find((x) => x.plantilla_id == b.dataset.ck);
+      if (c.registro) { location.hash = '#/checklist?r=' + c.registro.id; return; }
+      try { const r = await api('/api/checklist/abrir', { method: 'POST', body: { plantilla_id: c.plantilla_id, sucursal_id: d.sucursal.id, jornada: d.jornada } }); location.hash = '#/checklist?r=' + r.id; }
+      catch (err) { toast(err.message, true); }
+    });
+  };
+
+  async function vistaRegistroCk(main, id) {
+    let d = await api('/api/checklist/registros/' + id);
+    const pend = new Map();
+    const pintar = () => {
+      const oblig = d.items.filter((i) => i.obligatorio), hechos = d.items.filter((i) => i.hecho).length, faltan = oblig.filter((i) => !i.hecho).length;
+      const secciones = [...new Set(d.items.map((i) => i.seccion || ''))];
+      main.innerHTML = `<div class="ct-top"><div class="ct-titulo"><a href="#/checklist${d.estado === 'COMPLETO' || !d.editable ? '' : ''}" class="ct-back">←</a>
+          <div><b>${CK_ICO[d.tipo]} ${esc(d.nombre)} · ${esc(d.sucursal)}</b><small>Jornada ${fmtDia(d.jornada)}${d.estado === 'COMPLETO' ? ` · ✓ Finalizado por ${esc(d.completado_por || '')}, ${fmtFecha(d.completado_en)}` : d.vencida ? ' · <b style="color:var(--accent)">atrasado</b>' : ''}</small></div>
+          ${d.estado !== 'COMPLETO' ? '<button class="btn ghost sm" id="ck-ref" title="Actualizar">🔄</button>' : ''}</div>
+        <div class="ct-bar"><i style="width:${Math.round((hechos / Math.max(1, d.items.length)) * 100)}%"></i></div>
+        <div class="ct-prog"><b>${hechos}</b> de ${d.items.length} tareas${faltan && d.estado !== 'COMPLETO' ? ` · faltan <b>${faltan}</b> obligatorias` : ''}</div></div>
+        ${secciones.map((sec) => `${sec ? `<h3 class="ck-sec">${esc(sec)}</h3>` : ''}<div class="ck-lista">${d.items.filter((i) => (i.seccion || '') === sec).map((i) => `
+          <div class="ck-item ${i.hecho ? 'hecho' : ''}" data-i="${i.id}">
+            <button class="ck-box" ${d.editable ? '' : 'disabled'} aria-label="Marcar">${i.hecho ? '✓' : ''}</button>
+            <div class="ck-txt"><span>${esc(i.texto)}${i.obligatorio ? '' : ' <em>(opcional)</em>'}</span>
+              ${i.tipo_valor ? `<div class="ck-val"><input ${i.tipo_valor === 'NUMERO' ? 'inputmode="decimal"' : ''} value="${esc(i.valor || '')}" placeholder="${i.tipo_valor === 'NUMERO' ? 'Valor' : 'Escribí acá'}" ${d.editable ? '' : 'disabled'}>${i.unidad ? `<b>${esc(i.unidad)}</b>` : ''}</div>` : ''}
+              ${i.nota ? `<div class="ck-nota">📝 ${esc(i.nota)}</div>` : ''}
+              <small>${i.hecho_por ? `${i.hecho ? '✓' : '↺'} ${esc(i.hecho_por)} · ${new Date(i.hecho_en).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}` : ''}${d.editable ? ` <a href="#" data-nota>${i.nota ? 'editar nota' : '+ nota'}</a>` : ''}</small></div></div>`).join('')}</div>`).join('')}
+        ${d.observacion ? `<div class="card mt"><b>Observaciones:</b> ${esc(d.observacion)}</div>` : ''}
+        <div style="height:90px"></div>
+        <div class="ct-pie">${d.estado === 'COMPLETO' ? `<a class="btn sec" href="#/checklist">Volver</a>${puede('checklistConfig') ? '<button class="btn ghost sm" id="ck-reabrir">Reabrir</button>' : ''}`
+          : d.editable ? `<button class="btn" id="ck-fin" ${faltan ? 'disabled' : ''}>${faltan ? `Faltan ${faltan} obligatorias` : 'Finalizar checklist'}</button>` : '<a class="btn sec" href="#/checklist">Volver</a>'}</div>`;
+      enlazar();
+    };
+    const guardar = (i, body, inmediato) => {
+      clearTimeout(pend.get(i.id));
+      pend.set(i.id, setTimeout(async () => {
+        try { const r = await api(`/api/checklist/registros/${id}/items/${i.id}`, { method: 'PUT', body }); pend.delete(i.id);
+          Object.assign(i, { hecho: r.hecho, valor: r.valor, hecho_por: r.hecho_por, hecho_en: new Date().toISOString() }); if (body.nota !== undefined) i.nota = body.nota || null;
+          const y = window.scrollY; pintar(); window.scrollTo(0, y); }
+        catch (err) { pend.delete(i.id); toast(err.message, true); const y = window.scrollY; pintar(); window.scrollTo(0, y); }
+      }, inmediato ? 0 : 700));
+    };
+    const enlazar = () => {
+      $$('.ck-item').forEach((row) => {
+        const i = d.items.find((x) => x.id == row.dataset.i); const inp = $('.ck-val input', row);
+        $('.ck-box', row).onclick = () => {
+          if (!i.hecho && i.tipo_valor && i.obligatorio && !(inp && inp.value.trim())) { toast(`Anotá ${i.unidad ? 'el valor en ' + i.unidad : 'el dato'} primero`, true); if (inp) inp.focus(); return; }
+          if (navigator.vibrate) navigator.vibrate(30);
+          row.classList.toggle('hecho', !i.hecho); $('.ck-box', row).textContent = i.hecho ? '' : '✓';
+          guardar(i, { hecho: !i.hecho, valor: inp ? inp.value : i.valor }, true);
+        };
+        if (inp) inp.addEventListener('input', () => guardar(i, { hecho: !!inp.value.trim() || (!i.tipo_valor && i.hecho), valor: inp.value }));
+        const n = $('[data-nota]', row);
+        if (n) n.onclick = (e) => { e.preventDefault();
+          const m = modal(`<h2>Nota</h2><p class="sub" style="margin-top:-6px">${esc(i.texto)}</p><form id="f-nt2"><textarea name="t" maxlength="300" rows="3" autofocus placeholder="Ej.: falta reponer jabón, heladera 2 hace ruido…">${esc(i.nota || '')}</textarea>
+            <div class="form-actions"><button type="button" class="btn sec" data-close>Cancelar</button><button class="btn">Guardar</button></div></form>`);
+          $('#f-nt2', m).addEventListener('submit', (ev) => { ev.preventDefault(); closeModal(); guardar(i, { hecho: i.hecho, valor: i.valor, nota: ev.target.t.value }, true); }); };
+      });
+      if ($('#ck-ref')) $('#ck-ref').onclick = async () => { d = await api('/api/checklist/registros/' + id); pintar(); toast('Actualizado'); };
+      if ($('#ck-fin')) $('#ck-fin').onclick = () => {
+        const m = modal(`<h2>Finalizar ${esc(d.nombre.toLowerCase())}</h2><p class="sub" style="margin-top:-6px">${esc(d.sucursal)} · jornada ${fmtDia(d.jornada)}</p>
+          <form id="f-fin"><div class="f"><label>Observaciones (opcional)</label><textarea name="o" maxlength="1000" rows="3" placeholder="Novedades, faltantes, algo para avisar…"></textarea></div>
+          <div class="form-actions"><button type="button" class="btn sec" data-close>Cancelar</button><button class="btn">Finalizar</button></div></form>`);
+        $('#f-fin', m).addEventListener('submit', async (e) => { e.preventDefault();
+          try { await api(`/api/checklist/registros/${id}/completar`, { method: 'POST', body: { observacion: e.target.o.value } }); closeModal(); toast('Checklist finalizado ✅'); location.hash = '#/checklist'; }
+          catch (err) { toast(err.message, true); } });
+      };
+      if ($('#ck-reabrir')) $('#ck-reabrir').onclick = async () => { try { await api(`/api/checklist/registros/${id}/reabrir`, { method: 'POST' }); d = await api('/api/checklist/registros/' + id); pintar(); toast('Checklist reabierto'); } catch (err) { toast(err.message, true); } };
+    };
+    pintar();
+    clearInterval(VIEWS.checklist._t);
+    if (d.estado !== 'COMPLETO') VIEWS.checklist._t = setInterval(async () => {
+      if (!location.hash.startsWith('#/checklist?r=' + id)) return clearInterval(VIEWS.checklist._t);
+      if (pend.size || (document.activeElement && document.activeElement.closest && document.activeElement.closest('.ck-item, .modal'))) return;
+      try { const y = window.scrollY; d = await api('/api/checklist/registros/' + id); pintar(); window.scrollTo(0, y); } catch (_) { /* sin conexión */ }
+    }, 20000);
+  }
+
+  async function historialCk(main) {
+    const q = new URLSearchParams(location.hash.split('?')[1] || '');
+    const d = await api('/api/checklist/historial?' + new URLSearchParams({ desde: q.get('desde') || '', hasta: q.get('hasta') || '' }));
+    main.innerHTML = `${tabsCk('historial')}<h1>Historial de checklists</h1><p class="sub">Del ${fmtDia(d.desde)} al ${fmtDia(d.hasta)}.</p>
+      <div class="toolbar"><div class="f"><label>Desde</label><input type="date" id="hc-d" value="${d.desde}"></div><div class="f"><label>Hasta</label><input type="date" id="hc-h" value="${d.hasta}"></div><button class="btn sec" id="hc-ok">Ver</button></div>
+      ${d.faltantes.length ? `<div class="card" style="background:#fdeceb;border-color:#f3c5c2"><b>⚠️ ${d.faltantes.length} checklists sin hacer</b><div class="stock-hint" style="margin-top:4px">${d.faltantes.slice(0, 12).map((f) => `${fmtDia(f.jornada).slice(0, 5)} ${esc(f.nombre)} ${esc(f.sucursal)}`).join(' · ')}${d.faltantes.length > 12 ? '…' : ''}</div></div>` : ''}
+      ${d.registros.length ? `<div class="tbl-wrap mt"><table><thead><tr><th>Jornada</th><th>Sucursal</th><th>Checklist</th><th>Estado</th><th class="num">Hechas</th><th>Finalizado</th><th>Valores</th><th></th></tr></thead><tbody>
+        ${d.registros.map((r) => `<tr><td style="white-space:nowrap">${diaSem(r.jornada)} ${fmtDia(r.jornada)}</td><td>${esc(r.sucursal)}</td><td>${CK_ICO[r.tipo]} ${esc(r.nombre)}</td>
+          <td><span class="badge ${r.estado === 'COMPLETO' ? 'b-COMPLETADO' : 'b-PENDIENTE'}">${r.estado === 'COMPLETO' ? 'Completo' : 'Incompleto'}</span></td><td class="num">${r.hechos}/${r.items}</td>
+          <td class="muted">${r.completado_en ? `${esc(r.completado_por || '')} · ${new Date(r.completado_en).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' })}` : ''}</td>
+          <td style="font-size:.8rem;max-width:300px">${esc(r.valores || '')}${r.observacion ? `<div class="muted">📝 ${esc(r.observacion)}</div>` : ''}</td><td><a class="btn ghost sm" href="#/checklist?r=${r.id}">Ver</a></td></tr>`).join('')}</tbody></table></div>`
+        : '<div class="card empty mt">No hay checklists en ese período.</div>'}`;
+    $('#hc-ok').onclick = () => { location.hash = `#/checklist?tab=historial&desde=${$('#hc-d').value}&hasta=${$('#hc-h').value}`; };
+  }
+
+  async function plantillasCk(main) {
+    const [pls, sucs] = await Promise.all([api('/api/checklist/plantillas'), api('/api/sucursales')]);
+    main.innerHTML = `${tabsCk('plantillas')}<h1>Plantillas de checklist</h1><p class="sub">Qué tareas tiene cada checklist. Los cambios se aplican desde el próximo checklist que se empiece.</p>
+      <div class="toolbar"><div class="spacer"></div><button class="btn" id="pl-new">+ Nueva plantilla</button></div>
+      <div class="ck-cards">${pls.map((p) => `<div class="card ck-card ${p.activo ? '' : 'inactive'}"><div class="ck-ico">${CK_ICO[p.tipo]}</div>
+        <div class="ck-body"><div class="ck-tit"><b>${esc(p.nombre)}</b>${p.activo ? '' : '<span class="badge">Inactiva</span>'}</div>
+          <small>${p.items.length} tareas · ${esc(p.sucursal || 'Todas las sucursales')}${p.hora_limite ? ` · hasta las ${esc(p.hora_limite)}` : ''}</small></div>
+        <button class="btn sec" data-pl="${p.id}">Editar</button></div>`).join('')}</div>`;
+    const editar = (p) => {
+      p = p || { nombre: '', tipo: 'OTRO', sucursal_id: null, hora_limite: '', activo: true, items: [{ seccion: '', texto: '', tipo_valor: null, unidad: '', obligatorio: true }] };
+      let items = p.items.map((x) => ({ ...x }));
+      const m = modal(`<h2>${p.id ? 'Editar plantilla' : 'Nueva plantilla'}</h2><form id="f-pl">
+        <div class="row"><div class="f"><label>Nombre *</label><input name="nombre" maxlength="80" required value="${esc(p.nombre)}"></div>
+          <div class="f s"><label>Tipo</label><select name="tipo">${['APERTURA', 'CIERRE', 'OTRO'].map((t) => `<option value="${t}" ${p.tipo === t ? 'selected' : ''}>${CK_ICO[t]} ${t === 'OTRO' ? 'Otro' : t[0] + t.slice(1).toLowerCase()}</option>`).join('')}</select></div>
+          <div class="f"><label>Sucursal</label><select name="sucursal_id"><option value="">Todas</option>${sucs.filter((s) => s.activo).map((s) => `<option value="${s.id}" ${p.sucursal_id === s.id ? 'selected' : ''}>${esc(s.nombre)}</option>`).join('')}</select></div>
+          <div class="f s"><label>Hora límite</label><input type="time" name="hora_limite" value="${esc(p.hora_limite || '')}"></div></div>
+        <h3 class="mt" style="margin-bottom:6px">Tareas</h3><div id="pl-items" class="pl-items"></div><button type="button" class="btn ghost sm" id="pl-add">+ Agregar tarea</button>
+        ${p.id ? `<label class="check mt"><input type="checkbox" name="activo" ${p.activo ? 'checked' : ''}> Activa</label>` : ''}
+        <div class="form-actions"><button type="button" class="btn sec" data-close>Cancelar</button><button class="btn">Guardar</button></div></form>`, { wide: true });
+      const leer = () => { $$('.pl-it', m).forEach((r, n) => { Object.assign(items[n], { seccion: $('[data-k=seccion]', r).value, texto: $('[data-k=texto]', r).value, tipo_valor: $('[data-k=tipo]', r).value || null, unidad: $('[data-k=unidad]', r).value, obligatorio: $('[data-k=obl]', r).checked }); }); };
+      const pintarIt = () => {
+        $('#pl-items', m).innerHTML = items.map((x, n) => `<div class="pl-it"><input data-k="seccion" placeholder="Sección" value="${esc(x.seccion || '')}" maxlength="60" list="pl-secs">
+          <input data-k="texto" placeholder="Tarea" value="${esc(x.texto || '')}" maxlength="200" class="pl-txt">
+          <select data-k="tipo"><option value="">Tildar</option><option value="NUMERO" ${x.tipo_valor === 'NUMERO' ? 'selected' : ''}>Número</option><option value="TEXTO" ${x.tipo_valor === 'TEXTO' ? 'selected' : ''}>Texto</option></select>
+          <input data-k="unidad" placeholder="°C, $…" value="${esc(x.unidad || '')}" maxlength="20" class="pl-un">
+          <label class="check" title="Obligatoria"><input type="checkbox" data-k="obl" ${x.obligatorio ? 'checked' : ''}> Oblig.</label>
+          <span class="pl-bt"><button type="button" data-up="${n}" title="Subir">↑</button><button type="button" data-dn="${n}" title="Bajar">↓</button><button type="button" data-rm="${n}" title="Quitar">✕</button></span></div>`).join('')
+          + `<datalist id="pl-secs">${[...new Set(items.map((x) => x.seccion).filter(Boolean))].map((s) => `<option value="${esc(s)}">`).join('')}</datalist>`;
+        $$('[data-up]', m).forEach((b) => b.onclick = () => { leer(); const n = +b.dataset.up; if (n > 0) [items[n - 1], items[n]] = [items[n], items[n - 1]]; pintarIt(); });
+        $$('[data-dn]', m).forEach((b) => b.onclick = () => { leer(); const n = +b.dataset.dn; if (n < items.length - 1) [items[n + 1], items[n]] = [items[n], items[n + 1]]; pintarIt(); });
+        $$('[data-rm]', m).forEach((b) => b.onclick = () => { leer(); items.splice(+b.dataset.rm, 1); pintarIt(); });
+      };
+      pintarIt();
+      $('#pl-add', m).onclick = () => { leer(); items.push({ seccion: items.length ? items[items.length - 1].seccion : '', texto: '', tipo_valor: null, unidad: '', obligatorio: true }); pintarIt(); $$('[data-k=texto]', m).at(-1).focus(); };
+      $('#f-pl', m).addEventListener('submit', async (e) => { e.preventDefault(); leer(); const f = e.target;
+        try { await api(p.id ? '/api/checklist/plantillas/' + p.id : '/api/checklist/plantillas', { method: p.id ? 'PUT' : 'POST', body: { nombre: f.nombre.value, tipo: f.tipo.value, sucursal_id: f.sucursal_id.value || null,
+          hora_limite: f.hora_limite.value, activo: f.activo ? f.activo.checked : true, orden: p.orden || 0, items } }); closeModal(); toast('Plantilla guardada'); router(); }
+        catch (err) { toast(err.message, true); } });
+    };
+    $('#pl-new').onclick = () => editar(null);
+    $$('[data-pl]').forEach((b) => b.onclick = () => editar(pls.find((p) => p.id == b.dataset.pl)));
+  }
+
+  // ---------- Notificaciones push programadas ----------
+  const DIAS_C = [[1, 'Lun'], [2, 'Mar'], [3, 'Mié'], [4, 'Jue'], [5, 'Vie'], [6, 'Sáb'], [0, 'Dom']];
+  const PANTALLAS = [['', 'Inicio (panel)'], ['#/conteo', 'Conteo de inventario'], ['#/checklist', 'Checklist'], ['#/stock', 'Stock por almacén'], ['#/pedidos', 'Notas de pedido'],
+    ['#/programacion', 'Programación'], ['#/mis-horas', 'Mis horas'], ['#/mis-solicitudes', 'Mis solicitudes'], ['#/solicitudes', 'Solicitudes del personal'], ['#/consumos-fudo', 'Consumos desde Fudo']];
+  const diasTxt = (ds) => { const s = [...ds].sort().join(','); if (s === '0,1,2,3,4,5,6') return 'Todos los días'; if (s === '1,2,3,4,5') return 'Lunes a viernes'; if (s === '0,3,4,5,6') return 'Miércoles a domingo'; if (s === '0,4,5,6') return 'Jueves a domingo'; if (s === '0,6') return 'Fines de semana';
+    return DIAS_C.filter(([n]) => ds.includes(n)).map(([, l]) => l).join(', '); };
+  VIEWS.notificaciones = async (main) => {
+    const [d, roles] = await Promise.all([api('/api/push/programadas'), api('/api/roles')]);
+    const nomRol = (c) => (roles.find((r) => r.codigo === c) || { nombre: c }).nombre;
+    const rolesTxt = (rs) => (rs.length ? rs.map(nomRol).join(', ') : 'Todos los usuarios');
+    main.innerHTML = `<h1>Notificaciones push</h1><p class="sub">Avisos que llegan al celular de cada usuario, aunque la app esté cerrada. Se programan por rol, días y hora.</p>
+      <div class="card" style="background:#eaf2fa;border-color:#c9d6e3"><b>¿Quiénes las reciben?</b> Solo quienes las activaron en su celular (botón <b>🔔 Activar</b> del panel).
+        <div class="push-roles">${d.por_rol.map((r) => `<span><b>${esc(nomRol(r.rol))}</b> ${r.activados}/${r.usuarios}</span>`).join('')}</div></div>
+      <div class="toolbar mt"><button class="btn sec" id="nt-ya">Enviar ahora…</button><div class="spacer"></div><button class="btn" id="nt-new">+ Nueva programada</button></div>
+      ${d.programadas.length ? `<div class="nt-lista">${d.programadas.map((p) => `<div class="card nt-card ${p.activo ? '' : 'inactive'}">
+        <div class="nt-hora"><b>${esc(p.hora)}</b><small>${esc(diasTxt(p.dias))}</small></div>
+        <div class="nt-cuerpo"><div class="nt-prev"><img src="/icon-192.png" alt=""><div><b>${esc(p.titulo)}</b><span>${esc(p.mensaje)}</span></div></div>
+          <div class="muted" style="font-size:.82rem;margin-top:6px">👥 ${esc(rolesTxt(p.roles))}${p.link ? ` · abre ${esc((PANTALLAS.find(([v]) => v === p.link) || ['', p.link])[1])}` : ''}${p.ultimo_envio ? ` · último envío ${fmtFecha(p.ultimo_envio)}` : ''}</div></div>
+        <div class="nt-acc"><label class="switch" title="${p.activo ? 'Activa' : 'Pausada'}"><input type="checkbox" data-act="${p.id}" ${p.activo ? 'checked' : ''}><i></i></label>
+          <button class="btn ghost sm" data-send="${p.id}">Enviar ahora</button><button class="btn ghost sm" data-ed="${p.id}">Editar</button></div></div>`).join('')}</div>`
+        : '<div class="card empty">Todavía no hay notificaciones programadas. Creá la primera, por ejemplo: “Recordar realizar conteo” de miércoles a domingo a la 1:00.</div>'}
+      <div class="tip-lic mt" style="background:#eef2f6;border-left-color:#165f96">ℹ️ Se envían a la hora de Argentina. Si el servidor estaba en reposo, la notificación sale apenas se activa, hasta 20 minutos después de la hora programada.</div>
+      ${d.envios.length ? `<h2 class="mt" style="margin-top:20px">Últimos envíos</h2><div class="tbl-wrap"><table><thead><tr><th>Fecha</th><th>Notificación</th><th>Para</th><th class="num">Recibidas</th><th class="num">Sin activar</th></tr></thead><tbody>
+        ${d.envios.map((e) => `<tr><td class="muted" style="white-space:nowrap">${fmtFecha(e.creado_en)}</td><td><b>${esc(e.titulo || '')}</b> <span class="badge">${e.origen === 'PROGRAMADA' ? 'Programada' : e.origen === 'MANUAL' ? 'Manual' : 'Prueba'}</span><div class="muted" style="font-size:.82rem">${esc(e.mensaje || '')}</div></td>
+          <td>${e.origen === 'PRUEBA' ? esc(e.enviado_por_nombre || '') : esc(rolesTxt(String(e.roles || '').split(',').filter(Boolean)))}</td><td class="num"><b>${e.enviados}</b>${Number(e.fallidos) ? ` <span style="color:var(--accent)">(${e.fallidos} fallidas)</span>` : ''}</td><td class="num">${e.sin_activar}</td></tr>`).join('')}</tbody></table></div>` : ''}`;
+    const form = (p, soloEnviar = false) => {
+      p = p || { titulo: '', mensaje: '', link: '', roles: [], dias: [0, 3, 4, 5, 6], hora: '01:00', activo: true };
+      const m = modal(`<h2>${soloEnviar ? 'Enviar ahora' : p.id ? 'Editar notificación' : 'Nueva notificación programada'}</h2><form id="f-nt">
+        <div class="row"><div class="f"><label>Título *</label><input name="titulo" maxlength="80" required value="${esc(p.titulo)}" placeholder="Ej.: Conteo"></div>
+          <div class="f"><label>Al tocarla abre</label><select name="link">${PANTALLAS.map(([v, l]) => `<option value="${v}" ${p.link === v || (!p.link && !v) ? 'selected' : ''}>${l}</option>`).join('')}</select></div></div>
+        <div class="f mt"><label>Mensaje *</label><textarea name="mensaje" maxlength="300" rows="2" required placeholder="Ej.: Recordar realizar conteo">${esc(p.mensaje)}</textarea></div>
+        ${soloEnviar ? '' : `<div class="f mt"><label>Días</label><div class="dias-sel">${DIAS_C.map(([n, l]) => `<label><input type="checkbox" name="dia" value="${n}" ${p.dias.includes(n) ? 'checked' : ''}><span>${l}</span></label>`).join('')}</div>
+          <div class="nt-rap"><a href="#" data-r="0,1,2,3,4,5,6">Todos</a><a href="#" data-r="1,2,3,4,5">Lun a vie</a><a href="#" data-r="0,3,4,5,6">Mié a dom</a><a href="#" data-r="0,4,5,6">Jue a dom</a><a href="#" data-r="0,6">Fin de semana</a></div></div>
+          <div class="row mt"><div class="f s"><label>Hora</label><input type="time" name="hora" value="${esc(p.hora)}" required></div>
+          <div class="f"><p class="stock-hint" style="margin:24px 0 0">La 1:00 del miércoles es la madrugada del martes al miércoles.</p></div></div>`}
+        <div class="f mt"><label>Para los roles <span class="muted" style="font-weight:400">(sin marcar = todos)</span></label><div class="chk-grupo">${roles.filter((r) => r.codigo !== 'PROVEEDOR').map((r) => `<label class="check"><input type="checkbox" name="rol" value="${esc(r.codigo)}" ${p.roles.includes(r.codigo) ? 'checked' : ''}> ${esc(r.nombre)}</label>`).join('')}</div></div>
+        <div class="nt-prev mt" id="nt-prev"></div>
+        ${!soloEnviar && p.id ? `<label class="check mt"><input type="checkbox" name="activo" ${p.activo ? 'checked' : ''}> Activa</label>` : ''}
+        <div class="form-actions">${!soloEnviar && p.id ? '<button type="button" class="btn ghost" id="nt-del" style="margin-right:auto;color:var(--accent)">Eliminar</button>' : ''}
+          <button type="button" class="btn sec" data-close>Cancelar</button><button class="btn">${soloEnviar ? 'Enviar' : 'Guardar'}</button></div></form>`, { wide: true });
+      const f = $('#f-nt', m);
+      const prev = () => { $('#nt-prev', m).innerHTML = `<img src="/icon-192.png" alt=""><div><b>${esc(f.titulo.value || 'Título')}</b><span>${esc(f.mensaje.value || 'Mensaje')}</span></div>`; };
+      [f.titulo, f.mensaje].forEach((i) => i.addEventListener('input', prev)); prev();
+      $$('[data-r]', m).forEach((a) => a.addEventListener('click', (e) => { e.preventDefault(); const set = a.dataset.r.split(','); $$('input[name=dia]', f).forEach((c) => { c.checked = set.includes(c.value); }); }));
+      f.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const body = { titulo: f.titulo.value, mensaje: f.mensaje.value, link: f.link.value, roles: $$('input[name=rol]:checked', f).map((c) => c.value) };
+        try {
+          if (soloEnviar) { const r = await api('/api/push/enviar', { method: 'POST', body }); closeModal(); toast(`Enviada a ${r.enviados} ${r.enviados === 1 ? 'dispositivo' : 'dispositivos'}${r.sin_activar ? ` · ${r.sin_activar} sin activar` : ''}`); return router(); }
+          Object.assign(body, { dias: $$('input[name=dia]:checked', f).map((c) => Number(c.value)), hora: f.hora.value, activo: f.activo ? f.activo.checked : true });
+          await api(p.id ? '/api/push/programadas/' + p.id : '/api/push/programadas', { method: p.id ? 'PUT' : 'POST', body });
+          closeModal(); toast('Notificación guardada'); router();
+        } catch (err) { toast(err.message, true); }
+      });
+      if ($('#nt-del', m)) $('#nt-del', m).onclick = async () => { if (!confirm('¿Eliminar esta notificación programada?')) return; try { await api('/api/push/programadas/' + p.id, { method: 'DELETE' }); closeModal(); toast('Eliminada'); router(); } catch (err) { toast(err.message, true); } };
+    };
+    $('#nt-new').onclick = () => form(null);
+    $('#nt-ya').onclick = () => form(null, true);
+    $$('[data-ed]').forEach((b) => b.addEventListener('click', () => form(d.programadas.find((p) => p.id == b.dataset.ed))));
+    $$('[data-send]').forEach((b) => b.addEventListener('click', async () => {
+      try { const r = await api(`/api/push/programadas/${b.dataset.send}/enviar`, { method: 'POST' }); toast(`Enviada a ${r.enviados} ${r.enviados === 1 ? 'dispositivo' : 'dispositivos'}${r.sin_activar ? ` · ${r.sin_activar} sin activar` : ''}`); router(); }
+      catch (err) { toast(err.message, true); }
+    }));
+    $$('[data-act]').forEach((c) => c.addEventListener('change', async () => {
+      const p = d.programadas.find((x) => x.id == c.dataset.act);
+      try { await api('/api/push/programadas/' + p.id, { method: 'PUT', body: { ...p, activo: c.checked } }); toast(c.checked ? 'Activada' : 'Pausada'); router(); } catch (err) { toast(err.message, true); c.checked = !c.checked; }
+    }));
+  };
 
   // ---------- Conteo de inventario (celular) ----------
   VIEWS.conteo = async (main) => {

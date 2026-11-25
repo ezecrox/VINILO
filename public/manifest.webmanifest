@@ -1,0 +1,16 @@
+{
+  "name": "Vinilo",
+  "short_name": "Vinilo",
+  "description": "Vinilo · Gestión de almacén y personal",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#fdf6ec",
+  "theme_color": "#0f3557",
+  "lang": "es-AR",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/icon-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

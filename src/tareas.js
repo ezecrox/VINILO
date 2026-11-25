@@ -27,6 +27,30 @@ async function calcularTareas(user, { query, fudo, sqlAlm }) {
     return ordenar(t);
   }
 
+  // ---- Checklists de la jornada ----
+  if (p('checklist')) {
+    const { jornadaActual, vencida } = require('./checklist');
+    const jornada = jornadaActual();
+    const { rows: mias } = await query('SELECT sucursal_id FROM usuario_sucursales WHERE usuario_id = $1', [user.id]);
+    const { rows } = await query(
+      `SELECT p.id, p.nombre, p.tipo, p.hora_limite, s.id AS sucursal_id, s.nombre AS sucursal, r.estado,
+              (SELECT count(*)::int FROM checklist_respuestas x JOIN checklist_items i ON i.id = x.item_id WHERE x.registro_id = r.id AND x.hecho AND i.activo) AS hechos,
+              (SELECT count(*)::int FROM checklist_items i WHERE i.plantilla_id = p.id AND i.activo) AS items
+       FROM checklist_plantillas p JOIN sucursales s ON s.activo AND (p.sucursal_id IS NULL OR p.sucursal_id = s.id)
+       LEFT JOIN checklist_registros r ON r.plantilla_id = p.id AND r.sucursal_id = s.id AND r.jornada = $1
+       WHERE p.activo AND coalesce(r.estado, '') <> 'COMPLETO' ${mias.length && user.rol !== 'ADMIN' ? `AND s.id = ANY('{${mias.map((m) => Number(m.sucursal_id)).join(',')}}'::int[])` : ''}
+       ORDER BY s.nombre, p.orden`, [jornada]);
+    // Apertura: se muestra todo el día; cierre: a partir de las 18 h o si ya se empezó
+    const hora = Number(new Date().toLocaleString('en-US', { timeZone: 'America/Argentina/Buenos_Aires', hour: 'numeric', hour12: false })) % 24;
+    const vis = rows.filter((r) => r.tipo !== 'CIERRE' || r.estado || hora >= 18 || hora < 6);
+    const urg = vis.some((r) => vencida(jornada, r.hora_limite));
+    add({ id: 'checklist', prioridad: urg ? 'alta' : 'media', titulo: 'Checklist del local', cantidad: vis.length, link: '#/checklist', accion: 'Completar checklist',
+      detalle: 'Checklists de la jornada que todavía no se finalizaron.',
+      items: vis.slice(0, 6).map((r) => ({ texto: `${r.tipo === 'CIERRE' ? '🌙' : r.tipo === 'APERTURA' ? '🌅' : '📋'} ${r.nombre} · ${r.sucursal}`,
+        sub: `${r.estado ? `${n(r.hechos)} de ${n(r.items)} hechas` : 'Sin empezar'}${vencida(jornada, r.hora_limite) ? ` · pasó la hora límite (${r.hora_limite})` : ''}`, alerta: vencida(jornada, r.hora_limite),
+        link: `#/checklist?s=${r.sucursal_id}` })) });
+  }
+
   // ---- Conteos de inventario en curso ----
   if (p('contar') || p('ajustar')) {
     const { rows } = await query(

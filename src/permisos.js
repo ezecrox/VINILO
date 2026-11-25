@@ -14,6 +14,7 @@ const CATALOGO = [
   { grupo: 'Operaciones', clave: 'contar', menu: 'Conteo de inventario', desc: 'Contar el stock desde el celular (aplicar el conteo requiere Ajuste de inventario)' },
   { grupo: 'Operaciones', clave: 'ajustar', menu: 'Ajuste de inventario', desc: 'Ajustar stock por conteo físico' },
   { grupo: 'Operaciones', clave: 'producir', menu: 'Producción', desc: 'Producir productos con receta (descuenta insumos y suma lo producido)' },
+  { grupo: 'Operaciones', clave: 'checklist', menu: 'Checklist apertura / cierre', desc: 'Completar los checklists de apertura y cierre del local' },
   { grupo: 'Operaciones', clave: 'verMovimientos', menu: 'Movimientos', desc: 'Ver el historial de movimientos' },
   { grupo: 'Personal', clave: 'solicitudes', menu: 'Mis solicitudes', desc: 'Pedir adelantos de sueldo, vacaciones y licencias (examen, enfermedad, etc.)' },
   { grupo: 'Personal', clave: 'misHoras', menu: 'Mis horas', desc: 'Ver las propias horas trabajadas. Todo usuario con N° en el reloj ya lo tiene, sea cual sea su rol' },
@@ -23,6 +24,8 @@ const CATALOGO = [
   { grupo: 'Parametrización', clave: 'productos', menu: 'Productos', desc: 'Maestro de productos, alertas e importación' },
   { grupo: 'Parametrización', clave: 'sucursales', menu: 'Sucursales', desc: 'Alta y edición de sucursales y qué empleados trabajan en cada una' },
   { grupo: 'Parametrización', clave: 'almacenes', menu: 'Almacenes', desc: 'Alta y edición de almacenes' },
+  { grupo: 'Parametrización', clave: 'checklistConfig', menu: 'Checklist apertura / cierre', desc: 'Armar las plantillas de checklist y ver el historial de todos', requiere: 'checklist' },
+  { grupo: 'Parametrización', clave: 'notificaciones', menu: 'Notificaciones push', desc: 'Programar y enviar notificaciones al celular por rol' },
   { grupo: 'Parametrización', clave: 'usuarios', menu: 'Usuarios y roles', desc: 'Usuarios, roles y permisos' },
 ];
 const CLAVES = CATALOGO.map((c) => c.clave);

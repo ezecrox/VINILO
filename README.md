@@ -201,3 +201,14 @@ En **Usuarios → WhatsApp** se ve el estado de la conexión, se manda un mensaj
 ## Conteo de inventario desde el celular
 
 **Operaciones → Conteo de inventario** (permiso `contar`; aplicar requiere `ajustar`). Se crea un conteo por almacén (todos los productos con gestión de stock o una categoría), por defecto **ciego** (quien cuenta no ve el stock del sistema). Varias personas cuentan a la vez desde el celular: botones − / +, cantidad directa o “＋ sumar” lo encontrado en otro lugar; cada producto se guarda al instante y la pantalla se actualiza sola. Búsqueda por nombre o código, lector de código de barras (cámara en Android/Chrome o lector Bluetooth/USB) y asociación de códigos nuevos a productos. Quien puede ajustar revisa diferencias (sistema vs contado), decide qué hacer con lo no contado (dejar o poner en 0) y aplica: el stock pasa a ser lo contado y queda un movimiento de **Ajuste** con referencia al conteo. Un conteo en curso por almacén; aparece como tarea en el panel.
+
+## Notificaciones push al celular
+
+Web Push estándar, sin servicios externos ni costo (claves VAPID generadas solas y guardadas en la base; opcional `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`).
+- Cada usuario las activa desde el banner **🔔 Activar** del panel o desde **🔔 Avisos** en su menú. En iPhone (iOS 16.4+) primero hay que **agregar la app a la pantalla de inicio** y abrirla desde ese ícono.
+- **Parametrización → Notificaciones push** (permiso `notificaciones`): notificaciones programadas por **roles**, **días de la semana** y **hora** (Argentina), con la pantalla que abren al tocarlas; enviar ahora, pausar, historial de envíos y cuántos usuarios de cada rol las tienen activadas.
+- El programador revisa cada 30 s; si el servidor estaba en reposo, envía las de los últimos 20 minutos. En el plan gratuito de Render el servicio se duerme sin tráfico: para que salgan de madrugada conviene un plan pago o un “ping” externo periódico.
+
+## Checklist de apertura y cierre
+
+**Operaciones → Checklist apertura / cierre** (permiso `checklist`, incluido en Empleado y Encargado). Plantillas Apertura y Cierre cargadas por defecto (por secciones: salón, barra, cocina, caja), con tareas para tildar, valores (temperaturas en °C, efectivo en $) y notas. Un checklist por sucursal y jornada (antes de las 6 h cuenta para el día anterior) que varios completan a la vez desde el celular; se finaliza cuando están todas las obligatorias. Panel: checklists pendientes (urgentes después de la hora límite). Con `checklistConfig`: **Historial** (con valores registrados y checklists faltantes) y **Plantillas** (tareas, secciones, tipo de dato, obligatoria, orden, sucursal y hora límite).

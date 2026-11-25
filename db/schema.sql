@@ -503,3 +503,133 @@ BEGIN
     INSERT INTO app_config (clave, valor) VALUES ('limpieza_conteos_solicitud_20261125', now()::text);
   END IF;
 END $$;
+
+-- ===== Notificaciones push (Web Push) =====
+CREATE TABLE IF NOT EXISTS push_suscripciones (
+  id          SERIAL PRIMARY KEY,
+  usuario_id  INT NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+  endpoint    TEXT NOT NULL UNIQUE,
+  p256dh      VARCHAR(200) NOT NULL,
+  auth        VARCHAR(100) NOT NULL,
+  dispositivo VARCHAR(200),
+  creado_en   TIMESTAMPTZ NOT NULL DEFAULT now(),
+  ultimo_ok   TIMESTAMPTZ,
+  fallos      INT NOT NULL DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS push_programadas (
+  id           SERIAL PRIMARY KEY,
+  titulo       VARCHAR(80) NOT NULL,
+  mensaje      VARCHAR(300) NOT NULL,
+  link         VARCHAR(120),
+  roles        TEXT NOT NULL DEFAULT '',        -- códigos de rol separados por coma ('' = todos)
+  dias         VARCHAR(20) NOT NULL,            -- 0=domingo … 6=sábado, separados por coma
+  hora         VARCHAR(5) NOT NULL,             -- HH:MM (hora de Argentina)
+  activo       BOOLEAN NOT NULL DEFAULT TRUE,
+  creado_por   INT REFERENCES usuarios(id),
+  creado_en    TIMESTAMPTZ NOT NULL DEFAULT now(),
+  ultimo_envio TIMESTAMPTZ
+);
+CREATE TABLE IF NOT EXISTS push_envios (
+  id            SERIAL PRIMARY KEY,
+  programada_id INT REFERENCES push_programadas(id) ON DELETE SET NULL,
+  origen        VARCHAR(20) NOT NULL,           -- PROGRAMADA | MANUAL | PRUEBA
+  titulo        VARCHAR(80),
+  mensaje       VARCHAR(300),
+  roles         TEXT,
+  usuarios      INT NOT NULL DEFAULT 0,
+  dispositivos  INT NOT NULL DEFAULT 0,
+  enviados      INT NOT NULL DEFAULT 0,
+  fallidos      INT NOT NULL DEFAULT 0,
+  sin_activar   INT NOT NULL DEFAULT 0,         -- usuarios del rol sin notificaciones activadas
+  enviado_por   INT REFERENCES usuarios(id),
+  creado_en     TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- ===== Checklist de apertura y cierre =====
+CREATE TABLE IF NOT EXISTS checklist_plantillas (
+  id          SERIAL PRIMARY KEY,
+  nombre      VARCHAR(80) NOT NULL,
+  tipo        VARCHAR(20) NOT NULL DEFAULT 'OTRO' CHECK (tipo IN ('APERTURA','CIERRE','OTRO')),
+  sucursal_id INT REFERENCES sucursales(id),     -- NULL = todas las sucursales
+  hora_limite VARCHAR(5),                        -- HH:MM: después de esa hora el panel lo marca urgente
+  activo      BOOLEAN NOT NULL DEFAULT TRUE,
+  orden       INT NOT NULL DEFAULT 0,
+  creado_en   TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS checklist_items (
+  id           SERIAL PRIMARY KEY,
+  plantilla_id INT NOT NULL REFERENCES checklist_plantillas(id) ON DELETE CASCADE,
+  seccion      VARCHAR(60),
+  texto        VARCHAR(200) NOT NULL,
+  orden        INT NOT NULL DEFAULT 0,
+  tipo_valor   VARCHAR(10) CHECK (tipo_valor IN ('NUMERO','TEXTO')),
+  unidad       VARCHAR(20),
+  obligatorio  BOOLEAN NOT NULL DEFAULT TRUE,
+  activo       BOOLEAN NOT NULL DEFAULT TRUE
+);
+CREATE TABLE IF NOT EXISTS checklist_registros (
+  id             SERIAL PRIMARY KEY,
+  plantilla_id   INT NOT NULL REFERENCES checklist_plantillas(id),
+  sucursal_id    INT NOT NULL REFERENCES sucursales(id),
+  jornada        DATE NOT NULL,
+  estado         VARCHAR(20) NOT NULL DEFAULT 'EN_CURSO' CHECK (estado IN ('EN_CURSO','COMPLETO')),
+  iniciado_por   INT REFERENCES usuarios(id),
+  iniciado_en    TIMESTAMPTZ NOT NULL DEFAULT now(),
+  completado_por INT REFERENCES usuarios(id),
+  completado_en  TIMESTAMPTZ,
+  observacion    TEXT,
+  UNIQUE (plantilla_id, sucursal_id, jornada)
+);
+CREATE TABLE IF NOT EXISTS checklist_respuestas (
+  registro_id INT NOT NULL REFERENCES checklist_registros(id) ON DELETE CASCADE,
+  item_id     INT NOT NULL REFERENCES checklist_items(id),
+  hecho       BOOLEAN NOT NULL DEFAULT FALSE,
+  valor       VARCHAR(60),
+  nota        VARCHAR(300),
+  usuario_id  INT REFERENCES usuarios(id),
+  hecho_en    TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (registro_id, item_id)
+);
+DO $$
+DECLARE ap INT; ci INT;
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM app_config WHERE clave = 'seed_checklist') THEN
+    INSERT INTO checklist_plantillas (nombre, tipo, hora_limite, orden) VALUES ('Apertura', 'APERTURA', '20:00', 1) RETURNING id INTO ap;
+    INSERT INTO checklist_items (plantilla_id, seccion, texto, orden, tipo_valor, unidad, obligatorio) VALUES
+      (ap, 'Salón', 'Encender luces, música y cartel', 1, NULL, NULL, TRUE),
+      (ap, 'Salón', 'Salón, mesas y sillas limpias y en su lugar', 2, NULL, NULL, TRUE),
+      (ap, 'Salón', 'Baños limpios y con papel, jabón y toallas', 3, NULL, NULL, TRUE),
+      (ap, 'Barra', 'Temperatura de heladeras de barra', 4, 'NUMERO', '°C', TRUE),
+      (ap, 'Barra', 'Reponer bebidas en heladeras', 5, NULL, NULL, TRUE),
+      (ap, 'Barra', 'Hielo cargado', 6, NULL, NULL, TRUE),
+      (ap, 'Barra', 'Cristalería y vajilla limpias', 7, NULL, NULL, TRUE),
+      (ap, 'Cocina', 'Temperatura de cámara / heladera de cocina', 8, 'NUMERO', '°C', TRUE),
+      (ap, 'Cocina', 'Temperatura del freezer', 9, 'NUMERO', '°C', TRUE),
+      (ap, 'Cocina', 'Encender equipos (horno, freidora, plancha)', 10, NULL, NULL, TRUE),
+      (ap, 'Cocina', 'Mise en place lista', 11, NULL, NULL, TRUE),
+      (ap, 'Cocina', 'Revisar vencimientos de productos abiertos', 12, NULL, NULL, TRUE),
+      (ap, 'Caja', 'Cambio inicial en caja', 13, 'NUMERO', '$', TRUE),
+      (ap, 'Caja', 'Fudo y posnet funcionando', 14, NULL, NULL, TRUE),
+      (ap, 'Caja', 'Revisar reservas y eventos del día', 15, NULL, NULL, FALSE);
+    INSERT INTO checklist_plantillas (nombre, tipo, hora_limite, orden) VALUES ('Cierre', 'CIERRE', '05:00', 2) RETURNING id INTO ci;
+    INSERT INTO checklist_items (plantilla_id, seccion, texto, orden, tipo_valor, unidad, obligatorio) VALUES
+      (ci, 'Caja', 'Cerrar caja en Fudo', 1, NULL, NULL, TRUE),
+      (ci, 'Caja', 'Efectivo contado', 2, 'NUMERO', '$', TRUE),
+      (ci, 'Caja', 'Efectivo guardado en caja fuerte', 3, NULL, NULL, TRUE),
+      (ci, 'Cocina', 'Alimentos guardados, tapados y rotulados con fecha', 4, NULL, NULL, TRUE),
+      (ci, 'Cocina', 'Temperatura de cámara / heladera de cocina', 5, 'NUMERO', '°C', TRUE),
+      (ci, 'Cocina', 'Hornos, freidoras, plancha y gas apagados', 6, NULL, NULL, TRUE),
+      (ci, 'Cocina', 'Cocina y equipos limpios', 7, NULL, NULL, TRUE),
+      (ci, 'Barra', 'Barra y cristalería limpias', 8, NULL, NULL, TRUE),
+      (ci, 'Barra', 'Temperatura de heladeras de barra', 9, 'NUMERO', '°C', TRUE),
+      (ci, 'Barra', 'Botellas abiertas tapadas y guardadas', 10, NULL, NULL, TRUE),
+      (ci, 'Salón', 'Salón y baños limpios', 11, NULL, NULL, TRUE),
+      (ci, 'Salón', 'Basura y reciclables afuera', 12, NULL, NULL, TRUE),
+      (ci, 'Salón', 'Luces, aire, música y cartel apagados', 13, NULL, NULL, TRUE),
+      (ci, 'Salón', 'Puertas y ventanas cerradas, alarma activada', 14, NULL, NULL, TRUE),
+      (ci, 'Salón', 'Novedades para el turno siguiente', 15, 'TEXTO', NULL, FALSE);
+    -- Quien atiende el local completa los checklists
+    UPDATE roles SET permisos = permisos || ',checklist' WHERE codigo IN ('EMPLEADO','ENCARGADO') AND (',' || permisos || ',') NOT LIKE '%,checklist,%';
+    INSERT INTO app_config (clave, valor) VALUES ('seed_checklist', '1');
+  END IF;
+END $$;
