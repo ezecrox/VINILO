@@ -38,7 +38,7 @@ async function calcularTareas(user, { query, fudo, sqlAlm }) {
     add({ id: 'sol-aprobar', prioridad: pronto ? 'alta' : 'media', titulo: 'Solicitudes del personal para responder', cantidad: rows.length, link: '#/solicitudes', accion: 'Revisar solicitudes',
       detalle: 'Adelantos, vacaciones y licencias pendientes de aprobación.',
       items: rows.slice(0, 6).map((r) => ({ texto: `${r.empleado} · ${NOM[r.tipo] || r.tipo}`,
-        sub: r.tipo === 'ADELANTO' ? `$ ${Number(r.monto).toLocaleString('es-AR')}` : `${fmtDia(r.desde)}${r.hasta && r.hasta !== r.desde ? ' al ' + fmtDia(r.hasta) : ''} · ${r.dias} ${Number(r.dias) === 1 ? 'día' : 'días'}`,
+        sub: r.tipo === 'ADELANTO' ? (r.monto === null ? 'Monto a definir' : `$ ${Number(r.monto).toLocaleString('es-AR')}`) : `${fmtDia(r.desde)}${r.hasta && r.hasta !== r.desde ? ' al ' + fmtDia(r.hasta) : ''} · ${r.dias} ${Number(r.dias) === 1 ? 'día' : 'días'}`,
         link: `#/solicitudes?id=${r.id}` })) });
   }
   if (p('solicitudes')) {

@@ -797,7 +797,7 @@
   const SOL_ICO = { ADELANTO: '💵', VACACIONES: '🏖️', EXAMEN: '📚', ENFERMEDAD: '🤒', MATRIMONIO: '💍', NACIMIENTO: '👶', FALLECIMIENTO: '🕊️', MUDANZA: '📦', TRAMITE: '🗂️', OTRO: '📝' };
   const SOL_EST = { PENDIENTE: 'Pendiente', APROBADA: 'Aprobada', RECHAZADA: 'Rechazada', CANCELADA: 'Cancelada' };
   const fmt$ = (n) => (n === null || n === undefined ? '' : '$ ' + Number(n).toLocaleString('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 2 }));
-  const periodoSol = (x) => (x.tipo === 'ADELANTO' ? fmt$(x.monto) + (x.monto_aprobado !== null && x.monto_aprobado !== x.monto ? ` (aprobado ${fmt$(x.monto_aprobado)})` : '')
+  const periodoSol = (x) => (x.tipo === 'ADELANTO' ? (x.monto === null ? 'Monto a definir' : fmt$(x.monto)) + (x.monto_aprobado !== null && x.monto_aprobado !== x.monto ? ` (aprobado ${fmt$(x.monto_aprobado)})` : '')
     : `${fmtDia(x.desde)}${x.hasta && x.hasta !== x.desde ? ' al ' + fmtDia(x.hasta) : ''} · ${x.dias} ${x.dias === 1 ? 'día' : 'días'}`);
 
   async function descargarAdjSol(solId, a) {
@@ -818,7 +818,7 @@
       <div class="f" id="ns-tipo-wrap"><label>Tipo de licencia</label><select name="tipo">${(tipoIni === 'OTRAS' ? otras : tipos).map((t) => `<option value="${t.codigo}" ${t.codigo === tipo0 ? 'selected' : ''}>${SOL_ICO[t.codigo] || ''} ${esc(t.nombre)}</option>`).join('')}</select></div>
       <div id="ns-fechas" class="row mt"><div class="f"><label>Desde *</label><input type="date" name="desde" value="${hoy}"></div><div class="f"><label>Hasta *</label><input type="date" name="hasta" value="${hoy}"></div>
         <div class="f s" style="flex-basis:120px"><label>Días</label><div class="ns-dias" id="ns-dias">1</div></div></div>
-      <div id="ns-monto" class="f mt"><label>Monto que necesitás *</label><input type="number" name="monto" min="1" step="100" inputmode="decimal" placeholder="Ej.: 50000"></div>
+      <div id="ns-monto" class="f mt"><label>Monto que necesitás (opcional)</label><input type="text" name="monto" inputmode="decimal" placeholder="Ej.: 50000"></div>
       <div class="f mt"><label id="ns-mot-lbl">Comentario</label><textarea name="motivo" maxlength="1000"></textarea></div>
       <div class="f mt" id="ns-adj"><label id="ns-adj-lbl">Adjuntar certificado (opcional)</label><input type="file" name="archivo" accept=".pdf,.jpg,.jpeg,.png,.webp,.heic"></div>
       <div class="form-actions"><button type="button" class="btn sec" data-close>Cancelar</button><button class="btn">Enviar solicitud</button></div></form>`);
@@ -947,7 +947,7 @@
       ${x.superpuestas && x.superpuestas.length ? `<div class="card" style="background:#fdf3e1;border-color:#f2d9a6"><b>⚠️ Se superpone con:</b><ul style="margin:6px 0 0 18px;padding:0">
         ${x.superpuestas.map((o) => `<li>${esc(o.empleado)} · ${esc(o.tipo_nombre)} ${fmtDia(o.desde)}–${fmtDia(o.hasta)} (${SOL_EST[o.estado].toLowerCase()})</li>`).join('')}</ul></div>` : ''}
       ${responder ? `<div class="card mt" style="margin-bottom:0">
-        ${x.tipo === 'ADELANTO' ? `<div class="f"><label>Monto a aprobar (pedido ${fmt$(x.monto)})</label><input type="number" id="rs-monto" min="1" step="100" value="${x.monto}"></div>` : ''}
+        ${x.tipo === 'ADELANTO' ? `<div class="f"><label>Monto a aprobar${x.monto !== null ? ` (pedido ${fmt$(x.monto)})` : ''}</label><input type="text" inputmode="decimal" id="rs-monto" value="${x.monto ?? ''}"></div>` : ''}
         <div class="f mt"><label>Respuesta para el empleado (obligatoria si rechazás)</label><textarea id="rs-resp" maxlength="1000"></textarea></div></div>` : ''}
       <div class="form-actions"><button class="btn sec" data-close>Cerrar</button>
         ${responder ? '<button class="btn danger" id="rs-no">Rechazar</button><button class="btn ok" id="rs-si">Aprobar</button>' : ''}</div>`, { wide: true });

@@ -109,9 +109,9 @@ module.exports = function registrarPersonal({ route, query, tx, fail, permitir, 
       if (sol.length) fail(409, `Ya tenés la solicitud #${sol[0].id} en esas fechas`);
     }
     if (def.monto) {
-      monto = Math.round(Number(body.monto) * 100) / 100;
-      if (!Number.isFinite(monto) || monto <= 0) fail(400, 'Indicá el monto del adelanto');
-      if (monto > 100000000) fail(400, 'Monto fuera de rango');
+      // El monto es opcional y no se valida: si no es un número, queda vacío
+      const n2 = Number(String(body.monto ?? '').replace(',', '.'));
+      monto = body.monto === undefined || body.monto === null || body.monto === '' || !Number.isFinite(n2) ? null : Math.round(n2 * 100) / 100;
     }
     const motivo = str(body.motivo, 1000);
     if ((tipo === 'OTRO' || tipo === 'ADELANTO') && !motivo) fail(400, 'Contá brevemente el motivo');
@@ -145,9 +145,10 @@ module.exports = function registrarPersonal({ route, query, tx, fail, permitir, 
       if (!aprobar && !respuesta) fail(400, 'Indicá el motivo del rechazo');
       let montoAp = null;
       if (aprobar && s.tipo === 'ADELANTO') {
-        montoAp = body.monto_aprobado === undefined || body.monto_aprobado === null || body.monto_aprobado === '' ? Number(s.monto) : Math.round(Number(body.monto_aprobado) * 100) / 100;
-        if (!Number.isFinite(montoAp) || montoAp <= 0) fail(400, 'Monto aprobado inválido');
-        if (montoAp > Number(s.monto)) fail(400, 'El monto aprobado no puede superar lo pedido');
+        // Sin validación de monto: se toma lo indicado al aprobar o, si no se indica, lo pedido
+        const v = Number(String(body.monto_aprobado ?? '').replace(',', '.'));
+        montoAp = body.monto_aprobado === undefined || body.monto_aprobado === null || body.monto_aprobado === '' || !Number.isFinite(v)
+          ? (s.monto === null ? null : Number(s.monto)) : Math.round(v * 100) / 100;
       }
       await client.query('UPDATE solicitudes SET estado = $2, respuesta = $3, monto_aprobado = $4, resuelto_por = $5, resuelto_en = now() WHERE id = $1',
         [id, aprobar ? 'APROBADA' : 'RECHAZADA', respuesta, montoAp, user.id]);
