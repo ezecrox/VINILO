@@ -406,3 +406,29 @@ CREATE TABLE IF NOT EXISTS programacion (
   UNIQUE (usuario_id, fecha, sucursal_id)
 );
 CREATE INDEX IF NOT EXISTS programacion_fecha_idx ON programacion (fecha);
+
+-- ===== Eventos (fiesta, show, privado…) con el personal asignado =====
+CREATE TABLE IF NOT EXISTS eventos (
+  id          SERIAL PRIMARY KEY,
+  nombre      VARCHAR(120) NOT NULL,
+  sucursal_id INT NOT NULL REFERENCES sucursales(id),
+  fecha       DATE NOT NULL,
+  hora_desde  TIME,
+  hora_hasta  TIME,
+  descripcion VARCHAR(500),
+  creado_por  INT REFERENCES usuarios(id),
+  creado_en   TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS eventos_fecha_idx ON eventos (fecha);
+-- El personal de un evento se guarda como días programados vinculados al evento
+ALTER TABLE programacion ADD COLUMN IF NOT EXISTS evento_id INT REFERENCES eventos(id) ON DELETE CASCADE;
+
+-- Limpieza única de la programación cargada en pruebas (pedido del 25/11/2026). No toca sucursales ni asignaciones.
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM app_config WHERE clave = 'limpieza_programacion_20261125') THEN
+    DELETE FROM programacion;
+    DELETE FROM eventos;
+    INSERT INTO app_config (clave, valor) VALUES ('limpieza_programacion_20261125', now()::text);
+  END IF;
+END $$;

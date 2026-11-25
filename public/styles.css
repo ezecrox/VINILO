@@ -446,3 +446,13 @@ tbody tr:hover { background: #fffaf2; }
 .md-f b { color: var(--side); }
 .md-t { font-size: .86rem; }
 .md-t small { display: block; color: var(--muted); }
+.pg-chip em { display: block; font-style: normal; font-size: .7rem; color: var(--side); font-weight: 600; margin-top: 1px; }
+.pg-evrow .pg-cel { background: #fffaf0; }
+.pg-evrow .pg-emp, .pg-evrow td { background: #fffaf0; }
+.pg-ev { display: block; width: 100%; text-align: left; border: 1.5px solid var(--c); background: #fff; border-radius: 8px; padding: 4px 6px; margin-bottom: 4px;
+  cursor: pointer; font: inherit; font-size: .74rem; line-height: 1.25; color: var(--ink); box-shadow: 0 1px 0 color-mix(in srgb, var(--c) 40%, transparent); }
+.pg-ev b { display: block; color: var(--side); font-size: .78rem; }
+.pg-ev span { display: block; color: var(--c); font-weight: 600; }
+.pg-ev small { color: var(--muted); }
+.pg-ev:hover { background: color-mix(in srgb, var(--c) 8%, #fff); }
+.md-ev { color: var(--accent) !important; font-weight: 600; }

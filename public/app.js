@@ -1035,7 +1035,8 @@
           <b id="pg-tit" style="min-width:190px;text-align:center"></b><button class="btn ghost sm" id="pg-next" title="Semana siguiente">▶</button>
           <button class="btn ghost sm" id="pg-hoy">Hoy</button></div>
         <div class="spacer"></div>
-        <button class="btn sec" id="pg-copiar" title="Copia lo programado la semana anterior a esta semana">Copiar semana anterior</button>
+        <button class="btn sec" id="pg-copiar" title="Copia lo programado la semana anterior a esta semana (sin eventos)">Copiar semana ant.</button>
+        <button class="btn sec" id="pg-evento">🎉 Nuevo evento</button>
         <button class="btn" id="pg-varios">Programar varios días</button>
       </div>
       <div class="pg-leyenda">${activas.map((s) => `<span><i style="background:${sucColor(s.id, sucs)}"></i>${esc(s.nombre)}</span>`).join('')}</div>
@@ -1059,7 +1060,7 @@
           const ts = porCelda.get(e.id + '|' + f) || [];
           if (ts.length) dTot++; ts.forEach((t) => { mTot += minTurno(t); });
           const libres = sucsEmp(e).filter((id) => !ts.some((t) => t.sucursal_id === id));
-          return `<td class="pg-cel ${f === hoy ? 'hoy' : ''} ${f < hoy ? 'pasado' : ''}">${ts.map((t) => `<button class="pg-chip" style="--c:${sucColor(t.sucursal_id, sucs)}" data-t="${t.id}" title="${esc(t.sucursal)}${t.nota ? ' · ' + esc(t.nota) : ''}"><b>${esc(sucCorto(t.sucursal))}</b><span>${horario(t)}</span></button>`).join('')}
+          return `<td class="pg-cel ${f === hoy ? 'hoy' : ''} ${f < hoy ? 'pasado' : ''}">${ts.map((t) => `<button class="pg-chip" style="--c:${sucColor(t.sucursal_id, sucs)}" data-t="${t.id}" title="${esc(t.sucursal)}${t.evento ? ' · Evento: ' + esc(t.evento) : ''}${t.nota ? ' · ' + esc(t.nota) : ''}"><b>${esc(sucCorto(t.sucursal))}</b><span>${horario(t)}</span>${t.evento ? `<em>🎉 ${esc(t.evento)}</em>` : ''}</button>`).join('')}
             ${libres.length ? `<button class="pg-add" data-u="${e.id}" data-f="${f}" title="Programar">${ts.length ? '+' : '<span>+</span>'}</button>` : ''}</td>`;
         }).join('');
         return `<tr><th class="pg-emp"><b>${esc(e.nombre)}</b><small>${esc(e.rol_nombre)} · ${e.sucursales.map((id) => esc(sucCorto((sucs.find((s) => s.id === id) || {}).nombre))).join(', ') || 'sin sucursal'}</small></th>${celdas}
@@ -1070,10 +1071,16 @@
         const cnt = activas.map((s) => [s, ts.filter((t) => t.sucursal_id === s.id).length]).filter(([, n]) => n);
         return `<td class="pg-pie">${cnt.map(([s, n]) => `<span style="color:${sucColor(s.id, sucs)}">${esc(sucCorto(s.nombre))} <b>${n}</b></span>`).join('') || '<span class="muted">—</span>'}</td>`;
       }).join('');
+      const filaEv = `<tr class="pg-evrow"><th class="pg-emp"><b>🎉 Eventos</b><small>Tocá + para crear uno</small></th>${dias.map((f) => `<td class="pg-cel ${f === hoy ? 'hoy' : ''}">
+        ${data.eventos.filter((e) => e.fecha === f).map((e) => `<button class="pg-ev" style="--c:${sucColor(e.sucursal_id, sucs)}" data-ev="${e.id}" title="${esc(e.sucursal)}${e.descripcion ? ' · ' + esc(e.descripcion) : ''}">
+          <b>${esc(e.nombre)}</b><span>${esc(sucCorto(e.sucursal))}${e.hora_desde ? ' · ' + horario(e) : ''}</span><small>👥 ${e.personal.length} ${e.personal.length === 1 ? 'persona' : 'personas'}</small></button>`).join('')}
+        ${f >= hoy ? `<button class="pg-add pg-add-ev" data-evf="${f}" title="Nuevo evento">+</button>` : ''}</td>`).join('')}<td></td></tr>`;
       $('#pg-tbl').innerHTML = `<div class="tbl-wrap"><table class="pg-tabla"><thead><tr><th>Empleado</th>${dias.map((f) => `<th class="${f === hoy ? 'hoy' : ''}">${diaSem(f)}<small>${fmtDia(f).slice(0, 5)}</small></th>`).join('')}<th class="num">Semana</th></tr></thead>
-        <tbody>${filas}</tbody><tfoot><tr><th>Personas por día</th>${pie}<td></td></tr></tfoot></table></div>
+        <tbody>${filaEv}${filas}</tbody><tfoot><tr><th>Personas por día</th>${pie}<td></td></tr></tfoot></table></div>
         <p class="stock-hint mt">Un día sin programar es franco. Los turnos que pasan la medianoche (ej. 20:00–04:00) se cargan en el día en que empiezan.</p>`;
-      $$('.pg-add').forEach((b) => b.addEventListener('click', () => editarDia(data.empleados.find((e) => e.id == b.dataset.u), b.dataset.f, null)));
+      $$('.pg-ev').forEach((b) => b.addEventListener('click', () => editarEvento(data.eventos.find((e) => e.id == b.dataset.ev))));
+      $$('.pg-add-ev').forEach((b) => b.addEventListener('click', () => editarEvento(null, b.dataset.evf)));
+      $$('.pg-add:not(.pg-add-ev)').forEach((b) => b.addEventListener('click', () => editarDia(data.empleados.find((e) => e.id == b.dataset.u), b.dataset.f, null)));
       $$('.pg-chip').forEach((b) => b.addEventListener('click', () => { const t = data.turnos.find((x) => x.id == b.dataset.t); editarDia(data.empleados.find((e) => e.id === t.usuario_id), t.fecha, t); }));
     };
     const opcSuc = (ids, sel) => ids.map((id) => sucs.find((s) => s.id === id)).filter((s) => s && (s.activo || s.id === sel))
@@ -1105,6 +1112,57 @@
       });
       if (t) $('#pg-del', m).addEventListener('click', async () => {
         try { await api('/api/programacion/' + t.id, { method: 'DELETE' }); closeModal(); toast('Día quitado'); cargar(); } catch (err) { toast(err.message, true); }
+      });
+    };
+    const editarEvento = (ev, fecha) => {
+      const sucIni = ev ? ev.sucursal_id : (st.suc ? Number(st.suc) : (activas[0] || {}).id);
+      const marcados = new Set(ev ? ev.personal : []);
+      const m = modal(`<h2>${ev ? 'Editar evento' : '🎉 Nuevo evento'}</h2><form id="f-ev">
+        <div class="row"><div class="f" style="flex:2"><label>Nombre del evento *</label><input name="nombre" required maxlength="120" value="${esc(ev ? ev.nombre : '')}" placeholder="Ej.: Fiesta de fin de año, show en vivo, cumpleaños privado"></div>
+          <div class="f"><label>Fecha *</label><input type="date" name="fecha" required value="${ev ? ev.fecha : fecha || st.lunes}"></div></div>
+        <div class="row mt"><div class="f"><label>Sucursal *</label><select name="sucursal_id">${sucs.filter((s) => s.activo || (ev && s.id === ev.sucursal_id)).map((s) => `<option value="${s.id}" ${s.id === sucIni ? 'selected' : ''}>${esc(s.nombre)}</option>`).join('')}</select></div>
+          <div class="f"><label>Empieza</label><input type="time" name="hora_desde" value="${esc(ev && ev.hora_desde ? ev.hora_desde : '')}"></div>
+          <div class="f"><label>Termina</label><input type="time" name="hora_hasta" value="${esc(ev && ev.hora_hasta ? ev.hora_hasta : '')}"></div></div>
+        <div class="row mt"><div class="f"><label>Entrada del personal</label><input type="time" name="personal_desde" value="${esc(ev && ev.personal_desde && ev.personal_desde !== ev.hora_desde ? ev.personal_desde : '')}"></div>
+          <div class="f"><label>Salida del personal</label><input type="time" name="personal_hasta" value="${esc(ev && ev.personal_hasta && ev.personal_hasta !== ev.hora_hasta ? ev.personal_hasta : '')}"></div>
+          <div class="f" style="flex:2"><p class="stock-hint" style="margin:24px 0 0">Si el personal entra antes o sale después del evento. Vacío = mismo horario que el evento.</p></div></div>
+        <div class="f mt"><label>Descripción</label><textarea name="descripcion" maxlength="500" rows="2" placeholder="Cantidad de invitados, menú, contacto…">${esc(ev && ev.descripcion ? ev.descripcion : '')}</textarea></div>
+        <div class="f mt"><label>Personal del evento <a href="#" id="ev-todos" style="font-weight:400">(marcar todos)</a></label><div class="chk-grupo chk-lista" id="ev-emp"></div>
+          <div class="stock-hint">Quedan programados ese día en la sucursal del evento. Si ya tenían un turno ahí, se reemplaza por el del evento.</div></div>
+        <div class="form-actions">${ev ? '<button type="button" class="btn ghost" id="ev-del" style="margin-right:auto;color:var(--accent)">Eliminar evento</button>' : ''}
+          <button type="button" class="btn sec" data-close>Cancelar</button><button class="btn">Guardar evento</button></div></form>`, { wide: true });
+      const fm = $('#f-ev', m);
+      const pintar = async () => {
+        $$('input[name=emp]:checked', fm).forEach((c) => marcados.add(Number(c.value)));
+        $$('input[name=emp]:not(:checked)', fm).forEach((c) => marcados.delete(Number(c.value)));
+        const s = Number(fm.sucursal_id.value), f = fm.fecha.value;
+        let ocup = data.turnos;
+        if (f && (f < data.desde || f > data.hasta)) { try { ocup = (await api(`/api/programacion?desde=${f}&hasta=${f}`)).turnos; } catch (_) { ocup = []; } }
+        const lista = data.empleados.filter((e) => e.sucursales.includes(s));
+        $('#ev-emp', m).innerHTML = lista.map((e) => {
+          const otros = ocup.filter((t) => t.usuario_id === e.id && t.fecha === f && (!ev || t.evento_id !== ev.id));
+          return `<label class="check"><input type="checkbox" name="emp" value="${e.id}" ${marcados.has(e.id) ? 'checked' : ''}> ${esc(e.nombre)}
+            ${otros.length ? `<span class="muted" style="font-size:.8rem">· ya programado: ${otros.map((t) => `${esc(sucCorto(t.sucursal))} ${horario(t)}`).join(', ')}</span>` : ''}</label>`;
+        }).join('') || '<span class="muted">Nadie asignado a esta sucursal.</span>';
+      };
+      fm.sucursal_id.addEventListener('change', pintar); fm.fecha.addEventListener('change', pintar);
+      $('#ev-todos', m).addEventListener('click', (e) => { e.preventDefault(); const cs = $$('input[name=emp]', fm); const all = cs.every((c) => c.checked); cs.forEach((c) => { c.checked = !all; }); });
+      pintar();
+      fm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const body = { nombre: fm.nombre.value, fecha: fm.fecha.value, sucursal_id: Number(fm.sucursal_id.value), hora_desde: fm.hora_desde.value, hora_hasta: fm.hora_hasta.value,
+          personal_desde: fm.personal_desde.value, personal_hasta: fm.personal_hasta.value, descripcion: fm.descripcion.value,
+          empleados: $$('input[name=emp]:checked', fm).map((c) => Number(c.value)) };
+        try {
+          const r = await api(ev ? '/api/eventos/' + ev.id : '/api/eventos', { method: ev ? 'PUT' : 'POST', body });
+          closeModal(); toast(`Evento guardado · ${r.personal} ${r.personal === 1 ? 'persona programada' : 'personas programadas'}`);
+          if (body.fecha < st.lunes || body.fecha > addDias(st.lunes, 6)) st.lunes = lunesDe(body.fecha);
+          cargar();
+        } catch (err) { toast(err.message, true); }
+      });
+      if (ev) $('#ev-del', m).addEventListener('click', async () => {
+        if (!confirm(`¿Eliminar el evento "${ev.nombre}"? También se quitan los días programados de su personal.`)) return;
+        try { await api('/api/eventos/' + ev.id, { method: 'DELETE' }); closeModal(); toast('Evento eliminado'); cargar(); } catch (err) { toast(err.message, true); }
       });
     };
     const varios = () => {
@@ -1165,6 +1223,7 @@
     $('#pg-prev').addEventListener('click', () => { st.lunes = addDias(st.lunes, -7); cargar(); });
     $('#pg-next').addEventListener('click', () => { st.lunes = addDias(st.lunes, 7); cargar(); });
     $('#pg-hoy').addEventListener('click', () => { st.lunes = lunesDe(hoy); cargar(); });
+    $('#pg-evento').addEventListener('click', () => { if (!activas.length) return toast('Primero cargá una sucursal', true); editarEvento(null, hoy > st.lunes && hoy <= addDias(st.lunes, 6) ? hoy : st.lunes); });
     $('#pg-varios').addEventListener('click', () => { if (!activas.length) return toast('Primero cargá una sucursal', true); varios(); });
     $('#pg-copiar').addEventListener('click', async () => {
       if (!confirm(`¿Copiar lo programado la semana anterior a la semana del ${fmtDia(st.lunes)}${st.suc ? ' (solo esta sucursal)' : ''}? Los días que ya estén programados no se tocan.`)) return;
@@ -1184,7 +1243,7 @@
       const porDia = new Map(); r.turnos.forEach((t) => { if (!porDia.has(t.fecha)) porDia.set(t.fecha, []); porDia.get(t.fecha).push(t); });
       cont.innerHTML = `<h2 class="mt" style="margin-top:22px">${titulo}</h2><div class="mis-dias">${[...porDia].map(([f, ts]) => `
         <div class="mis-dia ${f === hoy ? 'hoy' : ''}"><div class="md-f"><span>${f === hoy ? 'Hoy' : f === addDias(hoy, 1) ? 'Mañana' : diaSem(f)}</span><b>${fmtDia(f).slice(0, 5)}</b></div>
-          <div>${ts.map((t) => `<div class="md-t"><b>${esc(t.sucursal)}</b> ${horario(t)}${t.nota ? `<small>${esc(t.nota)}</small>` : ''}</div>`).join('')}</div></div>`).join('')}</div>
+          <div>${ts.map((t) => `<div class="md-t"><b>${esc(t.sucursal)}</b> ${horario(t)}${t.evento ? `<small class="md-ev">🎉 Evento: ${esc(t.evento)}</small>` : ''}${t.nota ? `<small>${esc(t.nota)}</small>` : ''}</div>`).join('')}</div></div>`).join('')}</div>
         <p class="stock-hint">Los días que no aparecen son franco.</p>`;
     } catch (_) { /* sin datos */ }
   }

@@ -10,6 +10,11 @@ module.exports = function registrarProgramacion({ route, query, tx, fail, permit
   const turno = (r) => ({
     id: Number(r.id), usuario_id: Number(r.usuario_id), sucursal_id: Number(r.sucursal_id), fecha: r.fecha,
     hora_desde: hhmm(r.hora_desde), hora_hasta: hhmm(r.hora_hasta), nota: r.nota || null, sucursal: r.sucursal,
+    evento_id: r.evento_id ? Number(r.evento_id) : null, evento: r.evento || null,
+  });
+  const evento = (r) => ({
+    id: Number(r.id), nombre: r.nombre, sucursal_id: Number(r.sucursal_id), sucursal: r.sucursal, fecha: r.fecha,
+    hora_desde: hhmm(r.hora_desde), hora_hasta: hhmm(r.hora_hasta), descripcion: r.descripcion || null,
   });
   const idPos = (v) => { const n = toInt(v); return Number.isInteger(n) && n > 0 ? n : null; };
   const pgArr = (a) => `{${a.join(',')}}`; // literal de array (independiente del driver)
@@ -88,14 +93,78 @@ module.exports = function registrarProgramacion({ route, query, tx, fail, permit
        WHERE u.activo AND u.rol <> 'PROVEEDOR'
        GROUP BY u.id, r.nombre ORDER BY u.nombre`);
     const { rows: t } = await query(
-      `SELECT p.*, s.nombre AS sucursal FROM programacion p JOIN sucursales s ON s.id = p.sucursal_id
+      `SELECT p.*, s.nombre AS sucursal, ev.nombre AS evento FROM programacion p JOIN sucursales s ON s.id = p.sucursal_id LEFT JOIN eventos ev ON ev.id = p.evento_id
        WHERE p.fecha BETWEEN $1 AND $2 ${(suc !== null) ? 'AND p.sucursal_id = $3' : ''} ORDER BY p.fecha, p.hora_desde NULLS FIRST`,
       (suc !== null) ? [desde, hasta, suc] : [desde, hasta]);
     const turnos = t.map(turno);
     const conTurno = new Set(turnos.map((x) => x.usuario_id));
     const empleados = emp.map((e) => ({ id: Number(e.id), nombre: e.nombre, rol_nombre: e.rol_nombre, sucursales: (Array.isArray(e.sucursales) ? e.sucursales : String(e.sucursales || '').replace(/[{}]/g, '').split(',')).map(Number).filter((n) => Number.isInteger(n) && n > 0) }))
       .filter((e) => ((suc !== null) ? e.sucursales.includes(suc) : e.sucursales.length) || conTurno.has(e.id));
-    return { desde, hasta, empleados, turnos };
+    const { rows: ev } = await query(
+      `SELECT e.*, s.nombre AS sucursal FROM eventos e JOIN sucursales s ON s.id = e.sucursal_id
+       WHERE e.fecha BETWEEN $1 AND $2 ${(suc !== null) ? 'AND e.sucursal_id = $3' : ''} ORDER BY e.fecha, e.hora_desde NULLS FIRST`,
+      (suc !== null) ? [desde, hasta, suc] : [desde, hasta]);
+    const eventos = ev.map(evento).map((e) => {
+      const pers = turnos.filter((t) => t.evento_id === e.id);
+      return { ...e, personal: pers.map((t) => t.usuario_id), personal_desde: pers[0] ? pers[0].hora_desde : null, personal_hasta: pers[0] ? pers[0].hora_hasta : null };
+    });
+    return { desde, hasta, empleados, turnos, eventos };
+  });
+
+  // ---------- Eventos ----------
+  const guardarEvento = async (user, body, id) => {
+    permitir(user, 'programacion');
+    const nombre = str(body.nombre, 120);
+    if (!nombre) fail(400, 'Poné el nombre del evento');
+    const fecha = fechaOk(body.fecha);
+    if (!fecha) fail(400, 'Indicá la fecha del evento');
+    const sucursal = idPos(body.sucursal_id);
+    const { rows: s } = await query('SELECT id, nombre, activo FROM sucursales WHERE id = $1', [sucursal]);
+    if (!s[0]) fail(400, 'Elegí la sucursal');
+    if (!isTrue(s[0].activo)) fail(400, `La sucursal ${s[0].nombre} está inactiva`);
+    const desde = hora(body.hora_desde), hasta = hora(body.hora_hasta);
+    if ((desde && !hasta) || (!desde && hasta)) fail(400, 'Indicá la hora de inicio y la de fin del evento, o dejá las dos vacías');
+    let pDesde = hora(body.personal_desde), pHasta = hora(body.personal_hasta);
+    if ((pDesde && !pHasta) || (!pDesde && pHasta)) fail(400, 'Indicá la entrada y la salida del personal, o dejá las dos vacías');
+    if (!pDesde) { pDesde = desde; pHasta = hasta; }
+    const empleados = idsValidos(body.empleados);
+    if (empleados.length) {
+      const { rows: a } = await query(
+        `SELECT u.id, u.nombre, EXISTS (SELECT 1 FROM usuario_sucursales us WHERE us.usuario_id = u.id AND us.sucursal_id = $2) AS asignado
+         FROM usuarios u WHERE u.id = ANY($1::int[]) AND u.activo AND u.rol <> 'PROVEEDOR'`, [pgArr(empleados), sucursal]);
+      if (a.length !== empleados.length) fail(400, 'Algún empleado no existe o está inactivo');
+      const fuera = a.filter((x) => !isTrue(x.asignado)).map((x) => x.nombre);
+      if (fuera.length) fail(400, `${fuera.join(', ')} no ${fuera.length === 1 ? 'está asignado' : 'están asignados'} a ${s[0].nombre}`);
+    }
+    return tx(async (c) => {
+      let eid = id;
+      if (id) {
+        const { rows } = await c.query('UPDATE eventos SET nombre = $2, sucursal_id = $3, fecha = $4, hora_desde = $5, hora_hasta = $6, descripcion = $7 WHERE id = $1 RETURNING id',
+          [id, nombre, sucursal, fecha, desde, hasta, str(body.descripcion, 500)]);
+        if (!rows.length) fail(404, 'Evento inexistente');
+        await c.query('DELETE FROM programacion WHERE evento_id = $1', [id]);
+      } else {
+        const { rows } = await c.query('INSERT INTO eventos (nombre, sucursal_id, fecha, hora_desde, hora_hasta, descripcion, creado_por) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id',
+          [nombre, sucursal, fecha, desde, hasta, str(body.descripcion, 500), user.id]);
+        eid = Number(rows[0].id);
+      }
+      // El personal queda programado ese día en esa sucursal, vinculado al evento
+      for (const u of empleados) {
+        await c.query(
+          `INSERT INTO programacion (usuario_id, sucursal_id, fecha, hora_desde, hora_hasta, evento_id, creado_por) VALUES ($1,$2,$3,$4,$5,$6,$7)
+           ON CONFLICT (usuario_id, fecha, sucursal_id) DO UPDATE SET hora_desde = EXCLUDED.hora_desde, hora_hasta = EXCLUDED.hora_hasta, evento_id = EXCLUDED.evento_id`,
+          [u, sucursal, fecha, pDesde, pHasta, eid, user.id]);
+      }
+      return { id: eid, personal: empleados.length };
+    });
+  };
+  route('POST', '/api/eventos', ({ user, body }) => guardarEvento(user, body, null));
+  route('PUT', '/api/eventos/:id', ({ user, body, params }) => guardarEvento(user, body, idPos(params.id)));
+  route('DELETE', '/api/eventos/:id', async ({ user, params }) => {
+    permitir(user, 'programacion');
+    const { rows } = await query('DELETE FROM eventos WHERE id = $1 RETURNING id', [idPos(params.id)]);
+    if (!rows.length) fail(404, 'Evento inexistente');
+    return { ok: true };
   });
 
   // Programar uno o varios empleados en una o varias fechas (crea o actualiza)
@@ -190,7 +259,7 @@ module.exports = function registrarProgramacion({ route, query, tx, fail, permit
        FROM programacion p JOIN usuarios u ON u.id = p.usuario_id AND u.activo
        JOIN sucursales s ON s.id = p.sucursal_id AND s.activo
        JOIN usuario_sucursales us ON us.usuario_id = p.usuario_id AND us.sucursal_id = p.sucursal_id
-       WHERE p.fecha BETWEEN $1::date - 7 AND $1::date - 1 AND ($2::int IS NULL OR p.sucursal_id = $2::int)
+       WHERE p.evento_id IS NULL AND p.fecha BETWEEN $1::date - 7 AND $1::date - 1 AND ($2::int IS NULL OR p.sucursal_id = $2::int)
        ON CONFLICT (usuario_id, fecha, sucursal_id) DO NOTHING RETURNING id`, [desde, (suc !== null) ? suc : null, user.id]);
     return { copiados: rows.length };
   });
@@ -203,7 +272,7 @@ module.exports = function registrarProgramacion({ route, query, tx, fail, permit
     const hasta = h || new Date(Date.parse(desde) + 20 * 86400e3).toISOString().slice(0, 10);
     if (hasta < desde || Date.parse(hasta) - Date.parse(desde) > 93 * 86400e3) fail(400, 'Período inválido');
     const { rows } = await query(
-      `SELECT p.*, s.nombre AS sucursal FROM programacion p JOIN sucursales s ON s.id = p.sucursal_id
+      `SELECT p.*, s.nombre AS sucursal, ev.nombre AS evento FROM programacion p JOIN sucursales s ON s.id = p.sucursal_id LEFT JOIN eventos ev ON ev.id = p.evento_id
        WHERE p.usuario_id = $1 AND p.fecha BETWEEN $2 AND $3 ORDER BY p.fecha, p.hora_desde NULLS FIRST`, [user.id, desde, hasta]);
     return { desde, hasta, turnos: rows.map(turno) };
   });
