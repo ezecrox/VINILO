@@ -330,6 +330,7 @@
     let html = `<h1>Hola, ${esc(S.user.nombre.split(' ')[0])}</h1>
       <p class="sub">${esc(S.user.rol_nombre || ROL_LBL[S.user.rol] || S.user.rol)}${S.user.proveedor ? ' · ' + esc(S.user.proveedor) : ''} · ${new Date().toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' })}
       · ${total ? `<b>${total} ${total === 1 ? 'tarea pendiente' : 'tareas pendientes'}</b>` : 'sin tareas pendientes'}</p>`;
+    html += `<div id="panel-clima"></div>`;
     if (puede('programacion')) html += `<div id="panel-cal"></div>`;
     html += tareas.length ? `<div class="tareas">${tareas.map((t) => `
       <section class="tarea pri-${t.prioridad}">
@@ -359,6 +360,7 @@
       html += `<div class="form-actions" style="justify-content:flex-start"><a class="btn" href="#/pedidos?nuevo=1" style="text-decoration:none">+ Nueva nota de pedido</a></div>`;
     }
     main.innerHTML = html;
+    climaNoche($('#panel-clima'));
     if ($('#panel-cal')) calendarioHoyManiana($('#panel-cal'));
     if ($('#panel-prog')) misProximosDias($('#panel-prog'), { titulo: 'Tus próximos días de trabajo', dias: 7 });
     if ($('#panel-horas')) api('/api/horas/mias').then((h) => {
@@ -1251,6 +1253,26 @@
     });
     await cargar();
   };
+
+  // Pronóstico de la noche (18 a 3 h) en el panel
+  async function climaNoche(cont) {
+    if (!cont) return;
+    try {
+      const c = await api('/api/clima');
+      if (!document.body.contains(cont)) return;
+      if (c.error_clima) { cont.innerHTML = `<div class="clima clima-err">🌡️ ${esc(c.error_clima)}</div>`; return; }
+      const r = c.resumen;
+      const hoyN = c.noche === hoyISO();
+      cont.innerHTML = `<section class="clima">
+        <div class="clima-res">
+          <div class="clima-ico">${r.icono}</div>
+          <div><small>${esc(c.ciudad)} · ${hoyN ? 'Esta noche' : 'Noche del ' + fmtDia(c.noche).slice(0, 5)} · ${c.desde} a ${c.hasta} h</small>
+            <b>${r.temp_min}° a ${r.temp_max}°</b><span>${esc(r.texto)} · 💧 ${r.lluvia_prob_max ?? 0}%${r.lluvia_mm ? ` (${String(r.lluvia_mm).replace('.', ',')} mm)` : ''} · 💨 ${r.viento_max} km/h${r.rafagas_max >= 35 ? `, ráfagas ${r.rafagas_max}` : ''}</span>
+            ${c.avisos.length ? `<div class="clima-av">${c.avisos.map((a) => `<em>⚠️ ${esc(a)}</em>`).join('')}</div>` : ''}</div></div>
+        <div class="clima-horas">${c.horas.map((h) => `<div class="${(h.lluvia_prob || 0) >= 50 ? 'llueve' : ''}" title="${esc(h.texto)} · sensación ${h.sensacion}° · viento ${h.viento} km/h"><span>${h.hora.slice(0, 2)} h</span><i>${h.icono}</i><b>${h.temp}°</b><small>💧${h.lluvia_prob ?? 0}%</small></div>`).join('')}</div>
+        <p class="clima-src">Pronóstico ${esc(c.fuente)}${c.desactualizado ? ' (sin conexión, último dato disponible)' : ''}</p></section>`;
+    } catch (_) { cont.innerHTML = ''; }
+  }
 
   // Calendario de hoy y mañana (panel de quien programa): eventos y personal por sucursal
   async function calendarioHoyManiana(cont) {

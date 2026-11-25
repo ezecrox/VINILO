@@ -491,3 +491,23 @@ tbody tr:hover { background: #fffaf2; }
 .tip-lic { background: #fff6e5; border-left: 4px solid #b7791f; border-radius: 0 8px 8px 0; padding: 8px 10px; font-size: .88rem; margin: 0 0 12px; }
 .cal-lic { margin-top: 10px; padding-top: 8px; border-top: 1px dashed var(--line); font-size: .86rem; color: #1f5a37; }
 .md-lic b { color: #1f5a37; }
+/* Pronóstico de la noche */
+.clima { background: linear-gradient(135deg, #0f3557 0%, #154a78 60%, #1c5d93 100%); color: #fff; border-radius: 16px; padding: 14px 16px 8px; margin: 0 0 18px;
+  display: grid; grid-template-columns: minmax(250px, 1fr) 2fr; gap: 14px; align-items: center; box-shadow: 0 4px 14px rgba(15,53,87,.18); }
+.clima-err { display: block; background: #eef2f6; color: var(--muted); padding: 10px 14px; box-shadow: none; }
+.clima-res { display: flex; gap: 12px; align-items: center; }
+.clima-ico { font-size: 2.6rem; line-height: 1; }
+.clima-res small { display: block; color: #b9cde0; font-size: .78rem; }
+.clima-res b { display: block; font-size: 1.5rem; line-height: 1.2; }
+.clima-res span { display: block; font-size: .86rem; color: #dce7f2; }
+.clima-av { margin-top: 5px; display: flex; flex-wrap: wrap; gap: 5px; }
+.clima-av em { font-style: normal; background: var(--accent); color: #fff; border-radius: 99px; padding: 1px 9px; font-size: .76rem; font-weight: 700; }
+.clima-horas { display: flex; gap: 4px; overflow-x: auto; padding-bottom: 4px; }
+.clima-horas div { flex: 1 0 52px; text-align: center; background: rgba(255,255,255,.09); border-radius: 10px; padding: 6px 2px; }
+.clima-horas div.llueve { background: rgba(120,180,255,.28); }
+.clima-horas span { display: block; font-size: .72rem; color: #b9cde0; }
+.clima-horas i { display: block; font-style: normal; font-size: 1.3rem; line-height: 1.5; }
+.clima-horas b { display: block; font-size: .95rem; }
+.clima-horas small { display: block; font-size: .68rem; color: #b9cde0; }
+.clima-src { grid-column: 1 / -1; margin: 0; font-size: .68rem; color: #8fb0cf; text-align: right; }
+@media (max-width: 860px) { .clima { grid-template-columns: 1fr; } }

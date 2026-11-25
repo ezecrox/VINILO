@@ -177,3 +177,7 @@ render.yaml        Blueprint de Render
 - Ambos permisos se habilitan por rol en Usuarios → Roles.
 - **Eventos** (en Programación, botón *Nuevo evento* o el + de la fila 🎉 Eventos): nombre, sucursal, fecha, horario del evento, horario del personal (si entra antes o sale después) y descripción. El personal elegido queda programado ese día en esa sucursal, vinculado al evento; editar o eliminar el evento actualiza su personal. *Copiar semana anterior* no copia eventos. El empleado ve "Evento: …" en sus próximos días.
 - **Vacaciones y licencias en la programación**: las solicitudes aprobadas se ven en la grilla (celda verde rayada, sin poder programar ese día) y las pendientes con borde punteado. Al aprobar una licencia se quitan de la programación los días que abarca. *Programar varios días* y *Copiar semana* saltean los días de licencia aprobada, y un evento no acepta a quien está de licencia. El panel (hoy/mañana) muestra quién está de licencia y el empleado ve sus días de licencia junto a sus próximos turnos.
+
+## Pronóstico en el panel
+
+Todos los usuarios ven en su panel el pronóstico de la noche (18 a 3 h) de Junín (Bs. As.): temperatura, lluvia, viento y avisos (lluvia probable, tormenta, ráfagas, frío o calor), hora por hora. Fuente: Open-Meteo, sin clave; se actualiza cada 30 minutos. Entre las 0 y las 6 h muestra la noche en curso. La ubicación se puede cambiar con `CLIMA_LAT`, `CLIMA_LON` y `CLIMA_CIUDAD`.
