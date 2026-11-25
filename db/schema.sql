@@ -293,3 +293,40 @@ CREATE TABLE IF NOT EXISTS receta_insumos (
 );
 ALTER TABLE movimientos DROP CONSTRAINT IF EXISTS movimientos_tipo_check;
 ALTER TABLE movimientos ADD CONSTRAINT movimientos_tipo_check CHECK (tipo IN ('RECEPCION','TRANSFERENCIA','CONSUMO','AJUSTE','PRODUCCION'));
+
+-- ===== Personal: solicitudes de empleados =====
+INSERT INTO roles (codigo, nombre, descripcion, permisos, sistema) VALUES
+  ('EMPLEADO', 'Empleado', 'Pide adelantos de sueldo, vacaciones y licencias', 'solicitudes', TRUE)
+ON CONFLICT (codigo) DO NOTHING;
+
+CREATE TABLE IF NOT EXISTS solicitudes (
+  id             SERIAL PRIMARY KEY,
+  usuario_id     INT NOT NULL REFERENCES usuarios(id),
+  tipo           VARCHAR(20) NOT NULL CHECK (tipo IN ('ADELANTO','VACACIONES','EXAMEN','ENFERMEDAD','MATRIMONIO','NACIMIENTO','FALLECIMIENTO','MUDANZA','TRAMITE','OTRO')),
+  desde          DATE,
+  hasta          DATE,
+  dias           INT,
+  monto          NUMERIC(12,2),
+  monto_aprobado NUMERIC(12,2),
+  motivo         TEXT,
+  estado         VARCHAR(20) NOT NULL DEFAULT 'PENDIENTE' CHECK (estado IN ('PENDIENTE','APROBADA','RECHAZADA','CANCELADA')),
+  respuesta      TEXT,
+  resuelto_por   INT REFERENCES usuarios(id),
+  resuelto_en    TIMESTAMPTZ,
+  creado_en      TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CHECK (hasta IS NULL OR desde IS NULL OR hasta >= desde)
+);
+CREATE INDEX IF NOT EXISTS idx_sol_usuario ON solicitudes (usuario_id, creado_en DESC);
+CREATE INDEX IF NOT EXISTS idx_sol_estado ON solicitudes (estado);
+
+CREATE TABLE IF NOT EXISTS solicitud_archivos (
+  id             SERIAL PRIMARY KEY,
+  solicitud_id   INT NOT NULL REFERENCES solicitudes(id) ON DELETE CASCADE,
+  nombre_archivo VARCHAR(200) NOT NULL,
+  mime           VARCHAR(120) NOT NULL,
+  tamano         INT NOT NULL,
+  contenido      BYTEA NOT NULL,
+  subido_por     INT NOT NULL REFERENCES usuarios(id),
+  subido_en      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_solarch ON solicitud_archivos (solicitud_id);

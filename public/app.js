@@ -13,7 +13,7 @@
   const puede = (p) => S.permisos.includes(p);
   const hoyISO = () => new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10);
   const TIPO_LBL = { RECEPCION: 'Recepción', TRANSFERENCIA: 'Transferencia', CONSUMO: 'Consumo', AJUSTE: 'Ajuste', PRODUCCION: 'Producción' };
-  const ROL_LBL = { ADMIN: 'Administrador', RECEPTOR: 'Receptor', ENCARGADO: 'Encargado', REQUIRENTE: 'Requirente', PROVEEDOR: 'Proveedor' };
+  const ROL_LBL = { ADMIN: 'Administrador', RECEPTOR: 'Receptor', ENCARGADO: 'Encargado', REQUIRENTE: 'Requirente', PROVEEDOR: 'Proveedor', EMPLEADO: 'Empleado' };
   const OC_EST = { BORRADOR: 'Borrador', CONFIRMADA: 'Confirmada', PARCIAL: 'Recepción parcial', RECIBIDA: 'Recibida', CERRADA: 'Cerrada', ANULADA: 'Anulada' };
 
   async function api(path, opts = {}) {
@@ -172,6 +172,8 @@
     usuarios: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="M16 4.6a3.5 3.5 0 0 1 0 6.8"/><path d="M18.5 14.5a6.5 6.5 0 0 1 3 5.5"/>',
     'consumos-fudo': '<path d="M6 2h12v20l-3-2-3 2-3-2-3 2V2Z"/><path d="M9 7h6M9 11h6M9 15h4"/>',
     produccion: '<path d="M6 13h12v6a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2v-6Z"/><path d="M4 13h16"/><path d="M8 9c0-2 1.5-2 1.5-4M12 9c0-2 1.5-2 1.5-4M16 9c0-2 1.5-2 1.5-4"/>',
+    'mis-solicitudes': '<rect x="4" y="5" width="16" height="16" rx="2"/><path d="M8 3v4M16 3v4M4 10h16"/><path d="m9 15 2 2 4-4"/>',
+    solicitudes: '<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20a6.5 6.5 0 0 1 13 0"/><path d="m16 11 2 2 4-4"/>',
     salir: '<path d="M15 4h3a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-3"/><path d="M10 16l-4-4 4-4"/><path d="M6 12h10"/>',
     clave: '<circle cx="8" cy="15" r="4"/><path d="m11 12 9-9"/><path d="m17 6 3 3"/>',
   };
@@ -194,6 +196,9 @@
     { id: 'produccion', lbl: 'Producción', ok: () => puede('producir') },
     { id: 'ajuste', lbl: 'Ajuste de inventario', ok: () => puede('ajustar') },
     { id: 'movimientos', lbl: 'Movimientos', ok: () => puede('verMovimientos') },
+    { sec: 'Personal', ok: () => puede('solicitudes') || puede('gestionarSolicitudes') },
+    { id: 'mis-solicitudes', lbl: 'Mis solicitudes', ok: () => puede('solicitudes'), pillSol: true },
+    { id: 'solicitudes', lbl: 'Solicitudes del personal', ok: () => puede('gestionarSolicitudes'), pillSolG: true },
     { sec: 'Parametrización', ok: () => puede('productos') || puede('almacenes') || puede('usuarios') },
     { id: 'productos', lbl: 'Productos', ok: () => puede('productos') },
     { id: 'almacenes', lbl: 'Almacenes', ok: () => puede('almacenes') },
@@ -203,7 +208,7 @@
   function renderShell() {
     const links = NAV.filter((n) => !n.ok || n.ok()).map((n) => n.sec
       ? `<div class="sec">${n.sec}</div>`
-      : `<a class="nav" href="#/${n.id}" data-nav="${n.id}">${icono(n.id)}<span class="lbl">${n.lbl}</span>${n.pill ? '<span class="pill" id="pill-ped" hidden></span>' : ''}${n.pillOc ? '<span class="pill" id="pill-oc" hidden></span>' : ''}${n.pillCf ? '<span class="pill" id="pill-cf" hidden></span>' : ''}</a>`).join('');
+      : `<a class="nav" href="#/${n.id}" data-nav="${n.id}">${icono(n.id)}<span class="lbl">${n.lbl}</span>${n.pill ? '<span class="pill" id="pill-ped" hidden></span>' : ''}${n.pillOc ? '<span class="pill" id="pill-oc" hidden></span>' : ''}${n.pillCf ? '<span class="pill" id="pill-cf" hidden></span>' : ''}${n.pillSolG ? '<span class="pill" id="pill-solg" hidden></span>' : ''}</a>`).join('');
     $('#app').innerHTML = `
       <div class="topbar"><button id="menu-btn" aria-label="Menú">☰</button><span class="logo-tile sm"><img src="/logo.png" alt=""></span><b>VINILO</b></div>
       <div class="layout">
@@ -227,6 +232,12 @@
         const pend = await api('/api/pedidos?estado=PENDIENTE');
         const pill = $('#pill-ped');
         if (pill) { pill.textContent = pend.length; pill.hidden = pend.length === 0; }
+      }
+      const pillSg = $('#pill-solg');
+      if (pillSg) {
+        const r = await api('/api/solicitudes?todas=1&estado=PENDIENTE');
+        const n = r.solicitudes.filter((x) => x.usuario_id !== S.user.id).length;
+        pillSg.textContent = n; pillSg.hidden = n === 0;
       }
       const pillCf = $('#pill-cf');
       if (pillCf && puede('consumir')) {
@@ -303,6 +314,14 @@
     if (d.almacenes) {
       html += `<h2 class="mt" style="margin-top:28px">Resumen de stock</h2><div class="resumen">${d.almacenes.filter((a) => a.activo).map((a) => `
         <a href="#/stock?alm=${a.id}"><span>${esc(a.nombre)}</span><b>${fmtN(a.unidades)}</b><small>${fmtN(a.productos)} productos</small></a>`).join('')}</div>`;
+    }
+    if (puede('solicitudes') && !puede('verStock')) {
+      html += `<h2 class="mt" style="margin-top:28px">¿Qué necesitás pedir?</h2><div class="sol-tipos">
+        <a href="#/mis-solicitudes?nueva=ADELANTO" class="sol-tipo"><span>💵</span>Adelanto de sueldo</a>
+        <a href="#/mis-solicitudes?nueva=VACACIONES" class="sol-tipo"><span>🏖️</span>Vacaciones</a>
+        <a href="#/mis-solicitudes?nueva=EXAMEN" class="sol-tipo"><span>📚</span>Día por examen</a>
+        <a href="#/mis-solicitudes?nueva=ENFERMEDAD" class="sol-tipo"><span>🤒</span>Enfermedad</a>
+        <a href="#/mis-solicitudes?nueva=OTRAS" class="sol-tipo"><span>📝</span>Otra licencia</a></div>`;
     }
     if (S.user.rol === 'REQUIRENTE') {
       html += `<div class="form-actions" style="justify-content:flex-start"><a class="btn" href="#/pedidos?nuevo=1" style="text-decoration:none">+ Nueva nota de pedido</a></div>`;
@@ -772,6 +791,176 @@
     $('#pd-alm').addEventListener('change', pintar);
     pintar();
   };
+
+
+  // ---------- Personal: solicitudes ----------
+  const SOL_ICO = { ADELANTO: '💵', VACACIONES: '🏖️', EXAMEN: '📚', ENFERMEDAD: '🤒', MATRIMONIO: '💍', NACIMIENTO: '👶', FALLECIMIENTO: '🕊️', MUDANZA: '📦', TRAMITE: '🗂️', OTRO: '📝' };
+  const SOL_EST = { PENDIENTE: 'Pendiente', APROBADA: 'Aprobada', RECHAZADA: 'Rechazada', CANCELADA: 'Cancelada' };
+  const fmt$ = (n) => (n === null || n === undefined ? '' : '$ ' + Number(n).toLocaleString('es-AR', { minimumFractionDigits: 0, maximumFractionDigits: 2 }));
+  const periodoSol = (x) => (x.tipo === 'ADELANTO' ? fmt$(x.monto) + (x.monto_aprobado !== null && x.monto_aprobado !== x.monto ? ` (aprobado ${fmt$(x.monto_aprobado)})` : '')
+    : `${fmtDia(x.desde)}${x.hasta && x.hasta !== x.desde ? ' al ' + fmtDia(x.hasta) : ''} · ${x.dias} ${x.dias === 1 ? 'día' : 'días'}`);
+
+  async function descargarAdjSol(solId, a) {
+    try {
+      const res = await fetch(`/api/solicitudes/${solId}/archivos/${a.id}`, { headers: { Authorization: 'Bearer ' + S.token } });
+      if (!res.ok) throw new Error('No se pudo descargar');
+      const url = URL.createObjectURL(await res.blob());
+      const l = document.createElement('a'); l.href = url; l.download = a.nombre_archivo; l.click();
+      setTimeout(() => URL.revokeObjectURL(url), 2000);
+    } catch (err) { toast(err.message, true); }
+  }
+
+  function nuevaSolicitud(tipoIni, tipos, onDone) {
+    const otras = tipos.filter((t) => !['ADELANTO', 'VACACIONES', 'EXAMEN', 'ENFERMEDAD'].includes(t.codigo));
+    const tipo0 = tipoIni === 'OTRAS' ? otras[0].codigo : tipoIni;
+    const hoy = hoyISO();
+    const m = modal(`<h2 id="ns-tit"></h2><form id="f-ns">
+      <div class="f" id="ns-tipo-wrap"><label>Tipo de licencia</label><select name="tipo">${(tipoIni === 'OTRAS' ? otras : tipos).map((t) => `<option value="${t.codigo}" ${t.codigo === tipo0 ? 'selected' : ''}>${SOL_ICO[t.codigo] || ''} ${esc(t.nombre)}</option>`).join('')}</select></div>
+      <div id="ns-fechas" class="row mt"><div class="f"><label>Desde *</label><input type="date" name="desde" value="${hoy}"></div><div class="f"><label>Hasta *</label><input type="date" name="hasta" value="${hoy}"></div>
+        <div class="f s" style="flex-basis:120px"><label>Días</label><div class="ns-dias" id="ns-dias">1</div></div></div>
+      <div id="ns-monto" class="f mt"><label>Monto que necesitás *</label><input type="number" name="monto" min="1" step="100" inputmode="decimal" placeholder="Ej.: 50000"></div>
+      <div class="f mt"><label id="ns-mot-lbl">Comentario</label><textarea name="motivo" maxlength="1000"></textarea></div>
+      <div class="f mt" id="ns-adj"><label id="ns-adj-lbl">Adjuntar certificado (opcional)</label><input type="file" name="archivo" accept=".pdf,.jpg,.jpeg,.png,.webp,.heic"></div>
+      <div class="form-actions"><button type="button" class="btn sec" data-close>Cancelar</button><button class="btn">Enviar solicitud</button></div></form>`);
+    const f = $('#f-ns', m);
+    const sync = () => {
+      const t = f.tipo.value;
+      const def = tipos.find((x) => x.codigo === t);
+      $('#ns-tit', m).textContent = `${SOL_ICO[t] || ''} ${def.nombre}`;
+      $('#ns-tipo-wrap', m).hidden = tipoIni !== 'OTRAS';
+      $('#ns-fechas', m).hidden = !def.fechas;
+      $('#ns-monto', m).hidden = !def.monto;
+      $('#ns-adj', m).hidden = def.monto;
+      $('#ns-adj-lbl', m).textContent = t === 'ENFERMEDAD' ? 'Certificado médico (podés subirlo ahora o después)' : t === 'EXAMEN' ? 'Constancia de examen (podés subirla ahora o después)' : 'Adjunto (opcional)';
+      $('#ns-mot-lbl', m).textContent = t === 'ADELANTO' || t === 'OTRO' ? 'Motivo *' : t === 'EXAMEN' ? 'Materia / institución' : 'Comentario';
+      const d = Date.parse(f.hasta.value) - Date.parse(f.desde.value);
+      $('#ns-dias', m).textContent = Number.isNaN(d) || d < 0 ? '—' : String(Math.round(d / 86400e3) + 1);
+    };
+    f.tipo.addEventListener('change', sync);
+    f.desde.addEventListener('change', () => { if (f.hasta.value < f.desde.value) f.hasta.value = f.desde.value; sync(); });
+    f.hasta.addEventListener('change', sync);
+    f.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const t = f.tipo.value;
+      const file = f.archivo.files[0];
+      if (file && file.size > 8 * 1024 * 1024) return toast('El archivo supera los 8 MB', true);
+      try {
+        const r = await api('/api/solicitudes', { method: 'POST', body: { tipo: t, desde: f.desde.value, hasta: f.hasta.value, monto: f.monto.value, motivo: f.motivo.value } });
+        if (file && t !== 'ADELANTO') await api(`/api/solicitudes/${r.id}/archivos`, { method: 'POST', body: { nombre: file.name, data: await leerArchivo(file) } });
+        closeModal(); toast('Solicitud enviada ✅'); history.replaceState(null, '', '#/mis-solicitudes'); onDone(); actualizarPill();
+      } catch (err) { toast(err.message, true); }
+    });
+    sync();
+  }
+
+  VIEWS['mis-solicitudes'] = async (main) => {
+    const params = new URLSearchParams(location.hash.split('?')[1] || '');
+    const [tipos, d] = await Promise.all([api('/api/solicitudes/tipos'), api('/api/solicitudes')]);
+    const r = d.resumen;
+    main.innerHTML = `<h1>Mis solicitudes</h1><p class="sub">Pedí adelantos de sueldo, vacaciones y licencias. Te avisamos en el panel cuando te respondan.</p>
+      <div class="sol-tipos">
+        <button class="sol-tipo" data-nueva="ADELANTO"><span>💵</span>Adelanto de sueldo</button>
+        <button class="sol-tipo" data-nueva="VACACIONES"><span>🏖️</span>Vacaciones</button>
+        <button class="sol-tipo" data-nueva="EXAMEN"><span>📚</span>Día por examen</button>
+        <button class="sol-tipo" data-nueva="ENFERMEDAD"><span>🤒</span>Enfermedad</button>
+        <button class="sol-tipo" data-nueva="OTRAS"><span>📝</span>Otra licencia<small>matrimonio, mudanza, trámite…</small></button>
+      </div>
+      <div class="resumen mt" style="margin-top:18px">
+        <a><span>Vacaciones ${new Date().getFullYear()}</span><b>${r.vacaciones}</b><small>días aprobados</small></a>
+        <a><span>Licencias ${new Date().getFullYear()}</span><b>${r.licencias}</b><small>días aprobados</small></a>
+        <a><span>Adelantos del mes</span><b>${fmt$(r.adelantos_mes)}</b><small>aprobados</small></a>
+        <a><span>En espera</span><b>${r.pendientes}</b><small>sin respuesta</small></a></div>
+      <h2 class="mt" style="margin-top:24px">Historial</h2>
+      ${d.solicitudes.length ? `<div class="sol-lista">${d.solicitudes.map((x) => `
+        <div class="sol-card est-${x.estado}"><div class="sol-ico">${SOL_ICO[x.tipo] || '📝'}</div>
+          <div class="sol-body"><div><b>${esc(x.tipo_nombre)}</b> <span class="badge sol-${x.estado}">${SOL_EST[x.estado]}</span></div>
+            <div class="muted">${periodoSol(x)} · pedida ${fmtFecha(x.creado_en)}</div>
+            ${x.motivo ? `<div class="sol-mot">${esc(x.motivo)}</div>` : ''}
+            ${x.respuesta ? `<div class="sol-resp">💬 ${esc(x.respuesta)}${x.resuelto_por_nombre ? ` — ${esc(x.resuelto_por_nombre)}` : ''}</div>` : ''}</div>
+          <div class="sol-acc">${x.archivos ? `<span class="muted" title="Adjuntos">📎 ${x.archivos}</span>` : ''}
+            ${x.tipo !== 'ADELANTO' && x.estado !== 'CANCELADA' ? `<label class="btn ghost sm" title="Adjuntar certificado">Adjuntar<input type="file" data-adj="${x.id}" accept=".pdf,.jpg,.jpeg,.png,.webp,.heic" hidden></label>` : ''}
+            ${x.estado === 'PENDIENTE' ? `<button class="btn ghost sm" data-cancel="${x.id}">Cancelar</button>` : ''}</div></div>`).join('')}</div>`
+        : '<div class="card empty">Todavía no hiciste ninguna solicitud.</div>'}`;
+    const recargar = () => router();
+    $$('[data-nueva]').forEach((b) => b.addEventListener('click', () => nuevaSolicitud(b.dataset.nueva, tipos, recargar)));
+    $$('[data-cancel]').forEach((b) => b.addEventListener('click', async () => {
+      if (!confirm('¿Cancelar esta solicitud?')) return;
+      try { await api(`/api/solicitudes/${b.dataset.cancel}/cancelar`, { method: 'POST' }); toast('Solicitud cancelada'); recargar(); } catch (err) { toast(err.message, true); }
+    }));
+    $$('[data-adj]').forEach((inp) => inp.addEventListener('change', async () => {
+      const file = inp.files[0]; if (!file) return;
+      if (file.size > 8 * 1024 * 1024) return toast('El archivo supera los 8 MB', true);
+      try { await api(`/api/solicitudes/${inp.dataset.adj}/archivos`, { method: 'POST', body: { nombre: file.name, data: await leerArchivo(file) } }); toast('Adjunto subido'); recargar(); }
+      catch (err) { toast(err.message, true); }
+    }));
+    if (params.get('nueva')) nuevaSolicitud(params.get('nueva'), tipos, recargar);
+  };
+
+  VIEWS.solicitudes = async (main) => {
+    const params = new URLSearchParams(location.hash.split('?')[1] || '');
+    const [tipos, usuarios, aus] = await Promise.all([api('/api/solicitudes/tipos'), puede('usuarios') ? api('/api/usuarios') : Promise.resolve([]), api('/api/solicitudes-ausencias')]);
+    main.innerHTML = `<h1>Solicitudes del personal</h1><p class="sub">Adelantos de sueldo, vacaciones y licencias pedidas por los empleados.</p>
+      ${aus.length ? `<div class="card" style="background:#eaf2fa;border-color:#c9d6e3"><b>🗓️ Ausencias aprobadas (próximos 60 días)</b>
+        <div class="aus-lista">${aus.map((a) => `<span class="aus"><b>${esc(a.empleado)}</b> ${SOL_ICO[a.tipo] || ''} ${esc(a.tipo_nombre)} · ${fmtDia(a.desde)}${a.hasta !== a.desde ? '–' + fmtDia(a.hasta) : ''}</span>`).join('')}</div></div>` : ''}
+      <div class="toolbar">
+        <div class="f"><label>Estado</label><select id="sg-e"><option value="PENDIENTE">Pendientes</option><option value="">Todas</option>${Object.entries(SOL_EST).filter(([k]) => k !== 'PENDIENTE').map(([k, v]) => `<option value="${k}">${v}</option>`).join('')}</select></div>
+        <div class="f"><label>Tipo</label><select id="sg-t"><option value="">Todos</option>${tipos.map((t) => `<option value="${t.codigo}">${esc(t.nombre)}</option>`).join('')}</select></div>
+        ${usuarios.length ? `<div class="f"><label>Empleado</label><select id="sg-u"><option value="">Todos</option>${usuarios.filter((u) => u.rol !== 'PROVEEDOR').map((u) => `<option value="${u.id}">${esc(u.nombre)}</option>`).join('')}</select></div>` : ''}
+        <div class="spacer"></div><button class="btn sec" id="sg-csv">Exportar CSV</button>
+      </div><div id="sg-res" class="resumen" style="margin-bottom:12px"></div><div id="sg-tbl"></div>`;
+    let lista = [];
+    const cargar = async () => {
+      const qs = new URLSearchParams({ todas: '1' });
+      if ($('#sg-e').value) qs.set('estado', $('#sg-e').value);
+      if ($('#sg-t').value) qs.set('tipo', $('#sg-t').value);
+      if ($('#sg-u') && $('#sg-u').value) qs.set('usuario_id', $('#sg-u').value);
+      const d = await api('/api/solicitudes?' + qs);
+      lista = d.solicitudes;
+      $('#sg-res').innerHTML = d.resumen ? `<a><span>Vacaciones ${new Date().getFullYear()}</span><b>${d.resumen.vacaciones}</b><small>días aprobados</small></a>
+        <a><span>Licencias ${new Date().getFullYear()}</span><b>${d.resumen.licencias}</b><small>días aprobados</small></a><a><span>Adelantos del mes</span><b>${fmt$(d.resumen.adelantos_mes)}</b><small>aprobados</small></a>` : '';
+      $('#sg-tbl').innerHTML = lista.length ? `<div class="tbl-wrap"><table><thead><tr><th>#</th><th>Empleado</th><th>Tipo</th><th>Período / monto</th><th>Estado</th><th>Pedida</th><th class="num">📎</th><th></th></tr></thead><tbody>
+        ${lista.map((x) => `<tr><td>${x.id}</td><td><b>${esc(x.empleado)}</b></td><td>${SOL_ICO[x.tipo] || ''} ${esc(x.tipo_nombre)}</td><td>${periodoSol(x)}</td>
+          <td><span class="badge sol-${x.estado}">${SOL_EST[x.estado]}</span></td><td class="muted">${fmtFecha(x.creado_en)}</td><td class="num">${x.archivos || ''}</td>
+          <td class="num"><button class="btn ${x.estado === 'PENDIENTE' && x.usuario_id !== S.user.id ? '' : 'ghost'} sm" data-ver="${x.id}">${x.estado === 'PENDIENTE' && x.usuario_id !== S.user.id ? 'Responder' : 'Ver'}</button></td></tr>`).join('')}
+        </tbody></table></div>` : '<div class="card empty">No hay solicitudes para el filtro.</div>';
+      $$('#sg-tbl [data-ver]').forEach((b) => b.addEventListener('click', () => verSolicitud(Number(b.dataset.ver), cargar)));
+    };
+    ['#sg-e', '#sg-t', '#sg-u'].forEach((sel) => { if ($(sel)) $(sel).addEventListener('change', () => cargar().catch((e) => toast(e.message, true))); });
+    $('#sg-csv').onclick = () => descargarCSV(`solicitudes_${hoyISO()}.csv`, [
+      ['Id', 'Empleado', 'Tipo', 'Desde', 'Hasta', 'Dias', 'Monto', 'Monto aprobado', 'Estado', 'Motivo', 'Respuesta', 'Pedida', 'Resuelta por'],
+      ...lista.map((x) => [x.id, x.empleado, x.tipo_nombre, x.desde || '', x.hasta || '', x.dias ?? '', x.monto ?? '', x.monto_aprobado ?? '', SOL_EST[x.estado], x.motivo || '', x.respuesta || '', fmtFecha(x.creado_en), x.resuelto_por_nombre || '']),
+    ]);
+    await cargar();
+    if (params.get('id')) verSolicitud(Number(params.get('id')), cargar);
+  };
+
+  async function verSolicitud(id, onDone) {
+    let x;
+    try { x = await api('/api/solicitudes/' + id); } catch (err) { return toast(err.message, true); }
+    const responder = x.estado === 'PENDIENTE' && x.usuario_id !== S.user.id && puede('gestionarSolicitudes');
+    const m = modal(`<h2>${SOL_ICO[x.tipo] || ''} ${esc(x.tipo_nombre)} · ${esc(x.empleado)}</h2>
+      <p><span class="badge sol-${x.estado}">${SOL_EST[x.estado]}</span> <b>${periodoSol(x)}</b></p>
+      <p class="muted">Pedida ${fmtFecha(x.creado_en)}${x.resuelto_en && x.estado !== 'CANCELADA' ? ` · Resuelta por ${esc(x.resuelto_por_nombre || '')} ${fmtFecha(x.resuelto_en)}` : ''}</p>
+      ${x.motivo ? `<p class="obs">📝 ${esc(x.motivo)}</p>` : ''}${x.respuesta ? `<p class="obs">💬 ${esc(x.respuesta)}</p>` : ''}
+      ${x.adjuntos.length ? `<p><b>Adjuntos:</b> ${x.adjuntos.map((a) => `<button class="btn ghost sm" data-dl="${a.id}">📎 ${esc(a.nombre_archivo)}</button>`).join(' ')}</p>`
+        : (['ENFERMEDAD', 'EXAMEN'].includes(x.tipo) ? '<p class="stock-hint">Todavía no adjuntó el certificado.</p>' : '')}
+      ${x.superpuestas && x.superpuestas.length ? `<div class="card" style="background:#fdf3e1;border-color:#f2d9a6"><b>⚠️ Se superpone con:</b><ul style="margin:6px 0 0 18px;padding:0">
+        ${x.superpuestas.map((o) => `<li>${esc(o.empleado)} · ${esc(o.tipo_nombre)} ${fmtDia(o.desde)}–${fmtDia(o.hasta)} (${SOL_EST[o.estado].toLowerCase()})</li>`).join('')}</ul></div>` : ''}
+      ${responder ? `<div class="card mt" style="margin-bottom:0">
+        ${x.tipo === 'ADELANTO' ? `<div class="f"><label>Monto a aprobar (pedido ${fmt$(x.monto)})</label><input type="number" id="rs-monto" min="1" step="100" value="${x.monto}"></div>` : ''}
+        <div class="f mt"><label>Respuesta para el empleado (obligatoria si rechazás)</label><textarea id="rs-resp" maxlength="1000"></textarea></div></div>` : ''}
+      <div class="form-actions"><button class="btn sec" data-close>Cerrar</button>
+        ${responder ? '<button class="btn danger" id="rs-no">Rechazar</button><button class="btn ok" id="rs-si">Aprobar</button>' : ''}</div>`, { wide: true });
+    $$('[data-dl]', m).forEach((b) => b.addEventListener('click', () => descargarAdjSol(x.id, x.adjuntos.find((a) => a.id == b.dataset.dl))));
+    const resolver = async (decision) => {
+      try {
+        await api(`/api/solicitudes/${id}/resolver`, { method: 'POST', body: { decision, respuesta: $('#rs-resp', m).value, monto_aprobado: $('#rs-monto', m) ? $('#rs-monto', m).value : undefined } });
+        closeModal(); toast(decision === 'APROBAR' ? 'Solicitud aprobada' : 'Solicitud rechazada'); onDone(); actualizarPill();
+      } catch (err) { toast(err.message, true); }
+    };
+    if ($('#rs-si', m)) $('#rs-si', m).onclick = () => resolver('APROBAR');
+    if ($('#rs-no', m)) $('#rs-no', m).onclick = () => resolver('RECHAZAR');
+  }
 
   // ---------- Movimientos ----------
   VIEWS.movimientos = async (main) => {
@@ -1645,6 +1834,7 @@
 
   function montarVinilito() {
     if (S.user.rol === 'PROVEEDOR' || $('#vn-fab')) return;
+    if (!['verStock', 'verPedidos', 'verCompras', 'consumir', 'recibir', 'verMovimientos', 'compras'].some(puede)) return;
     const root = document.createElement('div');
     root.innerHTML = `
       <button id="vn-fab" class="vn-fab" aria-label="Preguntale a Vinilito" title="Preguntale a Vinilito"><img src="/vinilito-cara.svg" alt=""><span class="vn-fab-txt">Preguntale a Vinilito</span></button>

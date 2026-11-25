@@ -117,6 +117,12 @@ En **Operaciones → Consumos desde Fudo** (ADMIN y RECEPTOR) se elige un perío
 - Los productos vendidos que no están en la app aparecen como "No está en la app" y no se consumen; antes de importar se sincronizan los productos.
 - Un borrador se puede **anular** y el período queda libre para importarlo de nuevo.
 
+## Personal: solicitudes de empleados
+
+- Rol **Empleado** (de sistema): solo ve **Personal → Mis solicitudes**. Pide **adelantos de sueldo** (monto y motivo), **vacaciones** y **licencias** (examen, enfermedad, matrimonio, nacimiento, fallecimiento de familiar, mudanza, trámite, otro) con fechas; se calculan los días corridos. Puede adjuntar certificados (PDF o foto, 8 MB), cancelar mientras está pendiente y ve un resumen anual (vacaciones y licencias aprobadas, adelantos del mes).
+- Permiso **Solicitudes del personal** (ADMIN por defecto, asignable a cualquier rol): lista con filtros, ausencias aprobadas de los próximos 60 días, aviso de superposición con otras ausencias, aprobación (en adelantos se puede aprobar un monto menor) o rechazo con motivo, y exportación CSV. Nadie resuelve su propia solicitud.
+- Panel: quien aprueba ve las pendientes; el empleado, las respuestas recientes.
+
 ## Vinilito, el asistente
 
 Botón flotante abajo a la derecha (no aparece para proveedores). Responde con los datos de la app y **respeta los permisos y almacenes** del usuario. Es de solo lectura: no registra nada, pero lleva a la pantalla correspondiente.

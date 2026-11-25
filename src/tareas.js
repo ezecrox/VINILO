@@ -27,6 +27,32 @@ async function calcularTareas(user, { query, fudo, sqlAlm }) {
     return ordenar(t);
   }
 
+  // ---- Personal ----
+  if (p('gestionarSolicitudes')) {
+    const { rows } = await query(
+      `SELECT s.id, s.tipo, s.desde, s.hasta, s.dias, s.monto, s.creado_en, u.nombre AS empleado FROM solicitudes s JOIN usuarios u ON u.id = s.usuario_id
+       WHERE s.estado = 'PENDIENTE' AND s.usuario_id <> $1 ORDER BY coalesce(s.desde, s.creado_en::date), s.creado_en`, [user.id]);
+    const NOM = { ADELANTO: 'Adelanto', VACACIONES: 'Vacaciones', EXAMEN: 'Examen', ENFERMEDAD: 'Enfermedad', MATRIMONIO: 'Matrimonio', NACIMIENTO: 'Nacimiento',
+      FALLECIMIENTO: 'Fallecimiento', MUDANZA: 'Mudanza', TRAMITE: 'Trámite', OTRO: 'Otro' };
+    const pronto = rows.some((r) => r.desde && new Date(r.desde) - Date.now() < 3 * 86400e3);
+    add({ id: 'sol-aprobar', prioridad: pronto ? 'alta' : 'media', titulo: 'Solicitudes del personal para responder', cantidad: rows.length, link: '#/solicitudes', accion: 'Revisar solicitudes',
+      detalle: 'Adelantos, vacaciones y licencias pendientes de aprobación.',
+      items: rows.slice(0, 6).map((r) => ({ texto: `${r.empleado} · ${NOM[r.tipo] || r.tipo}`,
+        sub: r.tipo === 'ADELANTO' ? `$ ${Number(r.monto).toLocaleString('es-AR')}` : `${fmtDia(r.desde)}${r.hasta && r.hasta !== r.desde ? ' al ' + fmtDia(r.hasta) : ''} · ${r.dias} ${Number(r.dias) === 1 ? 'día' : 'días'}`,
+        link: `#/solicitudes?id=${r.id}` })) });
+  }
+  if (p('solicitudes')) {
+    const { rows } = await query(
+      `SELECT id, tipo, estado, respuesta, resuelto_en FROM solicitudes WHERE usuario_id = $1 AND estado IN ('APROBADA','RECHAZADA') AND resuelto_en > now() - interval '7 days'
+       ORDER BY resuelto_en DESC`, [user.id]);
+    add({ id: 'sol-respuestas', prioridad: 'media', titulo: 'Respuestas a tus solicitudes', cantidad: rows.length, link: '#/mis-solicitudes', accion: 'Ver mis solicitudes',
+      detalle: 'Solicitudes resueltas en los últimos 7 días.',
+      items: rows.slice(0, 6).map((r) => ({ texto: `#${r.id} · ${r.estado === 'APROBADA' ? '✅ Aprobada' : '❌ Rechazada'}`, sub: r.respuesta || '', alerta: r.estado === 'RECHAZADA', link: '#/mis-solicitudes' })) });
+    const { rows: pend } = await query("SELECT count(*)::int AS n FROM solicitudes WHERE usuario_id = $1 AND estado = 'PENDIENTE'", [user.id]);
+    add({ id: 'sol-pendientes', prioridad: 'baja', titulo: 'Solicitudes en espera de respuesta', cantidad: Number(pend[0].n), link: '#/mis-solicitudes', accion: 'Ver mis solicitudes',
+      detalle: 'Todavía no fueron respondidas.', items: [] });
+  }
+
   // ---- Consumos desde Fudo ----
   if (p('consumir')) {
     const { rows: bor } = await query(

@@ -823,6 +823,9 @@ require('./src/vinilito/agente')({ route, query, fail, calcularTareas, fudo, sql
 // ---------- Producción ----------
 require('./src/produccion')({ route, query, tx, fail, permitir, permitirAlguno, almacenActivo, exigirAlmacen, isTrue, toInt, str, veAlmacen });
 
+// ---------- Personal (solicitudes de empleados) ----------
+require('./src/personal')({ route, query, tx, fail, permitir, permitirAlguno, isTrue, toInt, str, fechaOk });
+
 // ---------- Panel ----------
 route('GET', '/api/dashboard', async ({ user }) => {
   const res = { rol: user.rol, pedidos_pendientes: 0, tareas: await calcularTareas(user, { query, fudo, sqlAlm }) };
