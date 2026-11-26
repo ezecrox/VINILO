@@ -33,7 +33,10 @@ input{font:700 18px Nunito;padding:14px;border:2px solid var(--line);border-radi
 .lado b{display:block;font:30px "Lilita One"}
 .estado{text-align:center;font-weight:800;color:#e8c9bf;min-height:24px}
 .pad{flex:1;position:relative;border-radius:22px;background:repeating-linear-gradient(0deg,#2a1b17 0 22px,#251714 22px 44px);border:3px solid #3d2a25;touch-action:none;user-select:none;overflow:hidden;min-height:260px}
-.pad .pala{position:absolute;left:12%;right:12%;height:22%;border-radius:16px;display:grid;place-items:center;font:20px "Lilita One";transition:background .2s;box-shadow:0 8px 20px rgba(0,0,0,.4)}
+.pad .pala{position:absolute;top:0;left:12%;right:12%;height:22%;border-radius:16px;display:grid;place-items:center;font:20px "Lilita One";box-shadow:0 8px 20px rgba(0,0,0,.4);will-change:transform}
+.cd{position:fixed;inset:0;z-index:50;background:radial-gradient(circle,#5a1a12,#120807 70%);display:grid;place-items:center;text-align:center}
+.cd small{display:block;font-weight:800;color:#ffcf3f;font-size:20px}.cd b{display:block;font:150px/1 "Lilita One",sans-serif;animation:pop .9s cubic-bezier(.2,1.4,.4,1)}.cd b.ya{font-size:64px;color:#7fd78c}
+@keyframes pop{from{transform:scale(2);opacity:0}to{transform:none;opacity:1}}
 .pad.izq .pala{background:linear-gradient(90deg,#e04a3f,#a51d15)}.pad.der .pala{background:linear-gradient(90deg,#43ad52,#24702f)}
 .pad .guia{position:absolute;inset:auto 0 10px;text-align:center;color:#a8908a;font-weight:800;font-size:14px;pointer-events:none}
 .pad.inactivo{opacity:.45}
@@ -90,18 +93,21 @@ function control() {
     <div class="pad ${lado}" id="pad"><div class="pala" id="pala">${esc(nombre)}</div><div class="guia">Arrastrá el dedo hacia arriba y abajo</div></div>
     <div id="extra"></div>`;
   pad = $('#pad'); pala = $('#pala');
-  let ultimo = -1, pend = null, tEnvio = 0;
+  // Envío inmediato: cada movimiento del dedo sale en el próximo cuadro (~60 por segundo), sin esperar
+  let ultimo = -1, pend = null, agendado = false, rect = pad.getBoundingClientRect(), tocando = false;
+  addEventListener('resize', () => { rect = pad.getBoundingClientRect(); });
+  const salir = () => { agendado = false; if (pend != null && Math.abs(pend - ultimo) > 0.001) { enviar({ t: 'y', v: Math.round(pend * 1000) / 1000 }); ultimo = pend; } pend = null; };
   const mover = (clientY) => {
-    const r = pad.getBoundingClientRect(); const v = Math.max(0, Math.min(1, (clientY - r.top) / r.height));
-    pala.style.top = `${v * 78}%`;
-    pend = v; const ahora = performance.now();
-    if (ahora - tEnvio > 30 && Math.abs(v - ultimo) > 0.003) { enviar({ t: 'y', v: Math.round(v * 1000) / 1000 }); ultimo = v; tEnvio = ahora; pend = null; }
+    const v = Math.max(0, Math.min(1, (clientY - rect.top) / rect.height));
+    pala.style.transform = `translateY(${v * 78 / 22 * 100}%)`; pend = v;
+    if (!agendado) { agendado = true; requestAnimationFrame(salir); }
   };
-  setInterval(() => { if (pend != null && Math.abs(pend - ultimo) > 0.003) { enviar({ t: 'y', v: pend }); ultimo = pend; tEnvio = performance.now(); pend = null; } }, 40);
-  pad.addEventListener('pointerdown', (e) => { pad.setPointerCapture(e.pointerId); mover(e.clientY); });
-  pad.addEventListener('pointermove', (e) => { if (e.pressure > 0 || e.pointerType === 'mouse' && e.buttons) mover(e.clientY); });
+  pad.addEventListener('pointerdown', (e) => { rect = pad.getBoundingClientRect(); tocando = true; pad.setPointerCapture(e.pointerId); mover(e.clientY); });
+  const ev = 'onpointerrawupdate' in pad ? 'pointerrawupdate' : 'pointermove';
+  pad.addEventListener(ev, (e) => { if (tocando || (e.pointerType === 'mouse' && e.buttons)) mover(e.clientY); });
+  pad.addEventListener('pointerup', () => { tocando = false; }); pad.addEventListener('pointercancel', () => { tocando = false; });
   pad.addEventListener('touchmove', (e) => { e.preventDefault(); }, { passive: false });
-  pala.style.top = "39%";
+  pala.style.top = '0'; pala.style.transform = `translateY(${0.5 * 78 / 22 * 100}%)`;
   actualizar();
 }
 
@@ -110,7 +116,8 @@ function actualizar() {
   const yo = lado, otro = lado === 'izq' ? 'der' : 'izq';
   if (est.izq != null) $('#marc').textContent = `${est.izq} – ${est.der}`;
   const nomOtro = est.nombres ? est.nombres[otro] : null;
-  const txt = { esperando: nomOtro ? `Esperando a ${nomOtro}…` : 'Esperando al otro jugador…', cuenta: `¡Prepárate! ${est.cuenta || ''}`, jugando: `Contra ${nomOtro || 'tu rival'} · a ${est.objetivo} puntos`,
+  if (est.fase === 'conteo10') conteoCel(est.restante); else if (cdEl) { cdEl.remove(); cdEl = null; }
+  const txt = { previa: 'Ya estás en la cancha. El juego arranca cuando el admin lo inicie desde la pantalla.', conteo10: '¡Arranca el juego!', esperando: nomOtro ? `Esperando a ${nomOtro}…` : 'Esperando al otro jugador…', cuenta: `¡Prepárate! ${est.cuenta || ''}`, jugando: `Contra ${nomOtro || 'tu rival'} · a ${est.objetivo} puntos`,
     gol: est.ultimoPunto === yo ? '¡Punto para vos! 🍕' : `Punto de ${nomOtro || 'tu rival'}`, pausa: 'Partido en pausa: se desconectó un jugador', fin: '' }[est.fase] || '';
   $('#estado').textContent = txt;
   pad.classList.toggle('inactivo', est.fase === 'fin');
@@ -119,6 +126,17 @@ function actualizar() {
   const rev = $('#rev'); if (rev) rev.onclick = () => { enviar({ t: 'listo' }); rev.textContent = 'Esperando al rival…'; };
 }
 
+let cdEl = null, cdFin = 0;
+function conteoCel(restante) {
+  cdFin = Date.now() + (Number(restante) || 0);
+  if (cdEl) return;
+  cdEl = document.createElement('div'); cdEl.className = 'cd'; cdEl.innerHTML = '<div><small>¡Arranca el Pong Pizza!</small><b id="cdn">10</b></div>'; document.body.appendChild(cdEl);
+  let ult = null;
+  const paso = () => { if (!cdEl) return; const resta = cdFin - Date.now(), n = Math.max(0, Math.ceil(resta / 1000));
+    if (n !== ult) { ult = n; const b = cdEl.querySelector('#cdn'); b.textContent = n > 0 ? n : '¡A jugar!'; b.classList.toggle('ya', n === 0); b.style.animation = 'none'; void b.offsetWidth; b.style.animation = ''; try { navigator.vibrate && navigator.vibrate(n === 0 ? 200 : 30); } catch (_) { /* nada */ } }
+    if (resta <= -900) { cdEl.remove(); cdEl = null; return; } requestAnimationFrame(paso); };
+  requestAnimationFrame(paso);
+}
 async function pedirPantallaEncendida() { try { if ('wakeLock' in navigator && !wake) { wake = await navigator.wakeLock.request('screen'); wake.addEventListener('release', () => { wake = null; }); } } catch (_) { /* no soportado */ } }
 document.addEventListener('visibilitychange', () => { if (!document.hidden && unido) pedirPantallaEncendida(); });
 

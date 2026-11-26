@@ -1864,6 +1864,81 @@
   };
 
   // ---------- Juegos: Pizzaiolo de la Noche (QR) ----------
+  // ---------- Escena previa de los juegos: Sr. Pizzaiolo, horno napolitano, pizzas y logo del Galpón ----------
+  const PIZZA_SVG = `<g><circle r="40" fill="#e0a24a"/><circle r="31" fill="#d8301f"/><circle cx="-12" cy="-8" r="8" fill="#fbf3df"/><circle cx="11" cy="-12" r="7" fill="#fbf3df"/><circle cx="4" cy="12" r="8" fill="#fbf3df"/><circle cx="-14" cy="12" r="5" fill="#fbf3df"/><ellipse cx="14" cy="6" rx="7" ry="3.5" fill="#2f8f3c" transform="rotate(35 14 6)"/>${Array.from({ length: 9 }, (_, i) => { const a = (i / 9) * Math.PI * 2; return `<circle cx="${(Math.cos(a) * 37).toFixed(1)}" cy="${(Math.sin(a) * 37).toFixed(1)}" r="3" fill="#7a3a12"/>`; }).join('')}</g>`;
+  function escenaPrevia({ titulo, texto, qr = '', extra = '' }) {
+    const pizzas = [[180, 120, 0.9, 0], [520, 70, 0.6, 2], [760, 150, 0.7, 4], [1380, 110, 0.8, 1], [1500, 380, 0.55, 3], [300, 330, 0.5, 5]];
+    return `<div class="esc">
+      <svg class="esc-svg" viewBox="0 0 1600 900" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+        <defs>
+          <linearGradient id="esc-cielo" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3a1d15"/><stop offset="1" stop-color="#150b08"/></linearGradient>
+          <pattern id="esc-lad" width="80" height="40" patternUnits="userSpaceOnUse"><rect width="80" height="40" fill="none"/><path d="M0 39.5h80M40 0v20M0 20h80M79.5 20v20" stroke="#000" stroke-opacity=".28" stroke-width="3"/></pattern>
+          <pattern id="esc-mos" width="26" height="22" patternUnits="userSpaceOnUse"><rect width="26" height="22" fill="#b4482b"/><rect x="2" y="2" width="22" height="8" rx="3" fill="#c9603a"/><rect x="-11" y="13" width="22" height="8" rx="3" fill="#9c3a22"/><rect x="15" y="13" width="22" height="8" rx="3" fill="#a94025"/></pattern>
+          <radialGradient id="esc-fuego" cx="50%" cy="85%" r="70%"><stop offset="0" stop-color="#ffe07a"/><stop offset=".4" stop-color="#ff8a1f"/><stop offset="1" stop-color="#7a1f0a" stop-opacity="0"/></radialGradient>
+          <linearGradient id="esc-mad" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#8a5532"/><stop offset="1" stop-color="#5a321b"/></linearGradient>
+          <g id="esc-pz">${PIZZA_SVG}</g>
+        </defs>
+        <rect width="1600" height="900" fill="url(#esc-cielo)"/><rect width="1600" height="760" fill="url(#esc-lad)"/>
+        ${pizzas.map(([x, y, s, d]) => `<g transform="translate(${x} ${y}) scale(${s})"><g class="esc-flota" style="animation-delay:-${d}s"><use href="#esc-pz"/></g></g>`).join('')}
+        <!-- horno napolitano -->
+        <g class="esc-horno">
+          <rect x="330" y="250" width="70" height="140" fill="#8f3a22"/><rect x="318" y="240" width="94" height="22" rx="4" fill="#6e2a17"/>
+          ${[0, 1, 2].map((i) => `<circle class="esc-humo" cx="365" cy="230" r="${18 + i * 6}" fill="#9a8a84" style="animation-delay:${i * 1.1}s"/>`).join('')}
+          <path d="M110 770V600Q110 330 365 330T620 600V770Z" fill="url(#esc-mos)"/><path d="M110 600Q110 330 365 330T620 600" fill="none" stroke="#7d2c16" stroke-width="10"/>
+          <ellipse class="esc-brillo" cx="365" cy="760" rx="330" ry="160" fill="url(#esc-fuego)" opacity=".55"/>
+          <path d="M235 770V650Q235 540 365 540T495 650V770Z" fill="#1c0a05" stroke="#e7d2b8" stroke-width="12"/>
+          <g class="esc-llamas">${[[290, 1], [335, 1.25], [380, 0.95], [425, 1.15]].map(([x, s], i) => `<path d="M${x} 760c-22-34 4-60 14-96 12 36 40 62 18 96z" fill="${i % 2 ? '#ffb13b' : '#ff7a1f'}" style="transform-origin:${x + 10}px 760px;animation-delay:-${i * 0.23}s;--s:${s}"/>`).join('')}</g>
+          <rect x="300" y="350" width="130" height="34" rx="8" fill="#e7d2b8"/><text x="365" y="374" text-anchor="middle" font-family="Lilita One, Nunito, sans-serif" font-size="22" fill="#7d2c16">VINILO</text>
+        </g>
+        <rect y="760" width="1600" height="140" fill="url(#esc-mad)"/><rect y="760" width="1600" height="10" fill="#a56a40"/>
+        <!-- Sr. Pizzaiolo -->
+        <g transform="translate(-230 0)"><g class="esc-chef">
+          <ellipse cx="960" cy="800" rx="150" ry="18" fill="#000" opacity=".3"/>
+          <path d="M840 800V640q0-70 120-80 120 10 120 80v160z" fill="#f7f4ef"/><path d="M960 560v240" stroke="#ddd5cc" stroke-width="4"/>
+          ${[610, 660, 710, 760].map((y) => `<circle cx="935" cy="${y}" r="6" fill="#c9bfb4"/><circle cx="985" cy="${y}" r="6" fill="#c9bfb4"/>`).join('')}
+          <path d="M915 560l45 46 45-46z" fill="#c8281e"/>
+          <g class="esc-brazo"><path d="M1060 610q70-40 100-120" stroke="#f7f4ef" stroke-width="44" stroke-linecap="round" fill="none"/><circle cx="1162" cy="482" r="24" fill="#f1c19a"/>
+            <path d="M1170 470l90-150" stroke="#8a5532" stroke-width="14" stroke-linecap="round"/><ellipse cx="1280" cy="300" rx="78" ry="26" fill="#c79a5c" transform="rotate(-58 1280 300)"/>
+            <g transform="translate(1282 296) rotate(-58) scale(.85 .3)"><use href="#esc-pz"/></g></g>
+          <path d="M860 610q-60 30-50 110" stroke="#f7f4ef" stroke-width="44" stroke-linecap="round" fill="none"/><circle cx="812" cy="724" r="24" fill="#f1c19a"/>
+          <g class="esc-masa"><g transform="translate(812 640) scale(.7)"><use href="#esc-pz"/></g></g>
+          <circle cx="960" cy="470" r="86" fill="#f1c19a"/><circle cx="876" cy="476" r="16" fill="#e8ad86"/><circle cx="1044" cy="476" r="16" fill="#e8ad86"/>
+          <circle cx="915" cy="500" r="17" fill="#ee8c7a" opacity=".55"/><circle cx="1005" cy="500" r="17" fill="#ee8c7a" opacity=".55"/>
+          <g class="esc-ojos"><ellipse cx="930" cy="455" rx="9" ry="12" fill="#2b1810"/><ellipse cx="990" cy="455" rx="9" ry="12" fill="#2b1810"/></g>
+          <path d="M912 430q18-12 36 0M972 430q18-12 36 0" stroke="#2b1810" stroke-width="6" fill="none" stroke-linecap="round"/>
+          <circle cx="960" cy="485" r="15" fill="#e39a76"/>
+          <path d="M960 505c-20-10-46-10-64 8 6-26 40-30 64-18 24-12 58-8 64 18-18-18-44-18-64-8z" fill="#2b1810"/>
+          <path d="M935 530q25 18 50 0" stroke="#8c3b2a" stroke-width="5" fill="none" stroke-linecap="round"/>
+          <rect x="890" y="365" width="140" height="34" rx="6" fill="#f7f4ef"/><circle cx="905" cy="330" r="42" fill="#fff"/><circle cx="960" cy="305" r="52" fill="#fff"/><circle cx="1015" cy="330" r="42" fill="#fff"/>
+          <rect x="890" y="380" width="140" height="10" fill="#e6dfd6"/>
+        </g></g>
+        <g transform="translate(-340 -120)"><g class="esc-globo"><path d="M1040 200h300a28 28 0 0 1 28 28v70a28 28 0 0 1-28 28h-220l-40 40 6-40h-46a28 28 0 0 1-28-28v-70a28 28 0 0 1 28-28z" fill="#fff"/>
+          <text x="1190" y="275" text-anchor="middle" font-family="Lilita One, Nunito, sans-serif" font-size="40" fill="#c8281e">¡Listo para jugar!</text></g></g>
+      </svg>
+      <div class="esc-logo"><img src="/logo.png" alt="El Galpón"></div>
+      <div class="esc-panel">${qr ? `<div class="esc-qr">${qr}</div>` : ''}<div><h2>${esc(titulo)}</h2><p>${esc(texto)}</p>${extra}</div></div>
+    </div>`;
+  }
+  // Conteo de 10 a 0 a pantalla completa (sincronizado con la hora en que arranca)
+  function conteoDiez(arranca, { titulo = '¡Arranca el juego!', alTerminar } = {}) {
+    document.querySelectorAll('.cd10').forEach((x) => x.remove());
+    const el = document.createElement('div'); el.className = 'cd10';
+    el.innerHTML = `<svg class="cd10-aro" viewBox="0 0 200 200"><circle cx="100" cy="100" r="88" fill="none" stroke="rgba(255,255,255,.12)" stroke-width="10"/><circle id="cd10-p" cx="100" cy="100" r="88" fill="none" stroke="#ffcf3f" stroke-width="10" stroke-linecap="round" transform="rotate(-90 100 100)" stroke-dasharray="553" stroke-dashoffset="0"/></svg>
+      <div class="cd10-c"><small>${esc(titulo)}</small><b id="cd10-n">10</b><span>🍕 Preparen los celulares</span></div>`;
+    document.body.appendChild(el);
+    let ultimo = null, fin = false;
+    const paso = () => {
+      if (fin || !el.isConnected) return;
+      const resta = arranca - Date.now(), n = Math.max(0, Math.ceil(resta / 1000));
+      $('#cd10-p', el).setAttribute('stroke-dashoffset', String(553 * (1 - Math.max(0, resta) / 10000)));
+      if (n !== ultimo) { ultimo = n; const b = $('#cd10-n', el); b.textContent = n > 0 ? n : '¡A jugar!'; b.classList.toggle('ya', n === 0); b.style.animation = 'none'; void b.offsetWidth; b.style.animation = ''; }
+      if (resta <= -1200) { fin = true; el.classList.add('saliendo'); setTimeout(() => el.remove(), 400); alTerminar && alTerminar(); return; }
+      requestAnimationFrame(paso);
+    };
+    requestAnimationFrame(paso);
+    return () => { fin = true; el.remove(); };
+  }
+
   // Festejo: podio del 3.º al 1.º con confeti, a pantalla completa
   function podioGanador(d) {
     const top = d.top.slice(0, 3); const orden = [top[1], top[0], top[2]]; // 2.º, 1.º, 3.º
@@ -1914,12 +1989,21 @@
     let previos = null;
     main.innerHTML = `<div class="pz">
       <div class="pz-top"><div class="pz-marca"><img src="/gato.png" alt=""><div><h1>Pizzaiolo de la Noche</h1><p id="pz-sub">Juego por QR para los comensales</p></div></div>
-        <div class="pz-acc">${puede('juegosControl') ? '<button class="bv-btn pz-gana" id="pz-ganador">🏆 Mostrar ganador</button><button class="bv-btn" id="pz-reset">🔄 Reiniciar</button>' : ''}${S.user.rol === 'ADMIN' ? '<button class="bv-btn" id="pz-conf">⚙️ Configurar</button>' : ''}<button class="bv-btn" id="pz-qrs">🖨️ Imprimir QR</button><button class="bv-btn" id="pz-tv">📺 Modo TV</button></div></div>
+        <div class="pz-acc">${puede('juegosControl') ? '<button class="bv-btn pz-ini" id="pz-ini" hidden>▶ Iniciar juego</button><button class="bv-btn" id="pz-fin" hidden>⏹ Terminar juego</button><button class="bv-btn pz-gana" id="pz-ganador">🏆 Mostrar ganador</button><button class="bv-btn" id="pz-reset">🔄 Reiniciar</button>' : ''}${S.user.rol === 'ADMIN' ? '<button class="bv-btn" id="pz-conf">⚙️ Configurar</button>' : ''}<button class="bv-btn" id="pz-qrs">🖨️ Imprimir QR</button><button class="bv-btn" id="pz-tv">📺 Modo TV</button></div></div>
       <div class="bv-tabs" id="pz-tabs" ${sucs.length < 2 ? 'hidden' : ''}>${sucs.map((s) => `<button data-s="${s.id}" class="${s.id === suc ? 'on' : ''}">${esc(s.nombre)}</button>`).join('')}</div>
       <div id="pz-body"><div class="bv-vacio">Cargando…</div></div></div>`;
+    let conteoVisto = null;
     const pintar = (d) => {
       d.partidas = Number(d.partidas) || 0; d.jugando = Number(d.jugando) || 0; d.mesas = Number(d.mesas) || 0;
-      $('#pz-sub').textContent = `${d.sucursal.nombre} · jornada del ${fmtDia(d.fecha)}${d.activo ? '' : ' · ⏸ juego pausado'}`;
+      const offset = (d.ahora || Date.now()) - Date.now(), cerrado = d.estado !== 'ABIERTO';
+      $('#pz-sub').textContent = `${d.sucursal.nombre} · jornada del ${fmtDia(d.fecha)}${d.activo ? '' : ' · ⏸ juego pausado'}${cerrado ? ' · esperando que lo inicies' : ''}`;
+      if ($('#pz-ini')) { $('#pz-ini').hidden = !cerrado; $('#pz-fin').hidden = cerrado; }
+      if (cerrado) {
+        $('#pz-body').innerHTML = `<div class="pz-esc">${escenaPrevia({ titulo: '¡Escaneá y anotate!', texto: 'Poné tu nombre en el celular. El juego arranca cuando el Sr. Pizzaiolo dé la orden.', qr: d.qr,
+          extra: d.premio ? `<div class="pz-premio" style="margin-top:10px">🏆 ${esc(d.premio)}</div>` : '' })}</div>`;
+        return;
+      }
+      if (d.inicia_en && d.inicia_en !== conteoVisto && new Date(d.inicia_en).getTime() - offset > Date.now() - 1000) { conteoVisto = d.inicia_en; conteoDiez(new Date(d.inicia_en).getTime() - offset, { titulo: '¡Arranca el Pizzaiolo!' }); }
       const ids = new Set(d.top.map((t) => t.id)); const nuevos = previos ? d.top.filter((t) => !previos.has(t.id)).map((t) => t.id) : []; previos = ids;
       $('#pz-body').innerHTML = `<div class="pz-grid">
         <div><h2 class="pz-h">Ranking de la noche</h2>
@@ -1947,6 +2031,14 @@
         <body><div class="c"><img src="${location.origin}/gato.png"><h1>Pizzaiolo de la Noche</h1><p>Escaneá con tu celular, poné tu nombre y entrá al ranking</p><div class="q">${d.qr}</div>
         ${d.premio ? `<div class="pr">🏆 ${esc(d.premio)}</div>` : ''}<div class="s">${esc(d.sucursal.nombre)}</div></div><script>setTimeout(()=>print(),800)<\/script></body></html>`);
       w.document.close();
+    };
+    if ($('#pz-ini')) $('#pz-ini').onclick = async () => {
+      try { const r = await api('/api/juego/abrir', { method: 'POST', body: { s: suc } }); conteoVisto = r.inicia_en; conteoDiez(new Date(r.inicia_en).getTime() - (r.ahora - Date.now()), { titulo: '¡Arranca el Pizzaiolo!' }); cargar(); } catch (err) { toast(err.message, true); }
+    };
+    if ($('#pz-fin')) $('#pz-fin').onclick = () => {
+      const m = modal(`<h2>⏹ Terminar juego</h2><p>La pantalla vuelve a la espera y nadie más puede empezar una partida hasta que lo inicies de nuevo. El ranking se mantiene (para limpiarlo usá 🔄 Reiniciar).</p>
+        <div class="form-actions"><button class="btn sec" data-close>Cancelar</button><button class="btn" id="pz-fin-ok">Terminar</button></div>`);
+      $('#pz-fin-ok', m).onclick = async () => { try { await api('/api/juego/cerrar', { method: 'POST', body: { s: suc } }); closeModal(); cargar(); } catch (err) { toast(err.message, true); } };
     };
     if ($('#pz-reset')) $('#pz-reset').onclick = () => {
       const nom = sucs.find((s) => s.id === suc).nombre;
@@ -1987,21 +2079,22 @@
     main.innerHTML = `<div class="pz pg">
       <div class="pz-top"><div class="pz-marca"><img src="/gato.png" alt=""><div><h1>Pong Pizza</h1><p id="pg-sub">Conectando la cancha…</p></div></div>
         <div class="pz-acc"><label class="pg-obj">A <select id="pg-obj"><option>3</option><option selected>5</option><option>7</option><option>10</option></select> puntos</label>
-          <button class="bv-btn" id="pg-lib">🔓 Liberar cancha</button><button class="bv-btn" id="pg-tv">📺 Modo TV</button></div></div>
+          ${puede('juegosControl') ? '<button class="bv-btn pz-ini" id="pg-ini">▶ Iniciar juego</button><button class="bv-btn" id="pg-fin" hidden>⏹ Terminar juego</button>' : ''}<button class="bv-btn" id="pg-lib">🔓 Liberar cancha</button><button class="bv-btn" id="pg-tv">📺 Modo TV</button></div></div>
       <div class="pg-cancha" id="pg-wrap"><canvas id="pg-c"></canvas><div class="pg-over" id="pg-over"></div></div>
       <p class="pg-ayuda">Probalo sin celulares: W / S mueven la pala roja y ↑ / ↓ la verde.</p></div>`;
     const cv = $('#pg-c'), ctx = cv.getContext('2d'), over = $('#pg-over');
     const W = 1600, H = 900, PW = 26, PH = 170, PX = 70, R = 30;
     let sala = null, qrSvg = '', link = '', ws = null, vivo = true;
     const J = { izq: null, der: null };
-    const G = { fase: 'esperando', izq: 0, der: 0, objetivo: 5, cuenta: 0, ultimoPunto: null, ganador: null, listos: { izq: false, der: false }, t: 0 };
+    let sesion = false, arranca = 0;
+    const G = { fase: 'previa', izq: 0, der: 0, objetivo: 5, cuenta: 0, ultimoPunto: null, ganador: null, listos: { izq: false, der: false }, t: 0 };
     const pal = { izq: { y: H / 2, obj: H / 2 }, der: { y: H / 2, obj: H / 2 } };
     const bola = { x: W / 2, y: H / 2, vx: 0, vy: 0, rot: 0, vel: 0 };
     const teclas = {};
     const ambos = () => J.izq && J.izq.conectado && J.der && J.der.conectado;
     const nombre = (l) => (J[l] ? J[l].nombre : l === 'izq' ? 'Rojo' : 'Verde');
     const enviar = (o) => { if (ws && ws.readyState === 1) ws.send(JSON.stringify(o)); };
-    const estado = () => enviar({ t: 'estado', fase: G.fase, izq: G.izq, der: G.der, objetivo: G.objetivo, cuenta: G.cuenta, ultimoPunto: G.ultimoPunto, ganador: G.ganador, listos: G.listos, nombres: { izq: J.izq && J.izq.nombre, der: J.der && J.der.nombre } });
+    const estado = () => enviar({ t: 'estado', restante: G.fase === 'conteo10' ? Math.max(0, arranca - Date.now()) : 0, fase: G.fase, izq: G.izq, der: G.der, objetivo: G.objetivo, cuenta: G.cuenta, ultimoPunto: G.ultimoPunto, ganador: G.ganador, listos: G.listos, nombres: { izq: J.izq && J.izq.nombre, der: J.der && J.der.nombre } });
     const vibrar = (lado, ms) => enviar({ t: 'vibrar', lado, ms });
 
     // ---- conexión ----
@@ -2025,6 +2118,7 @@
       const paso = () => { if (!vivo) return; G.cuenta--; if (G.cuenta <= 0) { G.fase = 'jugando'; luego(); estado(); pintarOver(); } else { estado(); pintarOver(); setTimeout(paso, 800); } }; setTimeout(paso, 800); };
     const nuevoPartido = () => { G.izq = 0; G.der = 0; G.ganador = null; G.listos = { izq: false, der: false }; G.ultimoPunto = null; cuentaAtras(() => saque(Math.random() < 0.5)); };
     const revisar = () => {
+      if (!sesion) { estado(); return; }
       if (G.fase === 'esperando' && ambos()) nuevoPartido();
       else if (['jugando', 'cuenta', 'gol'].includes(G.fase) && !ambos()) { G.fase = 'pausa'; estado(); }
       else if (G.fase === 'pausa' && ambos()) cuentaAtras(() => saque(G.ultimoPunto !== 'izq'));
@@ -2042,7 +2136,7 @@
     const tick = (t) => {
       if (!vivo) return; const dt = Math.min(0.033, (t - tPrev) / 1000); tPrev = t;
       if (teclas.w) pal.izq.obj -= 900 * dt; if (teclas.s) pal.izq.obj += 900 * dt; if (teclas.ArrowUp) pal.der.obj -= 900 * dt; if (teclas.ArrowDown) pal.der.obj += 900 * dt;
-      for (const l of ['izq', 'der']) { const p = pal[l]; p.obj = Math.max(PH / 2, Math.min(H - PH / 2, p.obj)); p.y += (p.obj - p.y) * Math.min(1, dt * 22); }
+      for (const l of ['izq', 'der']) { const p = pal[l]; p.obj = Math.max(PH / 2, Math.min(H - PH / 2, p.obj)); p.y += (p.obj - p.y) * Math.min(1, dt * 60); }
       if (G.fase === 'jugando') {
         bola.x += bola.vx * dt; bola.y += bola.vy * dt; bola.rot += (bola.vx > 0 ? 1 : -1) * dt * 6;
         if (bola.y < R) { bola.y = R; bola.vy = Math.abs(bola.vy); } if (bola.y > H - R) { bola.y = H - R; bola.vy = -Math.abs(bola.vy); }
@@ -2094,7 +2188,9 @@
     const slot = (l) => `<div class="pg-slot ${l} ${J[l] ? (J[l].conectado ? 'ok' : 'off') : ''}"><span>${l === 'izq' ? 'Pala roja' : 'Pala verde'}</span><b>${J[l] ? esc(J[l].nombre) + (J[l].conectado ? '' : ' (desconectado)') : 'Esperando jugador…'}</b></div>`;
     const pintarOver = () => {
       let h = '';
-      if (G.fase === 'esperando' || G.fase === 'pausa') h = `<div class="pg-espera"><div class="pg-qr">${qrSvg}</div><div><h2>${G.fase === 'pausa' ? 'Partido en pausa' : '¡Escaneá y jugá!'}</h2>
+      if (G.fase === 'previa' || G.fase === 'conteo10') h = escenaPrevia({ titulo: '¡Pong Pizza!', texto: 'Escaneá el QR, poné tu nombre y tu celular es el control. Se juega de a dos.', qr: qrSvg,
+        extra: `${slot('izq')}${slot('der')}<p class="pg-cod">Sala <b>${esc(sala || '…')}</b></p>` });
+      else if (G.fase === 'esperando' || G.fase === 'pausa') h = `<div class="pg-espera"><div class="pg-qr">${qrSvg}</div><div><h2>${G.fase === 'pausa' ? 'Partido en pausa' : '¡Escaneá y jugá!'}</h2>
         <p>${G.fase === 'pausa' ? 'Se desconectó un jugador. Si vuelve a entrar, el partido sigue.' : 'Escaneá el QR con el celular, poné tu nombre y tu celular se vuelve el control. Se juega de a dos.'}</p>${slot('izq')}${slot('der')}<p class="pg-cod">Sala <b>${esc(sala || '…')}</b></p></div></div>`;
       else if (G.fase === 'cuenta') h = `<div class="pg-cuenta">${G.cuenta}</div>`;
       else if (G.fase === 'gol') h = `<div class="pg-gol ${G.ultimoPunto}">¡Punto de ${esc(nombre(G.ultimoPunto))}! 🍕</div>`;
@@ -2107,7 +2203,14 @@
     };
     const confetiPong = () => { const n = 70; for (let i = 0; i < n; i++) { const p = document.createElement('i'); p.className = 'pg-cf'; p.style.left = Math.random() * 100 + '%'; p.style.background = ['#c8281e', '#ffcf3f', '#2f8f3c', '#fff', '#ff8a1f'][i % 5];
       p.style.animationDelay = Math.random() * 1.2 + 's'; p.style.animationDuration = 2 + Math.random() * 1.8 + 's'; over.appendChild(p); setTimeout(() => p.remove(), 4500); } };
-    const liberar = () => { enviar({ t: 'liberar' }); J.izq = J.der = null; G.fase = 'esperando'; G.izq = G.der = 0; G.ganador = null; pintarOver(); };
+    const liberar = () => { enviar({ t: 'liberar' }); J.izq = J.der = null; G.fase = sesion ? 'esperando' : 'previa'; G.izq = G.der = 0; G.ganador = null; pintarOver(); };
+    const botones = () => { if ($('#pg-ini')) { $('#pg-ini').hidden = sesion || G.fase === 'conteo10'; $('#pg-fin').hidden = !sesion; } };
+    if ($('#pg-ini')) $('#pg-ini').onclick = () => {
+      arranca = Date.now() + 10000; G.fase = 'conteo10'; botones(); pintarOver(); estado();
+      const aviso = setInterval(() => { if (G.fase !== 'conteo10') return clearInterval(aviso); estado(); }, 2000);
+      conteoDiez(arranca, { titulo: '¡Arranca el Pong Pizza!', alTerminar: () => { clearInterval(aviso); if (!vivo) return; sesion = true; G.fase = 'esperando'; botones(); revisar(); pintarOver(); estado(); } });
+    };
+    if ($('#pg-fin')) $('#pg-fin').onclick = () => { sesion = false; liberar(); G.fase = 'previa'; botones(); pintarOver(); estado(); };
 
     // ---- controles de la pantalla ----
     $('#pg-obj').onchange = (e) => { G.objetivo = Number(e.target.value); estado(); };
@@ -2117,9 +2220,9 @@
     const kd = (e) => { if (['w', 's', 'ArrowUp', 'ArrowDown'].includes(e.key)) { teclas[e.key] = true; if (e.key.startsWith('Arrow')) e.preventDefault(); } };
     const ku = (e) => { teclas[e.key] = false; };
     addEventListener('keydown', kd); addEventListener('keyup', ku);
-    ajustar(); pintarOver(); conectar(); raf = requestAnimationFrame(tick);
+    ajustar(); botones(); pintarOver(); conectar(); raf = requestAnimationFrame(tick);
     const vigia = setInterval(() => { if (!location.hash.startsWith('#/pong')) VIEWS.pong._fin(); }, 500);
-    VIEWS.pong._fin = () => { vivo = false; clearInterval(vigia); cancelAnimationFrame(raf); removeEventListener('keydown', kd); removeEventListener('keyup', ku); document.body.classList.remove('tv'); try { ws && ws.close(); } catch (_) { /* nada */ } VIEWS.pong._fin = null; };
+    VIEWS.pong._fin = () => { vivo = false; document.querySelectorAll('.cd10').forEach((x) => x.remove()); clearInterval(vigia); cancelAnimationFrame(raf); removeEventListener('keydown', kd); removeEventListener('keyup', ku); document.body.classList.remove('tv'); try { ws && ws.close(); } catch (_) { /* nada */ } VIEWS.pong._fin = null; };
   };
 
   // ---------- Manuales ----------

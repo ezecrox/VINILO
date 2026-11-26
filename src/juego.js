@@ -26,6 +26,10 @@ const puntosHorno = (p) => { const x = Number(p); if (!Number.isFinite(x) || x <
 
 module.exports = function registrarJuego({ route, query, fail, permitir }) {
   const config = async () => { const r = (await query("SELECT valor FROM app_config WHERE clave = 'juego_config'")).rows[0]; try { return { ...DEF, ...(r ? JSON.parse(r.valor) : {}) }; } catch (_) { return DEF; } };
+  // Estado de la ronda por sucursal: CERRADO hasta que el admin la inicia (con 10 s de conteo)
+  const CONTEO_MS = 10000;
+  const estadoRonda = async (sucId) => { const r = (await query('SELECT valor FROM app_config WHERE clave = $1', ['juego_estado_' + sucId])).rows[0]; try { return r ? JSON.parse(r.valor) : { estado: 'CERRADO' }; } catch (_) { return { estado: 'CERRADO' }; } };
+  const setEstado = (sucId, v) => query('INSERT INTO app_config (clave, valor) VALUES ($1, $2) ON CONFLICT (clave) DO UPDATE SET valor = EXCLUDED.valor', ['juego_estado_' + sucId, JSON.stringify(v)]);
   const sucursal = async (id) => (await query('SELECT id, nombre FROM sucursales WHERE id = $1 AND activo', [Number(id) || 0])).rows[0];
   async function ranking(sucId, fecha, limite = 10) {
     const { rows } = await query(`SELECT id, nombre, mesa, puntos, r1, r2, r3, terminado_en FROM juego_partidas WHERE sucursal_id = $1 AND jornada = $2 AND estado = 'TERMINADA'
@@ -36,13 +40,16 @@ module.exports = function registrarJuego({ route, query, fail, permitir }) {
   // ---------- Público (comensales, sin usuario) ----------
   route('GET', '/api/juego/info', async ({ url }) => {
     const s = await sucursal(url.searchParams.get('s')); if (!s) fail(404, 'No encontramos este local. Escaneá de nuevo el QR de la mesa.');
-    const c = await config();
-    return { sucursal: { id: Number(s.id), nombre: s.nombre }, activo: !!c.activo, premio: c.premio || '' };
+    const [c, e] = await Promise.all([config(), estadoRonda(s.id)]);
+    return { sucursal: { id: Number(s.id), nombre: s.nombre }, activo: !!c.activo, premio: c.premio || '', estado: e.estado, inicia_en: e.inicia_en || null, ahora: Date.now() };
   }, { auth: false });
 
   route('POST', '/api/juego/iniciar', async ({ req, body }) => {
     const c = await config(); if (!c.activo) fail(403, 'El juego no está disponible en este momento.');
     const s = await sucursal(body && body.s); if (!s) fail(404, 'Local inválido');
+    const e = await estadoRonda(s.id);
+    if (e.estado !== 'ABIERTO') fail(409, 'El juego todavía no empezó. Esperá la cuenta regresiva en la pantalla.');
+    if (e.inicia_en && Date.now() < new Date(e.inicia_en).getTime() - 1500) fail(409, 'Esperá que termine la cuenta regresiva');
     const nombre = limpiarNombre(body.nombre); if (nombre.length < 2) fail(400, 'Poné tu nombre (al menos 2 letras)');
     const mesaOk = null; // un único QR para todo el local: sin número de mesa
     const ip = ipDe(req), ahora = Date.now(); const h = (intentosIp.get(ip) || []).filter((t) => ahora - t < 3600e3);
@@ -86,13 +93,26 @@ module.exports = function registrarJuego({ route, query, fail, permitir }) {
     permitir(user, 'juegos');
     const s = await sucursal(url.searchParams.get('s')); if (!s) fail(404, 'Sucursal inválida');
     const fecha = /^\d{4}-\d{2}-\d{2}$/.test(url.searchParams.get('fecha') || '') ? url.searchParams.get('fecha') : inicioJornada().fecha;
+    const ronda = await estadoRonda(s.id);
     const [top, est, c] = await Promise.all([ranking(s.id, fecha, 15),
       query(`SELECT count(*) FILTER (WHERE estado = 'TERMINADA')::int AS partidas, count(*) FILTER (WHERE estado = 'JUGANDO' AND creado_en > now() - interval '3 minutes')::int AS jugando,
         count(DISTINCT mesa) FILTER (WHERE estado = 'TERMINADA')::int AS mesas FROM juego_partidas WHERE sucursal_id = $1 AND jornada = $2`, [s.id, fecha]), config()]);
     const ult = (await query(`SELECT id, nombre, mesa, puntos, terminado_en FROM juego_partidas WHERE sucursal_id = $1 AND jornada = $2 AND estado = 'TERMINADA' ORDER BY terminado_en DESC LIMIT 1`, [s.id, fecha])).rows[0] || null;
     const link = `${baseUrl(req)}/jugar?s=${s.id}`;
     return { sucursal: { id: Number(s.id), nombre: s.nombre }, fecha, top, ultimo: ult ? { ...ult, id: Number(ult.id), puntos: Number(ult.puntos) } : null,
-      ...est.rows[0], activo: !!c.activo, premio: c.premio, link, qr: qr.svg(link, { color: '#1a1010' }) };
+      ...est.rows[0], activo: !!c.activo, premio: c.premio, link, estado: ronda.estado, inicia_en: ronda.inicia_en || null, ahora: Date.now(), qr: qr.svg(link, { color: '#1a1010' }) };
+  });
+  // Iniciar (con conteo de 10 s) y terminar la ronda
+  route('POST', '/api/juego/abrir', async ({ user, body }) => {
+    permitir(user, 'juegosControl');
+    const s = await sucursal(body && body.s); if (!s) fail(404, 'Sucursal inválida');
+    const v = { estado: 'ABIERTO', inicia_en: new Date(Date.now() + CONTEO_MS).toISOString(), por: user.nombre };
+    await setEstado(s.id, v); return { ...v, ahora: Date.now() };
+  });
+  route('POST', '/api/juego/cerrar', async ({ user, body }) => {
+    permitir(user, 'juegosControl');
+    const s = await sucursal(body && body.s); if (!s) fail(404, 'Sucursal inválida');
+    await setEstado(s.id, { estado: 'CERRADO', por: user.nombre }); return { ok: true };
   });
   // Reiniciar: archiva las partidas terminadas de la jornada (el ranking vuelve a cero; las que están en juego siguen y entran al nuevo)
   route('POST', '/api/juego/reiniciar', async ({ user, body }) => {

@@ -62,6 +62,14 @@ input.campo{font:700 18px Nunito;padding:14px;border:2px solid var(--line);borde
 .top{display:grid;gap:6px}.top div{display:grid;grid-template-columns:30px minmax(0,1fr) auto;gap:10px;align-items:center;padding:8px 12px;border-radius:12px;background:#f7f1ee}
 .top div.yo{background:var(--rojo);color:#fff}.top .n{font:20px "Lilita One";text-align:center}.top .p{font:20px "Lilita One"}.top small{opacity:.75;margin-left:6px}
 .cargando{flex:1;display:grid;place-items:center;color:var(--mut);font-weight:800}
+/* espera y conteo */
+.espera{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:14px}
+.espera .pz{width:120px;height:120px;animation:gira 3s linear infinite}
+@keyframes gira{to{transform:rotate(360deg)}}
+.cd{position:fixed;inset:0;z-index:50;background:radial-gradient(circle,#5a1a12,#120807 70%);color:#fff;display:grid;place-items:center;text-align:center}
+.cd small{display:block;font-weight:800;color:#ffcf3f;font-size:20px}.cd b{display:block;font:150px/1 "Lilita One",sans-serif;animation:pop .9s cubic-bezier(.2,1.4,.4,1)}
+.cd b.ya{font-size:64px;color:#7fd78c}
+@keyframes pop{from{transform:scale(2);opacity:0}to{transform:none;opacity:1}}
 @media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
 </head>
@@ -108,6 +116,32 @@ async function arrancar() {
   if (!INFO.activo) { vista.innerHTML = '<h2>El juego está en pausa</h2><p>Volvé a escanear el QR más tarde. ¡Gracias!</p>'; return; }
   inicio();
 }
+const abierto = () => INFO && INFO.estado === 'ABIERTO';
+// Espera a que el admin inicie el juego; con la orden, conteo sincronizado y arranca solo
+let sondeo = null;
+function espera() {
+  limpiar(); hud.hidden = true;
+  vista.innerHTML = `<div class="espera"><svg class="pz" viewBox="-45 -45 90 90"><circle r="40" fill="#e0a24a"/><circle r="31" fill="#d8301f"/><circle cx="-12" cy="-8" r="8" fill="#fbf3df"/><circle cx="11" cy="-12" r="7" fill="#fbf3df"/><circle cx="4" cy="12" r="8" fill="#fbf3df"/><ellipse cx="14" cy="6" rx="7" ry="3.5" fill="#2f8f3c"/></svg>
+    <h2>¡Listo, ${esc(J.nombre)}!</h2><p>Mirá la pantalla del bar. Cuando el Sr. Pizzaiolo dé la orden arranca la cuenta regresiva y tu juego empieza solo.</p>
+    <button class="btn" id="cambiar" style="background:#7a6760;box-shadow:0 5px 0 #4e403b">Cambiar nombre</button></div>`;
+  $('#cambiar').onclick = () => { clearInterval(sondeo); inicio(); };
+  clearInterval(sondeo);
+  sondeo = setInterval(async () => { try { INFO = await api(`/api/juego/info?s=${SUC}`); } catch (_) { return; } if (abierto()) { clearInterval(sondeo); conteo(); } }, 2000);
+}
+function conteo() {
+  const offset = INFO.ahora - Date.now(), arranca = INFO.inicia_en ? new Date(INFO.inicia_en).getTime() - offset : Date.now();
+  if (arranca - Date.now() < 300) return empezar();
+  const el = document.createElement('div'); el.className = 'cd'; el.innerHTML = '<div><small>¡Arranca el juego!</small><b id="cdn">10</b></div>'; document.body.appendChild(el);
+  let ult = null;
+  const paso = () => { const resta = arranca - Date.now(), n = Math.max(0, Math.ceil(resta / 1000));
+    if (n !== ult) { ult = n; const b = el.querySelector('#cdn'); b.textContent = n > 0 ? n : '¡A jugar!'; b.classList.toggle('ya', n === 0); b.style.animation = 'none'; void b.offsetWidth; b.style.animation = ''; try { navigator.vibrate && navigator.vibrate(n === 0 ? 200 : 30); } catch (_) { /* nada */ } }
+    if (resta <= -600) { el.remove(); empezar(); return; } requestAnimationFrame(paso); };
+  requestAnimationFrame(paso);
+}
+async function empezar() {
+  try { const r = await api('/api/juego/iniciar', { s: SUC, nombre: J.nombre }); J.token = r.token; J.preguntas = r.preguntas; J.t0 = Date.now(); J.pts = [0, 0, 0]; J.r1 = []; J.r2 = { buenos: 0, malos: 0 }; J.r3 = []; ronda1(); }
+  catch (e) { try { INFO = await api(`/api/juego/info?s=${SUC}`); } catch (_) { /* nada */ } if (!abierto()) espera(); else { vista.innerHTML = `<h2>Ups</h2><p>${esc(e.message)}</p><button class="btn" id="otra">Probar de nuevo</button>`; $('#otra').onclick = inicio; } }
+}
 
 function inicio() {
   limpiar(); hud.hidden = true; J.pts = [0, 0, 0]; J.r1 = []; J.r2 = { buenos: 0, malos: 0 }; J.r3 = [];
@@ -119,12 +153,15 @@ function inicio() {
       <div><svg><use href="#i-pre"/></svg><span><b>Trivia del bar</b><small>Pizzas, horno y tragos, contra reloj</small></span></div></div>
     ${INFO.premio ? `<div class="premio">🏆 ${esc(INFO.premio)}</div>` : ''}
     <div><label for="nom">Tu nombre</label><input id="nom" class="campo" maxlength="16" placeholder="Ej.: Caro" value="${esc(J.nombre || leer('pz_nombre'))}" autocomplete="given-name"></div>
-    <div class="err" id="err"></div><button class="btn" id="go">¡A jugar!</button>`;
+    ${abierto() ? '' : '<p style="text-align:center;font-weight:800;color:#20130f">⏳ El juego todavía no empezó: anotate y esperá la orden del Sr. Pizzaiolo.</p>'}
+    <div class="err" id="err"></div><button class="btn" id="go">${abierto() ? '¡A jugar!' : '¡Estoy listo!'}</button>`;
   $('#go').onclick = async () => {
     const n = $('#nom').value.trim(); if (n.length < 2) { $('#err').textContent = 'Poné tu nombre'; $('#nom').focus(); return; }
-    $('#go').disabled = true; $('#err').textContent = '';
-    try { const r = await api('/api/juego/iniciar', { s: SUC, nombre: n }); J.token = r.token; J.preguntas = r.preguntas; J.nombre = n; guardar('pz_nombre', n); J.t0 = Date.now(); ronda1(); }
-    catch (e) { $('#err').textContent = e.message; $('#go').disabled = false; }
+    $('#go').disabled = true; $('#err').textContent = ''; J.nombre = n; guardar('pz_nombre', n);
+    try { INFO = await api(`/api/juego/info?s=${SUC}`); } catch (_) { /* nada */ }
+    if (!abierto()) return espera();
+    if (INFO.inicia_en && new Date(INFO.inicia_en).getTime() - (INFO.ahora - Date.now()) > Date.now() + 300) return conteo();
+    empezar();
   };
 }
 

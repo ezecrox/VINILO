@@ -258,3 +258,9 @@ El administrador ve cuántos lo leyeron y quiénes sí/no, puede editarlo (y vol
 - **Juegos → Pong Pizza** (permiso `juegos`) abre la cancha con un QR. Dos personas lo escanean (`/pong?sala=CODIGO`, página `public/pong.html`), ponen su nombre y su celular se vuelve el control: arrastran el dedo para mover la pala de pizzero (roja a la izquierda, verde a la derecha). La pelota es una pizza.
 - Cuenta regresiva al estar los dos, puntos con cartel, vibración en el celular al pegarle y al recibir un punto, partido a 3, 5, 7 o 10 puntos, festejo del ganador y revancha (los dos tocan 🔁 en el celular o el botón de la pantalla). **Liberar cancha** / **Que jueguen otros** desconecta a los jugadores para que entren otros. Si alguien se desconecta, el partido queda en pausa y al volver recupera su pala.
 - Tiempo real por WebSocket propio sin dependencias (`src/ws.js`); salas en memoria (`src/pong.js`). La física corre en la pantalla; el servidor solo reenvía los movimientos (~25 por segundo por jugador). Teclado para probar sin celulares: W/S y ↑/↓.
+
+### Inicio de los juegos (Pizzaiolo y Pong)
+- Los juegos arrancan **cerrados**: la pantalla muestra la escena de espera (Sr. Pizzaiolo con su pala, horno napolitano con fuego, pizzas volando y logo del Galpón) con el QR para anotarse.
+- **▶ Iniciar juego** (permiso `juegosControl`) muestra en la pantalla y en los celulares un conteo de **10 a 0** sincronizado (hora del servidor). En el Pizzaiolo, los que ya se anotaron arrancan solos al llegar a cero; en el Pong, al terminar el conteo empieza el partido (con su 3‑2‑1) cuando están los dos jugadores.
+- **⏹ Terminar juego** vuelve a la escena de espera. Estado del Pizzaiolo por sucursal en `app_config` (`juego_estado_<id>`).
+- Pong más rápido: el celular manda cada movimiento en el próximo cuadro (~60/s) y la pantalla sigue a la pala casi sin suavizado.
