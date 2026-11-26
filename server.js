@@ -976,11 +976,30 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-console.log(`Iniciando Vinilo Almacén (Node ${process.version})…`);
+// Prueba única (pedida por el dueño): cambiar en Fudo el precio de "Franco de Aji Picante" (ID 157) a 88888
+async function pruebaPrecioFudo() {
+  if (!fudo.configurado()) return;
+  try {
+    const { rows } = await pool.query("INSERT INTO app_config (clave, valor) VALUES ('prueba_precio_fudo_157', $1) ON CONFLICT (clave) DO NOTHING RETURNING clave", [new Date().toISOString()]);
+    if (!rows.length) return; // ya se hizo
+    const antes = await fudo.fudoGet('/products/157').catch((e) => ({ error: e.message }));
+    const a0 = (antes && antes.data && antes.data.attributes) || {};
+    console.log('Prueba precio Fudo · antes:', JSON.stringify({ nombre: a0.name, precio: a0.price, error: antes.error }));
+    const r = await fudo.cambiarPrecioFudo('157', 88888);
+    console.log('Prueba precio Fudo · resultado:', JSON.stringify(r));
+    const despues = await fudo.fudoGet('/products/157').catch((e) => ({ error: e.message }));
+    const a1 = (despues && despues.data && despues.data.attributes) || {};
+    console.log('Prueba precio Fudo · después:', JSON.stringify({ nombre: a1.name, precio: a1.price, error: despues.error }));
+    await pool.query("UPDATE app_config SET valor = $1 WHERE clave = 'prueba_precio_fudo_157'", [JSON.stringify({ antes: a0.price, despues: a1.price, ok: r.ok, status: r.intentos.map((i) => i.status) })]);
+  } catch (e) { console.error('Prueba precio Fudo · error:', e.message); }
+}
+
+console.log(`Iniciando VINILO APP (Node ${process.version})…`);
 migrate()
   .then(() => server.listen(PORT, '0.0.0.0', () => {
     console.log(`Vinilo Almacén escuchando en puerto ${PORT}`);
     fudo.iniciarSincronizacionAutomatica(pool);
     crosschex.iniciarSincronizacionAutomatica(pool); push.iniciarProgramador();
+    setTimeout(pruebaPrecioFudo, 12000);
   }))
   .catch((err) => { console.error('Error al inicializar la base de datos:', err.message || err); process.exit(1); });

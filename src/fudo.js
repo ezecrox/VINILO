@@ -264,6 +264,35 @@ function iniciarSincronizacionAutomatica(pool) {
   }
 }
 
+// Escritura en Fudo (JSON:API). Devuelve { status, body } sin lanzar error, para poder diagnosticar.
+async function fudoEnviar(metodo, path, cuerpo, tipo = 'application/json') {
+  const token = await obtenerToken();
+  const res = await fetch(`${API_URL}${path}`, {
+    method: metodo, headers: { Authorization: `Bearer ${token}`, Accept: 'application/json', 'Content-Type': tipo },
+    body: JSON.stringify(cuerpo), signal: AbortSignal.timeout(30000),
+  });
+  const txt = await res.text().catch(() => '');
+  let body = txt; try { body = JSON.parse(txt); } catch (_) { /* texto */ }
+  return { status: res.status, ok: res.ok, body };
+}
+// Cambia el precio de un producto en Fudo. Prueba el formato JSON:API y, si Fudo lo rechaza por formato, variantes.
+async function cambiarPrecioFudo(fudoId, precio) {
+  const id = String(fudoId); const intentos = [];
+  const variantes = [
+    [{ data: { type: 'Product', id, attributes: { price: precio } } }, 'application/json'],
+    [{ data: { type: 'Product', id, attributes: { price: precio } } }, 'application/vnd.api+json'],
+    [{ data: { type: 'Product', id, attributes: { price: String(precio) } } }, 'application/json'],
+    [{ price: precio }, 'application/json'],
+  ];
+  for (const [cuerpo, tipo] of variantes) {
+    const r = await fudoEnviar('PATCH', `/products/${id}`, cuerpo, tipo);
+    intentos.push({ tipo, cuerpo, status: r.status, respuesta: typeof r.body === 'string' ? r.body.slice(0, 300) : JSON.stringify(r.body).slice(0, 300) });
+    if (r.ok) { const a = (r.body && r.body.data && r.body.data.attributes) || {}; return { ok: true, precio_nuevo: a.price, intentos }; }
+    if ([401, 403, 404].includes(r.status)) break; // permiso o producto: no tiene sentido probar otros formatos
+  }
+  return { ok: false, intentos };
+}
+
 // Cliente de lectura para otra cuenta de Fudo (otra sucursal), con su propio token. Solo lo usa el tablero.
 function crearCliente(key, secret) {
   let tk = null;
@@ -293,4 +322,4 @@ function cuentasTablero() {
   return (cuentasCache = c);
 }
 
-module.exports = { cuentasTablero, crearCliente, fudoGet, configurado, sincronizarProveedores, sincronizarProductos, sincronizarTodo, iniciarSincronizacionAutomatica, direccionLegible };
+module.exports = { cambiarPrecioFudo, fudoEnviar, cuentasTablero, crearCliente, fudoGet, configurado, sincronizarProveedores, sincronizarProductos, sincronizarTodo, iniciarSincronizacionAutomatica, direccionLegible };
