@@ -233,3 +233,9 @@ Pantalla tipo bolsa de valores con los tragos (productos de Fudo cuya categoría
 Cada 5 minutos el precio de cada trago se mueve según lo vendido en Fudo: sube cuando se pide (+4,5 % por 1 unidad, rinde menos cada unidad extra), baja de a poco si no sale, y siempre tiende a volver al precio de carta (límites 70 %–160 %). El mercado abre a las 18 h o con el primer trago vendido.
 Muestra la cinta con cotizaciones, el **Índice VINILO** (base 1000), lo que más sube y baja en 30 minutos, una tarjeta por trago con precio, variación, gráfico, volumen y máx/mín del día, y los tragos sin operar. Modo TV y pestañas por sucursal (usa las mismas cuentas de Fudo del tablero).
 El ADMIN elige qué tragos se muestran con el botón **⚙️ Tragos**. Es un juego de pantalla: **los precios de Fudo no se modifican**.
+
+### Bolsa: pizzas, crash y animaciones
+- **Mercados**: selector 🍸 Tragos / 🍕 Pizzas (categorías de Fudo que contienen "Tragos" o "Pizza"). Cada mercado tiene su propia lista de productos ocultos (⚙️ Productos).
+- **CRASH** (permiso `juegosCrash`): baja todos los precios de la sucursal un 20–50 % durante 5–30 minutos, con animación y cuenta regresiva en pantalla. Se puede terminar antes; los precios se recuperan de a poco en 10 minutos. Queda guardado en `app_config` (`bolsa_crash_<cuenta>`).
+- **Animaciones**: cada venta nueva de una pizza o un trago dispara una animación al azar (pizza que cruza, sube, rebota o llueve; dos copas que brindan en el centro, desde los costados, en un lugar al azar o de a dos), con el nombre del producto. La pantalla consulta Fudo cada 20 s.
+- Logo del juego: `public/vinilo-club-blanco.png` (y la versión roja `vinilo-club.png`).

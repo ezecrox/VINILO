@@ -1590,34 +1590,115 @@
   const clsVar = (v) => (v > 0.05 ? 'up' : v < -0.05 ? 'down' : 'eq');
   const pctTxt = (v) => `${v > 0 ? '+' : ''}${v.toLocaleString('es-AR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
 
+  // Animaciones de ventas: una pizza volando o dos tragos brindando, con variantes al azar
+  const azar = (a) => a[Math.floor(Math.random() * a.length)];
+  const rnd = (a, b) => a + Math.random() * (b - a);
+  function capaAnim() { let c = document.getElementById('bv-anim'); if (!c) { c = document.createElement('div'); c.id = 'bv-anim'; document.body.appendChild(c); } return c; }
+  function etiquetaAnim(capa, txt, x, y, dur) {
+    const e = document.createElement('div'); e.className = 'bv-an-etq'; e.textContent = txt; e.style.left = x + 'px'; e.style.top = y + 'px'; capa.appendChild(e);
+    e.animate([{ opacity: 0, transform: 'translate(-50%, 10px) scale(.8)' }, { opacity: 1, transform: 'translate(-50%, 0) scale(1)', offset: 0.15 }, { opacity: 1, offset: 0.75 }, { opacity: 0, transform: 'translate(-50%, -20px)' }], { duration: dur, easing: 'ease-out' }).onfinish = () => e.remove();
+  }
+  function emoji(capa, ch, size) { const e = document.createElement('div'); e.className = 'bv-an'; e.textContent = ch; e.style.fontSize = size + 'px'; capa.appendChild(e); return e; }
+  function animPizza(v) {
+    const capa = capaAnim(), W = innerWidth, H = innerHeight, txt = `🍕 ${v.nombre}${v.cantidad > 1 ? ' ×' + v.cantidad : ''}`;
+    const tipo = azar(['cruza', 'sube', 'lluvia', 'zoom', 'boomerang']);
+    if (tipo === 'lluvia') {
+      for (let i = 0; i < 5 + Math.min(4, v.cantidad); i++) { const e = emoji(capa, '🍕', rnd(50, 90)); const x = rnd(0.05, 0.9) * W;
+        e.animate([{ transform: `translate(${x}px, -120px) rotate(0deg)` }, { transform: `translate(${x + rnd(-80, 80)}px, ${H + 60}px) rotate(${rnd(360, 900)}deg)` }], { duration: rnd(1800, 2800), delay: i * 140, easing: 'cubic-bezier(.4,0,.8,1)', fill: 'backwards' }).onfinish = () => e.remove(); }
+      etiquetaAnim(capa, txt, W / 2, H * 0.4, 2600); return;
+    }
+    const e = emoji(capa, '🍕', tipo === 'zoom' ? 120 : rnd(90, 130)); let kf, dur = 2400, ex = W / 2, ey = H * 0.4;
+    if (tipo === 'cruza') { const izq = Math.random() < 0.5, y0 = rnd(0.2, 0.7) * H; ey = y0 - 60; kf = [0, 0.5, 1].map((p, i) => ({ transform: `translate(${izq ? -150 + p * (W + 300) : W + 150 - p * (W + 300)}px, ${y0 - Math.sin(p * Math.PI) * rnd(80, 200)}px) rotate(${(izq ? 1 : -1) * p * 720}deg)` })); }
+    else if (tipo === 'sube') { const x = rnd(0.15, 0.8) * W; ex = x + 50; ey = H * 0.25; kf = [{ transform: `translate(${x}px, ${H + 50}px) rotate(0deg) scale(.6)` }, { transform: `translate(${x + rnd(-60, 60)}px, ${H * 0.25}px) rotate(360deg) scale(1.1)`, offset: 0.5 }, { transform: `translate(${x + rnd(-120, 120)}px, ${H + 80}px) rotate(720deg) scale(.7)` }]; dur = 2600; }
+    else if (tipo === 'boomerang') { const y0 = rnd(0.25, 0.6) * H; ey = y0 - 40; kf = [{ transform: `translate(-150px, ${y0}px) rotate(0deg)` }, { transform: `translate(${W * 0.7}px, ${y0 - 120}px) rotate(540deg)`, offset: 0.5 }, { transform: `translate(-150px, ${y0}px) rotate(1080deg)` }]; dur = 2800; }
+    else { kf = [{ transform: `translate(${W / 2 - 60}px, ${H / 2 - 60}px) scale(0) rotate(-90deg)` }, { transform: `translate(${W / 2 - 60}px, ${H / 2 - 60}px) scale(2.2) rotate(20deg)`, offset: 0.35 }, { transform: `translate(${W / 2 - 60}px, ${H / 2 - 60}px) scale(2) rotate(0deg)`, offset: 0.65 }, { transform: `translate(${W + 100}px, ${-150}px) scale(.5) rotate(540deg)` }]; ey = H / 2 + 140; }
+    e.animate(kf, { duration: dur, easing: 'ease-in-out' }).onfinish = () => e.remove();
+    etiquetaAnim(capa, txt, ex, ey, dur);
+  }
+  function animBrindis(v) {
+    const capa = capaAnim(), W = innerWidth, H = innerHeight;
+    const vaso = azar(['🍸', '🍹', '🥃', '🍷', '🍺', '🍸']);
+    const tipo = azar(['centro', 'lugar', 'lados', 'doble']);
+    const brindar = (cx, cy, tam, dur, retraso = 0) => {
+      const iz = emoji(capa, vaso, tam), de = emoji(capa, vaso, tam), d = tam * 0.62, desde = tipo === 'lados' ? W * 0.6 : tam * 1.3;
+      const k = (lado) => [{ transform: `translate(${cx - tam / 2 + lado * desde}px, ${cy}px) rotate(${lado * 0}deg) scaleX(${lado})`, opacity: 0 },
+        { transform: `translate(${cx - tam / 2 + lado * d}px, ${cy}px) rotate(${-lado * 25}deg) scaleX(${lado})`, opacity: 1, offset: 0.3 },
+        { transform: `translate(${cx - tam / 2 + lado * d * 0.6}px, ${cy - 10}px) rotate(${-lado * 35}deg) scaleX(${lado})`, opacity: 1, offset: 0.4 },
+        { transform: `translate(${cx - tam / 2 + lado * d}px, ${cy}px) rotate(${-lado * 15}deg) scaleX(${lado})`, opacity: 1, offset: 0.55 },
+        { transform: `translate(${cx - tam / 2 + lado * d * 0.6}px, ${cy - 14}px) rotate(${-lado * 35}deg) scaleX(${lado})`, opacity: 1, offset: 0.65 },
+        { transform: `translate(${cx - tam / 2 + lado * d}px, ${cy - 40}px) rotate(${-lado * 10}deg) scaleX(${lado})`, opacity: 0 }];
+      iz.animate(k(-1), { duration: dur, delay: retraso, easing: 'ease-in-out', fill: 'backwards' }).onfinish = () => iz.remove();
+      de.animate(k(1), { duration: dur, delay: retraso, easing: 'ease-in-out', fill: 'backwards' }).onfinish = () => de.remove();
+      for (const off of [0.4, 0.65]) for (let i = 0; i < 7; i++) {
+        const ch = emoji(capa, azar(['✨', '✨', '💫', '⭐', '🎉']), tam * rnd(0.2, 0.35)); const ang = rnd(0, Math.PI * 2), r = tam * rnd(0.7, 1.4);
+        ch.animate([{ transform: `translate(${cx - tam * 0.12}px, ${cy - tam * 0.25}px) scale(.2)`, opacity: 1 }, { transform: `translate(${cx - tam * 0.12 + Math.cos(ang) * r}px, ${cy - tam * 0.25 + Math.sin(ang) * r}px) scale(1)`, opacity: 0 }],
+          { duration: 700, delay: retraso + dur * off, easing: 'ease-out', fill: 'backwards' }).onfinish = () => ch.remove(); }
+    };
+    const txt = `🥂 ${v.nombre}${v.cantidad > 1 ? ' ×' + v.cantidad : ''}`;
+    if (tipo === 'centro' || tipo === 'lados') { brindar(W / 2, H * 0.32, 130, 2600); etiquetaAnim(capa, txt, W / 2, H * 0.32 + 160, 2600); }
+    else if (tipo === 'lugar') { const cx = rnd(0.2, 0.8) * W, cy = rnd(0.2, 0.6) * H; brindar(cx, cy, 90, 2300); etiquetaAnim(capa, txt, cx, cy + 115, 2300); }
+    else { brindar(W * 0.3, H * 0.35, 90, 2400); brindar(W * 0.7, H * 0.45, 90, 2400, 350); etiquetaAnim(capa, txt, W / 2, H * 0.62, 2600); }
+  }
+  function animCrash(c) {
+    const capa = capaAnim(); const e = document.createElement('div'); e.className = 'bv-crash-fx';
+    e.innerHTML = `<b>💥 CRASH 💥</b><span>Todo −${c.caida}% por ${c.minutos} minutos</span>`; capa.appendChild(e);
+    e.animate([{ opacity: 0, transform: 'scale(3)' }, { opacity: 1, transform: 'scale(1)', offset: 0.12 }, { transform: 'translate(-12px, 4px)', offset: 0.18 }, { transform: 'translate(12px, -4px)', offset: 0.24 }, { transform: 'translate(-8px, 2px)', offset: 0.3 }, { transform: 'translate(0, 0)', opacity: 1, offset: 0.8 }, { opacity: 0, transform: 'translateY(40px)' }], { duration: 4200, easing: 'ease-out' }).onfinish = () => e.remove();
+    const bv = document.querySelector('.bv'); if (bv) bv.animate([{ transform: 'translate(0,0)' }, { transform: 'translate(-10px,6px)' }, { transform: 'translate(9px,-5px)' }, { transform: 'translate(-6px,3px)' }, { transform: 'translate(0,0)' }], { duration: 600, delay: 400 });
+    for (let i = 0; i < 14; i++) { const f = emoji(capa, azar(['📉', '📉', '💸', '🔻']), rnd(40, 80)); const x = rnd(0, innerWidth);
+      f.animate([{ transform: `translate(${x}px, -100px) rotate(0deg)` }, { transform: `translate(${x + rnd(-60, 60)}px, ${innerHeight + 80}px) rotate(${rnd(-180, 180)}deg)` }], { duration: rnd(1600, 2600), delay: rnd(200, 1600), easing: 'ease-in', fill: 'backwards' }).onfinish = () => f.remove(); }
+  }
+
   VIEWS.bolsa = async (main) => {
     clearInterval(VIEWS.bolsa._t);
     document.body.classList.add('bolsa-on');
     main.innerHTML = `<div class="bv">
-      <div class="bv-top"><div class="bv-marca"><span class="bv-logo">VNL</span><div><h1>Bolsa de tragos</h1><p id="bv-sub">Abriendo el mercado…</p></div></div>
-        <div class="bv-acc"><span class="bv-reloj" id="bv-reloj"></span>${S.user.rol === 'ADMIN' ? '<button class="bv-btn" id="bv-conf">⚙️ Tragos</button>' : ''}<button class="bv-btn" id="bv-tv">📺 Modo TV</button></div></div>
-      <div class="bv-tabs" id="bv-tabs" hidden></div>
+      <div class="bv-top"><div class="bv-marca"><img class="bv-logo-img" src="/vinilo-club-blanco.png" alt="Vinilo Bar Club"><div><h1 id="bv-tit">Bolsa de tragos</h1><p id="bv-sub">Abriendo el mercado…</p></div></div>
+        <div class="bv-acc"><span class="bv-reloj" id="bv-reloj"></span>${puede('juegosCrash') ? '<button class="bv-btn bv-crash-btn" id="bv-crash">💥 Crash</button>' : ''}${S.user.rol === 'ADMIN' ? '<button class="bv-btn" id="bv-conf">⚙️ Productos</button>' : ''}<button class="bv-btn" id="bv-tv">📺 Modo TV</button></div></div>
+      <div class="bv-sel"><div class="bv-merc" id="bv-merc"></div><div class="bv-tabs" id="bv-tabs" hidden></div></div>
+      <div class="bv-crash-bar" id="bv-crashbar" hidden></div>
       <div class="bv-cinta"><div class="bv-cinta-in" id="bv-cinta"></div></div>
       <div id="bv-body"><div class="bv-vacio">Leyendo las ventas de Fudo…</div></div></div>`;
     let cuentas = [], cuenta = (() => { try { return localStorage.getItem('vinilo_bv_cuenta') || ''; } catch (_) { return ''; } })(), previo = new Map();
+    let mercado = (() => { try { return localStorage.getItem('vinilo_bv_mercado') || 'tragos'; } catch (_) { return 'tragos'; } })();
+    let vistos = null, crashVisto = null, crashAct = null, cola = [];
+    const qs = () => `?mercado=${encodeURIComponent(mercado)}${cuenta ? '&cuenta=' + encodeURIComponent(cuenta) : ''}`;
+    const pintarMerc = (ms) => { $('#bv-merc').innerHTML = (ms || [{ id: 'tragos', nombre: 'Tragos' }, { id: 'pizzas', nombre: 'Pizzas' }]).map((m) => `<button class="${m.id === mercado ? 'on' : ''}" data-m="${m.id}">${m.id === 'pizzas' ? '🍕' : '🍸'} ${esc(m.nombre)}</button>`).join('');
+      $$('#bv-merc button').forEach((b) => (b.onclick = () => { if (b.dataset.m === mercado) return; mercado = b.dataset.m; try { localStorage.setItem('vinilo_bv_mercado', mercado); } catch (_) { /* sin storage */ } previo = new Map(); pintarMerc(ms); $('#bv-body').innerHTML = '<div class="bv-vacio">Abriendo el mercado…</div>'; cargar(); })); };
+    pintarMerc();
     try { cuentas = await api('/api/bolsa/cuentas'); } catch (_) { cuentas = []; }
     if (!cuentas.some((c) => c.id === cuenta)) cuenta = cuentas[0] ? cuentas[0].id : '';
     const tabs = () => { const t = $('#bv-tabs'); t.hidden = cuentas.length < 2; t.innerHTML = cuentas.map((c) => `<button class="${c.id === cuenta ? 'on' : ''}" data-c="${esc(c.id)}">${esc(c.nombre)}</button>`).join('');
-      t.querySelectorAll('button').forEach((b) => (b.onclick = () => { cuenta = b.dataset.c; try { localStorage.setItem('vinilo_bv_cuenta', cuenta); } catch (_) { /* sin storage */ } previo = new Map(); tabs(); cargar(); })); };
+      t.querySelectorAll('button').forEach((b) => (b.onclick = () => { cuenta = b.dataset.c; try { localStorage.setItem('vinilo_bv_cuenta', cuenta); } catch (_) { /* sin storage */ } previo = new Map(); vistos = null; tabs(); cargar(); })); };
     tabs();
-    const reloj = () => { const e = $('#bv-reloj'); if (e) e.textContent = new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' }); };
+    const reloj = () => { const e = $('#bv-reloj'); if (e) e.textContent = new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' });
+      const cb = $('#bv-crashbar'); if (!cb) return;
+      const resta = crashAct ? new Date(crashAct.hasta).getTime() - Date.now() : 0;
+      if (resta > 0) { cb.hidden = false; const mm = Math.floor(resta / 60000), ss = Math.floor((resta % 60000) / 1000);
+        cb.innerHTML = `<b>💥 CRASH EN CURSO</b><span>Todo −${crashAct.caida}%</span><span class="bv-cd">termina en ${String(mm).padStart(2, '0')}:${String(ss).padStart(2, '0')}</span>`; }
+      else cb.hidden = true;
+      const bt = $('#bv-crash'); if (bt) bt.textContent = resta > 0 ? '⏹ Terminar crash' : '💥 Crash';
+    };
+    // Cola de animaciones: de a una, con pausa entre cada una
+    const animar = () => { if (!cola.length || document.hidden) return; if (document.querySelector('#modal-root .modal-bg')) { setTimeout(animar, 1500); return; } const v = cola.shift(); (v.mercado === 'pizzas' ? animPizza : animBrindis)(v); if (cola.length) setTimeout(animar, rnd(1400, 2200)); };
     reloj();
 
     const pintar = (d) => {
-      const ts = d.tragos.slice();
-      $('#bv-sub').innerHTML = `${esc(d.sucursal)} · ${d.abierto ? `mercado abierto desde las ${horaAR(d.apertura)} · ${d.unidades} tragos operados` : 'mercado cerrado: abre con el primer trago de la noche'}${d.desactualizado ? ' · <b>sin conexión con Fudo</b>' : ''}`;
+      const ts = d.tragos.slice(); const pz = d.mercado === 'pizzas', unidad = pz ? 'pizzas' : 'tragos';
+      if (d.mercados) pintarMerc(d.mercados);
+      $('#bv-tit').textContent = `Bolsa de ${d.mercado_nombre.toLowerCase()}`;
+      $('#bv-sub').innerHTML = `${esc(d.sucursal)} · ${d.abierto ? `mercado abierto desde las ${horaAR(d.apertura)} · ${d.unidades} ${unidad} operad${pz ? 'as' : 'os'}` : `mercado cerrado: abre con ${pz ? 'la primera pizza' : 'el primer trago'} de la noche`}${d.desactualizado ? ' · <b>sin conexión con Fudo</b>' : ''}`;
+      crashAct = d.crash; if (d.crash && d.crash.desde !== crashVisto) { if (crashVisto !== null || Date.now() - new Date(d.crash.desde).getTime() < 60e3) animCrash(d.crash); crashVisto = d.crash.desde; } else if (!d.crash && crashVisto === null) crashVisto = '';
+      reloj();
+      const rec = d.ventas_recientes || [];
+      if (vistos === null) vistos = new Set(rec.map((v) => v.id));
+      else { const nuevas = rec.filter((v) => !vistos.has(v.id)); nuevas.forEach((v) => vistos.add(v.id)); if (nuevas.length) { const vacia = !cola.length; cola.push(...nuevas.slice(-8)); if (vacia) animar(); } }
       // Cinta
       const enCinta = (d.abierto ? ts.filter((t) => t.vendidos > 0).sort((a, b) => b.ultima_hora - a.ultima_hora || b.vendidos - a.vendidos) : ts.sort((a, b) => a.nombre.localeCompare(b.nombre))).slice(0, 30);
       const items = enCinta.map((t) => `<span class="bv-tk ${clsVar(t.var_dia)}"><b>${esc(t.nombre.toUpperCase())}</b> ${pesos(t.precio)} <i>${flecha(t.var_dia)} ${pctTxt(t.var_dia)}</i></span>`).join('');
       $('#bv-cinta').innerHTML = items + items;
       $('#bv-cinta').style.animationDuration = Math.max(25, enCinta.length * 4) + 's';
       if (!d.abierto) {
-        $('#bv-body').innerHTML = `<div class="bv-cerrado"><div class="bv-campana">🔔</div><h2>El mercado todavía no abrió</h2><p>La rueda empieza con el primer trago vendido en Fudo (o a las 18 h). Estos son los precios de apertura:</p>
+        $('#bv-body').innerHTML = `<div class="bv-cerrado"><div class="bv-campana">🔔</div><h2>El mercado todavía no abrió</h2><p>La rueda empieza con ${pz ? 'la primera pizza vendida' : 'el primer trago vendido'} en Fudo (o a las 18 h). Estos son los precios de apertura:</p>
           <div class="bv-grid">${ts.slice(0, 24).map((t) => `<div class="bv-tile eq"><div class="bv-tn">${esc(t.nombre)}</div><div class="bv-tp">${pesos(t.precio)}</div><div class="bv-tv">■ 0,0%</div></div>`).join('')}</div></div>`;
         return;
       }
@@ -1640,8 +1721,8 @@
             <div class="bv-tn">${esc(t.nombre)}</div><div class="bv-tp">${pesos(t.precio)}</div>
             <div class="bv-tv">${flecha(t.var_dia)} ${pctTxt(t.var_dia)}</div>${sparkBolsa(t.serie, t.var_dia >= 0)}
             <div class="bv-tf"><span>Vol. ${t.vendidos}</span><span>máx ${pesosK(t.maximo)}</span><span>mín ${pesosK(t.minimo)}</span></div></div>`; }).join('')}</div>
-        ${quietos.length ? `<div class="bv-quietos"><h3>Sin operar hoy <small>${quietos.length} tragos</small></h3><div>${quietos.map((t) => `<span class="${clsVar(t.var_dia)}">${esc(t.nombre)} <b>${pesos(t.precio)}</b> <i>${flecha(t.var_dia)} ${pctTxt(t.var_dia)}</i></span>`).join('')}</div></div>` : ''}
-        <p class="bv-nota">Juego de pantalla: cada trago sube cuando se pide y baja cuando no sale, y siempre tiende a volver a su precio de carta. Los precios de Fudo no cambian.</p>`;
+        ${quietos.length ? `<div class="bv-quietos"><h3>Sin operar hoy <small>${quietos.length} ${unidad}</small></h3><div>${quietos.map((t) => `<span class="${clsVar(t.var_dia)}">${esc(t.nombre)} <b>${pesos(t.precio)}</b> <i>${flecha(t.var_dia)} ${pctTxt(t.var_dia)}</i></span>`).join('')}</div></div>` : ''}
+        <p class="bv-nota">Juego de pantalla: cada ${pz ? 'pizza' : 'trago'} sube cuando se pide y baja cuando no sale, y siempre tiende a volver a su precio de carta. Los precios de Fudo no cambian.</p>`;
       const g = $('#bv-idxg');
       if (g) { const pts = ix.serie.map((p) => ({ x: new Date(p.t).getTime(), y: p.v })); const mn = Math.min(...pts.map((p) => p.y), 1000), mx = Math.max(...pts.map((p) => p.y), 1000);
         graficoLinea(g, { series: [{ nombre: 'Índice', color: ix.var_dia >= 0 ? '#22c55e' : '#ef4444', puntos: pts, area: true }], formato: (v) => v.toLocaleString('es-AR', { maximumFractionDigits: 1 }), alto: 150, yMin: Math.floor((mn - 10) / 10) * 10, yMax: Math.ceil((mx + 10) / 10) * 10 }); }
@@ -1649,25 +1730,36 @@
     };
     const cargar = async () => {
       const pedida = cuenta;
-      try { const d = await api('/api/bolsa' + (cuenta ? '?cuenta=' + encodeURIComponent(cuenta) : '')); if (pedida === cuenta) pintar(d); }
+      const pedidoM = mercado;
+      try { const d = await api('/api/bolsa' + qs()); if (pedida === cuenta && pedidoM === mercado) pintar(d); }
       catch (err) { $('#bv-body').innerHTML = `<div class="bv-vacio">⚠️ ${esc(err.message)}</div>`; }
     };
     $('#bv-tv').onclick = () => { document.body.classList.toggle('tv'); $('#bv-tv').textContent = document.body.classList.contains('tv') ? '✕ Salir' : '📺 Modo TV';
       try { if (document.body.classList.contains('tv')) document.documentElement.requestFullscreen && document.documentElement.requestFullscreen(); else document.fullscreenElement && document.exitFullscreen(); } catch (_) { /* sin pantalla completa */ } };
     if ($('#bv-conf')) $('#bv-conf').onclick = async () => {
-      const lista = await api('/api/bolsa/config' + (cuenta ? '?cuenta=' + encodeURIComponent(cuenta) : ''));
-      const m = modal(`<h2>Tragos de la bolsa</h2><p class="stock-hint">Son los productos de Fudo de la categoría <b>Tragos</b>. Destildá los que no querés mostrar en la pantalla (por ejemplo, "fuera de carta" o medidas).</p>
+      const lista = await api('/api/bolsa/config' + qs()); const nm = mercado === 'pizzas' ? 'Pizzas' : 'Tragos';
+      const m = modal(`<h2>${nm} de la bolsa</h2><p class="stock-hint">Son los productos de Fudo de la categoría <b>${nm}</b>. Destildá los que no querés mostrar en la pantalla${mercado === 'pizzas' ? ' (por ejemplo, porciones)' : ' (por ejemplo, "fuera de carta" o medidas)'}.</p>
         <input id="bc-q" placeholder="Buscar…" style="margin-bottom:8px"><div class="chk-grupo chk-lista" id="bc-l" style="max-height:50vh">${lista.map((p) => `<label class="check" data-n="${esc(p.nombre.toLowerCase())}"><input type="checkbox" value="${esc(p.id)}" ${p.oculto ? '' : 'checked'}> ${esc(p.nombre)} <span class="muted">· ${pesos(p.base)}${p.activo ? '' : ' · inactivo en Fudo'}</span></label>`).join('')}</div>
         <div class="form-actions"><button class="btn sec" data-close>Cancelar</button><button class="btn" id="bc-ok">Guardar</button></div>`);
       $('#bc-q', m).oninput = (e) => { const q = e.target.value.toLowerCase(); m.querySelectorAll('#bc-l label').forEach((l) => (l.style.display = l.dataset.n.includes(q) ? '' : 'none')); };
       $('#bc-ok', m).onclick = async () => { const ocultos = [...m.querySelectorAll('#bc-l input')].filter((i) => !i.checked).map((i) => i.value);
-        try { await api('/api/bolsa/config' + (cuenta ? '?cuenta=' + encodeURIComponent(cuenta) : ''), { method: 'PUT', body: { ocultos } }); closeModal(); toast('Listo'); cargar(); } catch (err) { toast(err.message, true); } };
+        try { await api('/api/bolsa/config' + qs(), { method: 'PUT', body: { ocultos } }); closeModal(); toast('Listo'); cargar(); } catch (err) { toast(err.message, true); } };
+    };
+    if ($('#bv-crash')) $('#bv-crash').onclick = async () => {
+      if (crashAct && new Date(crashAct.hasta) > new Date()) { try { await api('/api/bolsa/crash' + qs(), { method: 'DELETE' }); crashAct = null; toast('Crash terminado: los precios se recuperan en 10 minutos'); cargar(); } catch (err) { toast(err.message, true); } return; }
+      const m = modal(`<h2>💥 Lanzar un CRASH</h2><p>Todos los precios de la bolsa de esta sucursal (tragos y pizzas) se desploman durante unos minutos. Al terminar se recuperan de a poco en 10 minutos. Los precios de Fudo no cambian.</p>
+        <div class="f"><label>Cuánto bajan</label><div class="bv-opc" id="cr-caida">${[20, 30, 40, 50].map((v) => `<button type="button" data-v="${v}" class="${v === 30 ? 'on' : ''}">−${v}%</button>`).join('')}</div></div>
+        <div class="f mt"><label>Durante</label><div class="bv-opc" id="cr-min">${[5, 10, 15, 20, 30].map((v) => `<button type="button" data-v="${v}" class="${v === 10 ? 'on' : ''}">${v} min</button>`).join('')}</div></div>
+        <div class="form-actions"><button class="btn sec" data-close>Cancelar</button><button class="btn" id="cr-ok">💥 ¡Crash!</button></div>`);
+      m.querySelectorAll('.bv-opc').forEach((g) => g.querySelectorAll('button').forEach((b) => (b.onclick = () => { g.querySelectorAll('button').forEach((x) => x.classList.remove('on')); b.classList.add('on'); })));
+      $('#cr-ok', m).onclick = async () => { const caida = Number(m.querySelector('#cr-caida .on').dataset.v), minutos = Number(m.querySelector('#cr-min .on').dataset.v);
+        try { await api('/api/bolsa/crash' + qs(), { method: 'POST', body: { caida, minutos } }); closeModal(); cargar(); } catch (err) { toast(err.message, true); } };
     };
     await cargar();
     let n = 0;
     VIEWS.bolsa._t = setInterval(() => {
-      if (!location.hash.startsWith('#/bolsa')) { clearInterval(VIEWS.bolsa._t); document.body.classList.remove('tv', 'bolsa-on'); return; }
-      reloj(); if (++n % 30 === 0 && !document.hidden) cargar();
+      if (!location.hash.startsWith('#/bolsa')) { clearInterval(VIEWS.bolsa._t); document.body.classList.remove('tv', 'bolsa-on'); cola = []; const c = document.getElementById('bv-anim'); if (c) c.remove(); return; }
+      reloj(); if (++n % 20 === 0 && !document.hidden) cargar();
     }, 1000);
   };
 

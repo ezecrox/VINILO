@@ -77,7 +77,7 @@ async function leerItems(get, desde, maxPag = 6) {
     let viejo = null;
     for (const it of lote) {
       const a = it.attributes || {}; const f = new Date(a.createdAt); if (Number.isNaN(f.getTime())) continue; viejo = f;
-      if (f >= desde && !(a.canceled === true || a.cancelled === true)) out.push({ producto: relId(it, 'product'), venta: relId(it, 'sale'), cantidad: num(pick(a, 'quantity', 'qty') ?? 1), precio: num(pick(a, 'price', 'unitPrice')), creado: f });
+      if (f >= desde && !(a.canceled === true || a.cancelled === true)) out.push({ id: String(it.id), producto: relId(it, 'product'), venta: relId(it, 'sale'), cantidad: num(pick(a, 'quantity', 'qty') ?? 1), precio: num(pick(a, 'price', 'unitPrice')), creado: f });
     }
     if (lote.length < 500 || (viejo && viejo < desde)) break;
   }

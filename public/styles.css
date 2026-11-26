@@ -757,3 +757,26 @@ td.num:has([data-vc]) { white-space: nowrap; }
 body.tv .bv { border-radius: 0; min-height: 100vh; margin: -18px -26px; padding: 18px 26px; }
 body.tv .bv-tp { font-size: 2.1rem; } body.tv .bv-grid { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
 @media (max-width: 620px) { .bv { margin: -6px; border-radius: 12px; padding: 12px; } .bv-cinta { margin: 10px -12px; } .bv-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; } .bv-tile { min-width: 0; padding: 9px 10px 7px; } .bv-tn { font-size: .8rem; } .bv-tp { font-size: 1.3rem; } .bv-tf span:nth-child(n+2) { display: none; } .bv-marca h1 { font-size: 1.2rem; } .bv-reloj { display: none; } }
+/* Bolsa: logo, mercados, crash y animaciones */
+.bv-logo-img { height: 58px; width: auto; display: block; }
+body.tv .bv-logo-img { height: 72px; }
+.bv-sel { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-top: 12px; }
+.bv-sel .bv-tabs { margin-top: 0; }
+.bv-merc { display: inline-flex; background: #070b10; border: 1px solid var(--lin); border-radius: 99px; padding: 3px; }
+.bv-merc button { background: transparent; color: var(--mu); border: 0; border-radius: 99px; padding: 6px 16px; font: inherit; font-weight: 700; font-size: .88rem; cursor: pointer; }
+.bv-merc button.on { background: var(--up); color: #04140a; }
+.bv-crash-btn { border-color: #7f1d1d; color: #fecaca; } .bv-crash-btn:hover { background: #3b0a0a; border-color: var(--dn); }
+.bv-crash-bar { display: flex; justify-content: center; align-items: center; gap: 18px; flex-wrap: wrap; margin: 12px -18px 0; padding: 10px 18px; background: repeating-linear-gradient(-45deg, #7f1d1d 0 18px, #991b1b 18px 36px); color: #fff; font-size: 1.05rem; animation: bvcrash 1.2s ease-in-out infinite; }
+.bv-crash-bar b { letter-spacing: .12em; } .bv-cd { font-family: ui-monospace, Menlo, monospace; background: rgba(0,0,0,.3); padding: 2px 10px; border-radius: 6px; }
+@keyframes bvcrash { 50% { filter: brightness(1.25); } }
+.bv-opc { display: flex; gap: 6px; flex-wrap: wrap; }
+.bv-opc button { border: 1.5px solid var(--line); background: #fff; border-radius: 8px; padding: 8px 14px; font: inherit; font-weight: 700; cursor: pointer; }
+.bv-opc button.on { background: #b91c1c; border-color: #b91c1c; color: #fff; }
+#bv-anim { position: fixed; inset: 0; pointer-events: none; z-index: 1500; overflow: hidden; }
+#bv-anim .bv-an { position: absolute; left: 0; top: 0; line-height: 1; will-change: transform; filter: drop-shadow(0 6px 10px rgba(0,0,0,.45)); }
+#bv-anim .bv-an-etq { position: absolute; white-space: nowrap; background: rgba(7,11,16,.88); color: #fff; border: 1px solid #22c55e; border-radius: 99px; padding: 8px 18px; font-weight: 800; font-size: 1.3rem; letter-spacing: .02em; box-shadow: 0 8px 24px rgba(0,0,0,.4); }
+#bv-anim .bv-crash-fx { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; background: radial-gradient(circle, rgba(127,29,29,.75), rgba(0,0,0,.55)); }
+#bv-anim .bv-crash-fx b { font-size: clamp(3rem, 12vw, 9rem); color: #fff; letter-spacing: .06em; text-shadow: 0 0 30px #ef4444, 0 6px 0 #7f1d1d; }
+#bv-anim .bv-crash-fx span { font-size: clamp(1.1rem, 3vw, 2rem); color: #fecaca; font-weight: 700; }
+@media (max-width: 620px) { .bv-logo-img { height: 44px; } #bv-anim .bv-an-etq { font-size: 1rem; } }
+@media (prefers-reduced-motion: reduce) { #bv-anim .bv-an { display: none; } }
