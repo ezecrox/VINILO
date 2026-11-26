@@ -1,4 +1,4 @@
-# Vinilo · Gestión de Almacén
+# VINILO APP
 
 Aplicación web para controlar el stock (en unidades) de los almacenes **CENTRAL**, **VINILO BAR** y **EL GALPON VINILO**:
 recepción de mercadería, transferencias entre depósitos, consumos, ajustes de inventario y notas de pedido.
