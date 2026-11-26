@@ -239,3 +239,4 @@ El ADMIN elige qué tragos se muestran con el botón **⚙️ Tragos**. Es un ju
 - **CRASH** (permiso `juegosCrash`): baja todos los precios de la sucursal un 20–50 % durante 5–30 minutos, con animación y cuenta regresiva en pantalla. Se puede terminar antes; los precios se recuperan de a poco en 10 minutos. Queda guardado en `app_config` (`bolsa_crash_<cuenta>`).
 - **Animaciones**: cada venta nueva de una pizza o un trago dispara una animación al azar (pizza que cruza, sube, rebota o llueve; dos copas que brindan en el centro, desde los costados, en un lugar al azar o de a dos), con el nombre del producto. La pantalla consulta Fudo cada 20 s.
 - Logo del juego: `public/vinilo-club-blanco.png` (y la versión roja `vinilo-club.png`).
+- **Modo demo** (botón 🎬 Demo o `#/bolsa?demo=1`): ventas inventadas en vivo sobre los productos y precios reales de Fudo, para mostrar cómo funciona sin esperar a la noche. Tiene su propio crash (no afecta la bolsa real).

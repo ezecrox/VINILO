@@ -780,3 +780,5 @@ body.tv .bv-logo-img { height: 72px; }
 #bv-anim .bv-crash-fx span { font-size: clamp(1.1rem, 3vw, 2rem); color: #fecaca; font-weight: 700; }
 @media (max-width: 620px) { .bv-logo-img { height: 44px; } #bv-anim .bv-an-etq { font-size: 1rem; } }
 @media (prefers-reduced-motion: reduce) { #bv-anim .bv-an { display: none; } }
+.bv-demo-bar { margin: 12px -18px 0; padding: 8px 18px; background: #1e293b; color: #fde68a; text-align: center; font-size: .9rem; border-top: 1px solid #334155; border-bottom: 1px solid #334155; }
+.bv-demo-bar a { color: #fde68a; } .bv-btn.on { background: #fde68a; color: #1e293b; border-color: #fde68a; }

@@ -94,18 +94,44 @@ function simular(prods, items, desde, ahora, crash = null) {
   };
 }
 
-async function armar(cta, merc, ocultos, crash) {
+// ---- Modo demo: ventas inventadas (siempre las mismas para cada momento) sobre los productos reales de Fudo ----
+function hashTxt(t) { let h = 2166136261; for (const c of String(t)) { h ^= c.charCodeAt(0); h = Math.imul(h, 16777619); } return h >>> 0; }
+function rngDe(sem) { let x = sem >>> 0 || 1; return () => { x ^= x << 13; x >>>= 0; x ^= x >>> 17; x ^= x << 5; x >>>= 0; return x / 4294967296; }; }
+function ventasDemo(todos, ahora) {
+  const SLOT = 12e3, HORAS = 4, fin = Math.floor(ahora.getTime() / SLOT), ini = fin - (HORAS * 3600e3) / SLOT;
+  const lista = [...todos.values()].filter((p) => p.activo);
+  // Popularidad fija por producto (unos pocos muy pedidos, el resto poco)
+  const peso = lista.map((p) => { const r = rngDe(hashTxt(p.id + 'pop'))(); return p.mercado === 'pizzas' ? 0.4 + r * 1.2 : Math.pow(r, 3) * 6 + 0.15; });
+  const total = peso.reduce((a, b) => a + b, 0);
+  const elegir = (r) => { let x = r * total; for (let i = 0; i < lista.length; i++) { x -= peso[i]; if (x <= 0) return lista[i]; } return lista[lista.length - 1]; };
+  const out = [];
+  for (let k = ini; k < fin; k++) {
+    const t = k * SLOT, p = (k - ini) / (fin - ini), r = rngDe(hashTxt('s' + k));
+    const carga = 0.3 + 0.7 * Math.min(1, p * 1.6);       // la noche se va llenando y ahora está en el pico
+    const caliente = lista.length ? lista[rngDe(hashTxt('h' + Math.floor(k / 45)))() * lista.length | 0] : null; // un "boom" distinto cada 15 min
+    const n = r() < carga * 0.85 ? (r() < 0.25 ? 2 : 1) : 0;
+    for (let j = 0; j < n; j++) {
+      const prod = caliente && caliente.mercado === 'tragos' && r() < 0.22 ? caliente : elegir(r());
+      out.push({ id: `demo-${k}-${j}`, producto: prod.id, venta: 'demo', cantidad: r() < 0.15 ? 2 : 1, precio: prod.base, creado: new Date(t + r() * SLOT) });
+    }
+  }
+  return out;
+}
+
+async function armar(cta, merc, ocultos, crash, demo = false) {
   const ahora = new Date(); const { desde, fecha } = inicioJornada(ahora);
-  const [todos, items] = await Promise.all([productosMercado(cta), leerItems(cta.get, desde, 10)]);
+  const todos = await productosMercado(cta);
+  const items = demo ? ventasDemo(todos, ahora).filter((i) => i.creado <= ahora) : await leerItems(cta.get, desde, 10);
+  const desdeSim = demo ? new Date(ahora.getTime() - 4 * 3600e3 - 12 * 3600e3) : desde; // en demo la "noche" empezó hace 4 h
   const visibles = new Map([...deMercado(todos, merc)].filter(([id]) => !ocultos.has(id)));
   const crashVivo = crash && ahora.getTime() < new Date(crash.hasta).getTime() + 10 * 60e3 ? crash : null;
-  const sim = simular(visibles, items, desde, ahora, crashVivo);
+  const sim = simular(visibles, items, desdeSim, ahora, crashVivo);
   // Ventas de los últimos 10 minutos de cualquier mercado (para las animaciones de la pantalla)
   const recientes = items.filter((i) => ahora - i.creado < 10 * 60e3 && todos.has(String(i.producto)))
     .map((i) => { const p = todos.get(String(i.producto)); return { id: i.id || `${i.venta}-${i.producto}-${i.creado.getTime()}`, mercado: p.mercado, nombre: p.nombre, cantidad: i.cantidad || 1, t: i.creado.toISOString() }; })
     .sort((x, y) => x.t.localeCompare(y.t)).slice(-40);
   const enCrash = crashVivo && ahora.getTime() <= new Date(crashVivo.hasta).getTime() ? crashVivo : null;
-  const base = { jornada: fecha, generado: ahora.toISOString(), cuenta: cta.id, sucursal: cta.nombre, mercado: merc, mercado_nombre: MERCADOS[merc].nombre,
+  const base = { demo, jornada: fecha, generado: ahora.toISOString(), cuenta: cta.id, sucursal: cta.nombre, mercado: merc, mercado_nombre: MERCADOS[merc].nombre,
     mercados: Object.entries(MERCADOS).map(([id, d]) => ({ id, nombre: d.nombre, productos: deMercado(todos, id).size })), total: visibles.size, ventas_recientes: recientes,
     crash: enCrash ? { ...enCrash, factor: +factorCrash(enCrash, ahora.getTime()).toFixed(3) } : null };
   if (!sim) { const f = factorCrash(crashVivo, ahora.getTime());
@@ -123,9 +149,10 @@ module.exports = function registrarBolsa({ route, query, fail, permitir }) {
   route('GET', '/api/bolsa/cuentas', async ({ user }) => { permitir(user, 'juegos'); return fudo.cuentasTablero().map(({ id, nombre }) => ({ id, nombre })); });
   route('GET', '/api/bolsa', async ({ user, url }) => {
     permitir(user, 'juegos');
-    const cta = cuenta(url); const merc = mercadoDe(url.searchParams.get('mercado')); const k = cta.id + ':' + merc; const ch = cache[k];
-    if (ch && Date.now() - ch.t < CACHE_MS) return ch.datos;
-    try { const datos = await armar(cta, merc, new Set(await cfg(claveOcultos(cta, merc), [])), await cfg('bolsa_crash_' + cta.id, null)); cache[k] = { t: Date.now(), datos }; return datos; }
+    const cta = cuenta(url); const merc = mercadoDe(url.searchParams.get('mercado')); const demo = url.searchParams.get('demo') === '1';
+    const k = cta.id + ':' + merc + (demo ? ':demo' : ''); const ch = cache[k];
+    if (ch && Date.now() - ch.t < (demo ? 5000 : CACHE_MS)) return ch.datos;
+    try { const datos = await armar(cta, merc, new Set(await cfg(claveOcultos(cta, merc), [])), await cfg('bolsa_crash_' + cta.id + (demo ? '_demo' : ''), null), demo); cache[k] = { t: Date.now(), datos }; return datos; }
     catch (e) { if (ch) return { ...ch.datos, desactualizado: true }; fail(502, `No se pudieron leer las ventas de Fudo de ${cta.nombre}: ${e.message}`); }
   });
   route('GET', '/api/bolsa/config', async ({ user, url }) => {
@@ -139,20 +166,21 @@ module.exports = function registrarBolsa({ route, query, fail, permitir }) {
   });
   // CRASH: baja todos los precios de la sucursal un % durante unos minutos (permiso juegosCrash)
   route('POST', '/api/bolsa/crash', async ({ user, url, body }) => {
-    permitir(user, 'juegosCrash'); const cta = cuenta(url);
+    permitir(user, 'juegosCrash'); const cta = cuenta(url); const sfx = url.searchParams.get('demo') === '1' ? '_demo' : '';
     const minutos = Math.min(60, Math.max(1, Math.round(Number(body && body.minutos) || 10)));
     const caida = Math.min(60, Math.max(5, Math.round(Number(body && body.caida) || 30)));
     const desde = new Date(); const crash = { desde: desde.toISOString(), hasta: new Date(desde.getTime() + minutos * 60e3).toISOString(), caida, minutos, por: user.nombre };
-    await setCfg('bolsa_crash_' + cta.id, crash);
+    await setCfg('bolsa_crash_' + cta.id + sfx, crash);
     for (const k of Object.keys(cache)) if (k.startsWith(cta.id + ':')) delete cache[k];
     return crash;
   });
   route('DELETE', '/api/bolsa/crash', async ({ user, url }) => {
-    permitir(user, 'juegosCrash'); const cta = cuenta(url);
-    const c = await cfg('bolsa_crash_' + cta.id, null);
-    if (c && new Date(c.hasta) > new Date()) { c.hasta = new Date().toISOString(); await setCfg('bolsa_crash_' + cta.id, c); }
+    permitir(user, 'juegosCrash'); const cta = cuenta(url); const sfx = url.searchParams.get('demo') === '1' ? '_demo' : '';
+    const c = await cfg('bolsa_crash_' + cta.id + sfx, null);
+    if (c && new Date(c.hasta) > new Date()) { c.hasta = new Date().toISOString(); await setCfg('bolsa_crash_' + cta.id + sfx, c); }
     for (const k of Object.keys(cache)) if (k.startsWith(cta.id + ':')) delete cache[k];
     return { ok: true };
   });
 };
 module.exports.simular = simular;
+module.exports.ventasDemo = ventasDemo;

@@ -1653,7 +1653,8 @@
     document.body.classList.add('bolsa-on');
     main.innerHTML = `<div class="bv">
       <div class="bv-top"><div class="bv-marca"><img class="bv-logo-img" src="/vinilo-club-blanco.png" alt="Vinilo Bar Club"><div><h1 id="bv-tit">Bolsa de tragos</h1><p id="bv-sub">Abriendo el mercado…</p></div></div>
-        <div class="bv-acc"><span class="bv-reloj" id="bv-reloj"></span>${puede('juegosCrash') ? '<button class="bv-btn bv-crash-btn" id="bv-crash">💥 Crash</button>' : ''}${S.user.rol === 'ADMIN' ? '<button class="bv-btn" id="bv-conf">⚙️ Productos</button>' : ''}<button class="bv-btn" id="bv-tv">📺 Modo TV</button></div></div>
+        <div class="bv-acc"><span class="bv-reloj" id="bv-reloj"></span>${puede('juegosCrash') ? '<button class="bv-btn bv-crash-btn" id="bv-crash">💥 Crash</button>' : ''}<button class="bv-btn" id="bv-demo">🎬 Demo</button>${S.user.rol === 'ADMIN' ? '<button class="bv-btn" id="bv-conf">⚙️ Productos</button>' : ''}<button class="bv-btn" id="bv-tv">📺 Modo TV</button></div></div>
+      <div class="bv-demo-bar" id="bv-demobar" hidden>🎬 <b>MODO DEMO</b> · ventas simuladas sobre los productos y precios reales de Fudo · <a href="#" id="bv-demo-salir">volver a las ventas reales</a></div>
       <div class="bv-sel"><div class="bv-merc" id="bv-merc"></div><div class="bv-tabs" id="bv-tabs" hidden></div></div>
       <div class="bv-crash-bar" id="bv-crashbar" hidden></div>
       <div class="bv-cinta"><div class="bv-cinta-in" id="bv-cinta"></div></div>
@@ -1661,7 +1662,8 @@
     let cuentas = [], cuenta = (() => { try { return localStorage.getItem('vinilo_bv_cuenta') || ''; } catch (_) { return ''; } })(), previo = new Map();
     let mercado = (() => { try { return localStorage.getItem('vinilo_bv_mercado') || 'tragos'; } catch (_) { return 'tragos'; } })();
     let vistos = null, crashVisto = null, crashAct = null, cola = [];
-    const qs = () => `?mercado=${encodeURIComponent(mercado)}${cuenta ? '&cuenta=' + encodeURIComponent(cuenta) : ''}`;
+    let demo = /[?&]demo=1/.test(location.hash);
+    const qs = () => `?mercado=${encodeURIComponent(mercado)}${cuenta ? '&cuenta=' + encodeURIComponent(cuenta) : ''}${demo ? '&demo=1' : ''}`;
     const pintarMerc = (ms) => { $('#bv-merc').innerHTML = (ms || [{ id: 'tragos', nombre: 'Tragos' }, { id: 'pizzas', nombre: 'Pizzas' }]).map((m) => `<button class="${m.id === mercado ? 'on' : ''}" data-m="${m.id}">${m.id === 'pizzas' ? '🍕' : '🍸'} ${esc(m.nombre)}</button>`).join('');
       $$('#bv-merc button').forEach((b) => (b.onclick = () => { if (b.dataset.m === mercado) return; mercado = b.dataset.m; try { localStorage.setItem('vinilo_bv_mercado', mercado); } catch (_) { /* sin storage */ } previo = new Map(); pintarMerc(ms); $('#bv-body').innerHTML = '<div class="bv-vacio">Abriendo el mercado…</div>'; cargar(); })); };
     pintarMerc();
@@ -1687,6 +1689,7 @@
       if (d.mercados) pintarMerc(d.mercados);
       $('#bv-tit').textContent = `Bolsa de ${d.mercado_nombre.toLowerCase()}`;
       $('#bv-sub').innerHTML = `${esc(d.sucursal)} · ${d.abierto ? `mercado abierto desde las ${horaAR(d.apertura)} · ${d.unidades} ${unidad} operad${pz ? 'as' : 'os'}` : `mercado cerrado: abre con ${pz ? 'la primera pizza' : 'el primer trago'} de la noche`}${d.desactualizado ? ' · <b>sin conexión con Fudo</b>' : ''}`;
+      $('#bv-demobar').hidden = !d.demo; $('#bv-demo').textContent = d.demo ? '📡 Ventas reales' : '🎬 Demo'; $('#bv-demo').classList.toggle('on', !!d.demo);
       crashAct = d.crash; if (d.crash && d.crash.desde !== crashVisto) { if (crashVisto !== null || Date.now() - new Date(d.crash.desde).getTime() < 60e3) animCrash(d.crash); crashVisto = d.crash.desde; } else if (!d.crash && crashVisto === null) crashVisto = '';
       reloj();
       const rec = d.ventas_recientes || [];
@@ -1745,6 +1748,8 @@
       $('#bc-ok', m).onclick = async () => { const ocultos = [...m.querySelectorAll('#bc-l input')].filter((i) => !i.checked).map((i) => i.value);
         try { await api('/api/bolsa/config' + qs(), { method: 'PUT', body: { ocultos } }); closeModal(); toast('Listo'); cargar(); } catch (err) { toast(err.message, true); } };
     };
+    const cambiarDemo = (e) => { if (e) e.preventDefault(); demo = !demo; history.replaceState(null, '', '#/bolsa' + (demo ? '?demo=1' : '')); previo = new Map(); vistos = null; crashVisto = null; cola = []; $('#bv-body').innerHTML = '<div class="bv-vacio">Abriendo el mercado…</div>'; cargar(); };
+    $('#bv-demo').onclick = () => cambiarDemo(); $('#bv-demo-salir').onclick = cambiarDemo;
     if ($('#bv-crash')) $('#bv-crash').onclick = async () => {
       if (crashAct && new Date(crashAct.hasta) > new Date()) { try { await api('/api/bolsa/crash' + qs(), { method: 'DELETE' }); crashAct = null; toast('Crash terminado: los precios se recuperan en 10 minutos'); cargar(); } catch (err) { toast(err.message, true); } return; }
       const m = modal(`<h2>💥 Lanzar un CRASH</h2><p>Todos los precios de la bolsa de esta sucursal (tragos y pizzas) se desploman durante unos minutos. Al terminar se recuperan de a poco en 10 minutos. Los precios de Fudo no cambian.</p>
@@ -1759,7 +1764,7 @@
     let n = 0;
     VIEWS.bolsa._t = setInterval(() => {
       if (!location.hash.startsWith('#/bolsa')) { clearInterval(VIEWS.bolsa._t); document.body.classList.remove('tv', 'bolsa-on'); cola = []; const c = document.getElementById('bv-anim'); if (c) c.remove(); return; }
-      reloj(); if (++n % 20 === 0 && !document.hidden) cargar();
+      reloj(); if (++n % (demo ? 8 : 20) === 0 && !document.hidden) cargar();
     }, 1000);
   };
 
