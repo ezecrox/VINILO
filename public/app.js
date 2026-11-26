@@ -205,6 +205,7 @@
     recepcion: '<path d="M12 3v11"/><path d="m7.5 9.5 4.5 4.5 4.5-4.5"/><path d="M3 14v4a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-4"/>',
     transferencia: '<path d="M4 8h14"/><path d="m14 4 4 4-4 4"/><path d="M20 16H6"/><path d="m10 12-4 4 4 4"/>',
     consumo: '<path d="M6 3h12l-1.2 7.2A4.9 4.9 0 0 1 12 14.5a4.9 4.9 0 0 1-4.8-4.3L6 3Z"/><path d="M12 14.5V20"/><path d="M8 21h8"/><path d="M6.6 7h10.8"/>',
+    pizzaiolo: '<path d="M12 2 2 21h20z"/><circle cx="10" cy="14" r="1.4" fill="currentColor"/><circle cx="14" cy="16" r="1.4" fill="currentColor"/><circle cx="12" cy="10" r="1.2" fill="currentColor"/>',
     bolsa: '<path d="M3 17l5-5 4 4 8-8"/><path d="M15 8h5v5"/><path d="M3 21h18"/>',
     avisos: '<path d="M3 11v2a1 1 0 0 0 1 1h2l5 4V6L6 10H4a1 1 0 0 0-1 1z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 5.5a9 9 0 0 1 0 13"/>',
     tablero: '<path d="M3 3v18h18"/><path d="m7 15 4-4 3 3 5-6"/><circle cx="19" cy="5" r="2" fill="currentColor"/>',
@@ -265,6 +266,7 @@
     { id: 'usuarios', lbl: 'Usuarios y roles', ok: () => puede('usuarios') },
     { sec: 'Juegos' },
     { id: 'bolsa', lbl: 'Bolsa de tragos', ok: () => puede('juegos') },
+    { id: 'pizzaiolo', lbl: 'Pizzaiolo (juego QR)', ok: () => puede('juegos') },
     { sec: 'Ayuda' },
     { id: 'manuales', lbl: 'Manuales', ok: () => true },
   ];
@@ -1857,6 +1859,75 @@
       if (!location.hash.startsWith('#/bolsa')) { clearInterval(VIEWS.bolsa._t); document.body.classList.remove('tv', 'bolsa-on'); cola = []; const c = document.getElementById('bv-anim'); if (c) c.remove(); return; }
       reloj(); if (++n % (demo ? 8 : 20) === 0 && !document.hidden) cargar();
     }, 1000);
+  };
+
+  // ---------- Juegos: Pizzaiolo de la Noche (QR) ----------
+  VIEWS.pizzaiolo = async (main) => {
+    clearInterval(VIEWS.pizzaiolo._t);
+    const sucs = (await api('/api/sucursales').catch(() => [])).filter((s) => s.activo);
+    if (!sucs.length) { main.innerHTML = '<h1>Pizzaiolo de la Noche</h1><div class="card empty">Primero cargá las sucursales en Parametrización → Sucursales.</div>'; return; }
+    let suc = Number((() => { try { return localStorage.getItem('vinilo_pz_suc'); } catch (_) { return ''; } })()) || 0;
+    if (!sucs.some((s) => s.id === suc)) suc = sucs[0].id;
+    let previos = null;
+    main.innerHTML = `<div class="pz">
+      <div class="pz-top"><div class="pz-marca"><img src="/gato.png" alt=""><div><h1>Pizzaiolo de la Noche</h1><p id="pz-sub">Juego por QR para los comensales</p></div></div>
+        <div class="pz-acc">${S.user.rol === 'ADMIN' ? '<button class="bv-btn" id="pz-conf">⚙️ Configurar</button>' : ''}<button class="bv-btn" id="pz-qrs">🖨️ QR por mesa</button><button class="bv-btn" id="pz-tv">📺 Modo TV</button></div></div>
+      <div class="bv-tabs" id="pz-tabs" ${sucs.length < 2 ? 'hidden' : ''}>${sucs.map((s) => `<button data-s="${s.id}" class="${s.id === suc ? 'on' : ''}">${esc(s.nombre)}</button>`).join('')}</div>
+      <div id="pz-body"><div class="bv-vacio">Cargando…</div></div></div>`;
+    const pintar = (d) => {
+      d.partidas = Number(d.partidas) || 0; d.jugando = Number(d.jugando) || 0; d.mesas = Number(d.mesas) || 0;
+      $('#pz-sub').textContent = `${d.sucursal.nombre} · jornada del ${fmtDia(d.fecha)}${d.activo ? '' : ' · ⏸ juego pausado'}`;
+      const ids = new Set(d.top.map((t) => t.id)); const nuevos = previos ? d.top.filter((t) => !previos.has(t.id)).map((t) => t.id) : []; previos = ids;
+      $('#pz-body').innerHTML = `<div class="pz-grid">
+        <div><h2 class="pz-h">Ranking de la noche</h2>
+          ${d.top.length ? `<div class="pz-rk">${d.top.slice(0, 10).map((t, i) => `<div class="${nuevos.includes(t.id) ? 'nuevo' : ''}"><span class="n">${i + 1}</span><span class="q">${esc(t.nombre)}${t.mesa ? `<small>mesa ${t.mesa}</small>` : ''}</span><span class="p">${t.puntos}</span>${S.user.rol === 'ADMIN' ? `<button class="pz-x" data-del="${t.id}" title="Borrar esta partida">✕</button>` : ''}</div>`).join('')}</div>`
+            : '<div class="pz-vacio">Todavía nadie jugó esta noche.<br>¡Escaneá el QR y estrená el ranking!</div>'}</div>
+        <div class="pz-lado"><div class="pz-qr">${d.qr}</div><div class="pz-esc">Escaneá y jugá</div>
+          <div class="pz-vivo"><span><b>${d.jugando}</b> jugando ahora</span><span><b>${d.partidas}</b> ${d.partidas === 1 ? 'partida' : 'partidas'} esta noche${d.mesas ? ` · ${d.mesas} ${d.mesas === 1 ? 'mesa' : 'mesas'}` : ''}</span>${d.ultimo ? `<span>Último: <b>${esc(d.ultimo.nombre)}</b>${d.ultimo.mesa ? ` (mesa ${d.ultimo.mesa})` : ''} · ${d.ultimo.puntos} pts</span>` : ''}</div>
+          ${d.premio ? `<div class="pz-premio">🏆 ${esc(d.premio)}</div>` : ''}<a class="pz-link" href="${esc(d.link)}" target="_blank" rel="noopener">Abrir el juego ↗</a></div></div>`;
+      $$('#pz-body [data-del]').forEach((b) => (b.onclick = () => { const t = d.top.find((x) => x.id == b.dataset.del);
+        const m = modal(`<h2>Borrar partida</h2><p>¿Sacar a <b>${esc(t.nombre)}</b> (${t.puntos} pts) del ranking? Sirve para nombres inapropiados.</p><div class="form-actions"><button class="btn sec" data-close>Cancelar</button><button class="btn" id="pz-del-ok">Borrar</button></div>`);
+        $('#pz-del-ok', m).onclick = async () => { try { await api('/api/juego/partidas/' + t.id, { method: 'DELETE' }); closeModal(); cargar(); } catch (err) { toast(err.message, true); } }; }));
+    };
+    const cargar = async () => { try { pintar(await api(`/api/juego/tablero?s=${suc}`)); } catch (err) { $('#pz-body').innerHTML = `<div class="bv-vacio">⚠️ ${esc(err.message)}</div>`; } };
+    $$('#pz-tabs button').forEach((b) => (b.onclick = () => { suc = Number(b.dataset.s); try { localStorage.setItem('vinilo_pz_suc', suc); } catch (_) { /* sin storage */ } previos = null; $$('#pz-tabs button').forEach((x) => x.classList.toggle('on', x === b)); cargar(); }));
+    $('#pz-tv').onclick = () => { document.body.classList.toggle('tv'); $('#pz-tv').textContent = document.body.classList.contains('tv') ? '✕ Salir' : '📺 Modo TV';
+      try { if (document.body.classList.contains('tv')) document.documentElement.requestFullscreen && document.documentElement.requestFullscreen(); else document.fullscreenElement && document.exitFullscreen(); } catch (_) { /* sin pantalla completa */ } };
+    $('#pz-qrs').onclick = () => {
+      const m = modal(`<h2>🖨️ QR por mesa</h2><p>Cada QR abre el juego con el número de mesa ya cargado. Imprimilos y pegalos en las mesas de <b>${esc(sucs.find((s) => s.id === suc).nombre)}</b>.</p>
+        <div class="row"><div class="f"><label>Desde la mesa</label><input type="number" id="qd" value="1" min="1"></div><div class="f"><label>Hasta la mesa</label><input type="number" id="qh" value="20" min="1"></div></div>
+        <div class="form-actions"><button class="btn sec" data-close>Cancelar</button><button class="btn" id="q-ok">Generar e imprimir</button></div>`);
+      $('#q-ok', m).onclick = async () => {
+        let d; try { d = await api(`/api/juego/qrs?s=${suc}&desde=${$('#qd', m).value}&hasta=${$('#qh', m).value}`); } catch (err) { toast(err.message, true); return; }
+        const w = window.open('', '_blank'); if (!w) { toast('Permití las ventanas emergentes para imprimir', true); return; }
+        w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>QR mesas · ${esc(d.sucursal)}</title><link href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Nunito:wght@700;800&display=swap" rel="stylesheet">
+          <style>body{margin:0;font-family:Nunito,sans-serif}.h{display:grid;grid-template-columns:repeat(2,1fr);gap:10mm;padding:10mm}.c{border:2px dashed #c8281e;border-radius:6mm;padding:6mm;text-align:center;break-inside:avoid}
+          .c h2{font-family:'Lilita One';color:#c8281e;margin:0;font-size:22pt}.c p{margin:2mm 0;font-weight:800}.c svg{width:55mm;height:55mm}.c .m{font-family:'Lilita One';font-size:28pt;color:#20130f}.c small{color:#7a6760}
+          .c img{width:16mm;height:16mm;border-radius:50%;vertical-align:middle}@media print{.h{padding:0}}</style></head><body><div class="h">
+          ${d.mesas.map((x) => `<div class="c"><img src="${location.origin}/gato.png"><h2>Pizzaiolo de la Noche</h2><p>Escaneá, jugá y entrá al ranking del bar</p>${x.svg}<div class="m">Mesa ${x.mesa}</div><small>${esc(d.sucursal)}</small></div>`).join('')}</div>
+          <script>setTimeout(()=>print(),800)<\/script></body></html>`);
+        w.document.close(); closeModal();
+      };
+    };
+    if ($('#pz-conf')) $('#pz-conf').onclick = async () => {
+      const c = await api('/api/juego/config');
+      const fila = (q, i) => `<div class="pz-q" data-i="${i}"><input class="q-p" placeholder="Pregunta" value="${esc(q.p)}" maxlength="140"><input class="q-ok" placeholder="Respuesta correcta" value="${esc(q.ok)}" maxlength="60">
+        ${[0, 1, 2].map((k) => `<input class="q-m" placeholder="Incorrecta ${k + 1}" value="${esc((q.mal || [])[k] || '')}" maxlength="60">`).join('')}<button type="button" class="btn ghost sm q-del">Quitar</button></div>`;
+      const m = modal(`<h2>⚙️ Configurar el juego</h2>
+        <label class="check"><input type="checkbox" id="pc-act" ${c.activo ? 'checked' : ''}> Juego activo (si lo pausás, el QR muestra "en pausa")</label>
+        <div class="f mt"><label>Premio de la noche</label><input id="pc-pre" maxlength="120" value="${esc(c.premio || '')}" placeholder="Ej.: El mejor de la noche gana un trago de la casa"></div>
+        <div class="f mt"><label>Preguntas de la trivia <span class="muted" style="font-weight:400">(en cada partida salen 4 al azar; mínimo 4)</span></label><div class="pz-q pz-qh"><span>Pregunta</span><span>✓ Correcta</span><span>✗ Incorrecta</span><span>✗ Incorrecta</span><span>✗ Incorrecta</span><span></span></div><div id="pc-qs">${c.preguntas.map(fila).join('')}</div>
+          <button type="button" class="btn sec sm mt" id="pc-add">+ Agregar pregunta</button></div>
+        <div class="form-actions"><button class="btn sec" data-close>Cancelar</button><button class="btn" id="pc-ok">Guardar</button></div>`, { wide: true });
+      const bind = () => m.querySelectorAll('.q-del').forEach((b) => (b.onclick = () => b.closest('.pz-q').remove()));
+      bind(); $('#pc-add', m).onclick = () => { $('#pc-qs', m).insertAdjacentHTML('beforeend', fila({ p: '', ok: '', mal: [] }, Date.now())); bind(); };
+      $('#pc-ok', m).onclick = async () => {
+        const preguntas = [...m.querySelectorAll('.pz-q')].map((r) => ({ p: r.querySelector('.q-p').value, ok: r.querySelector('.q-ok').value, mal: [...r.querySelectorAll('.q-m')].map((x) => x.value) }));
+        try { await api('/api/juego/config', { method: 'PUT', body: { activo: $('#pc-act', m).checked, premio: $('#pc-pre', m).value, preguntas } }); closeModal(); toast('Juego configurado'); cargar(); } catch (err) { toast(err.message, true); }
+      };
+    };
+    await cargar();
+    VIEWS.pizzaiolo._t = setInterval(() => { if (!location.hash.startsWith('#/pizzaiolo')) { clearInterval(VIEWS.pizzaiolo._t); document.body.classList.remove('tv'); return; } if (!document.hidden) cargar(); }, 10000);
   };
 
   // ---------- Manuales ----------

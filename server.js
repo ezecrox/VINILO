@@ -61,6 +61,7 @@ const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; cha
 function serveStatic(req, res, pathname) {
   let file = path.normalize(path.join(PUBLIC_DIR, decodeURIComponent(pathname)));
   if (!file.startsWith(PUBLIC_DIR)) { res.writeHead(403); return res.end(); }
+  if (pathname === '/jugar' || pathname === '/jugar/') file = path.join(PUBLIC_DIR, 'juego.html'); // juego QR para comensales
   if (!fs.existsSync(file) || fs.statSync(file).isDirectory()) file = path.join(PUBLIC_DIR, 'index.html');
   // Siempre revalidar: así cada publicación nueva llega al navegador sin tener que forzar la recarga
   const st = fs.statSync(file);
@@ -889,6 +890,7 @@ whatsapp.registrar({ route, fail, permitir, isTrue, toInt, str });
 require('./src/tablero')({ route, query, fail, permitir });
 require('./src/bolsa')({ route, query, fail, permitir });
 require('./src/avisos')({ route, query, fail, permitir });
+require('./src/juego')({ route, query, fail, permitir });
 require('./src/checklist')({ route, query, tx, fail, permitir, permitirAlguno, isTrue, toInt, str, fechaOk });
 require('./src/programacion')({ route, query, tx, fail, permitir, permitirAlguno, isTrue, toInt, str, fechaOk });
 

@@ -655,3 +655,21 @@ CREATE TABLE IF NOT EXISTS avisos_leidos (
   leido_en   TIMESTAMPTZ NOT NULL DEFAULT now(),
   PRIMARY KEY (aviso_id, usuario_id)
 );
+
+-- Juego QR "Pizzaiolo de la Noche": partidas de los comensales
+CREATE TABLE IF NOT EXISTS juego_partidas (
+  id           SERIAL PRIMARY KEY,
+  token        VARCHAR(48) NOT NULL UNIQUE,
+  sucursal_id  INT REFERENCES sucursales(id) ON DELETE SET NULL,
+  mesa         INT,
+  nombre       VARCHAR(20) NOT NULL,
+  jornada      DATE NOT NULL,
+  estado       VARCHAR(10) NOT NULL DEFAULT 'JUGANDO',   -- JUGANDO | TERMINADA
+  preguntas    TEXT NOT NULL DEFAULT '[]',                -- índices correctos (no se mandan al celular)
+  puntos       INT NOT NULL DEFAULT 0,
+  r1 INT, r2 INT, r3 INT,
+  ip           VARCHAR(64),
+  creado_en    TIMESTAMPTZ NOT NULL DEFAULT now(),
+  terminado_en TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS juego_partidas_rank ON juego_partidas (sucursal_id, jornada, estado, puntos DESC);

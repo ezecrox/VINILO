@@ -245,3 +245,10 @@ El ADMIN elige qué tragos se muestran con el botón **⚙️ Tragos**. Es un ju
 Menú **General → Avisos en el panel** (permiso `avisos`, ADMIN por defecto). El aviso aparece arriba de todo en el Panel de los usuarios elegidos (todos, ciertos roles y/o sucursales) hasta que cada uno toca **Entendido**; los leídos quedan en "Ver avisos leídos".
 Tipos: 📢 Aviso, ⚠️ Importante, 🚨 Urgente (va primero y titila). Vencimiento opcional (1 día, 3 días, 1 semana, 1 mes, fecha o sin vencimiento). Opción de mandarlo también como notificación push al celular.
 El administrador ve cuántos lo leyeron y quiénes sí/no, puede editarlo (y volver a mostrarlo a todos), pausarlo o borrarlo. Tablas `avisos` y `avisos_leidos`.
+
+## Juegos → Pizzaiolo de la Noche (juego por QR para comensales)
+- Los comensales escanean el QR de la mesa → `/jugar?s=<sucursal>&m=<mesa>` (página pública `public/juego.html`, sin usuario). Ponen su nombre y juegan 3 rondas: **Al punto** (sacar la pizza del horno), **Armá la Margherita** (tocar ingredientes correctos) y **Trivia del bar** (4 preguntas al azar).
+- El puntaje lo calcula el servidor (`src/juego.js`): la trivia se corrige en el servidor (el celular nunca recibe la respuesta), hay topes por ronda, duración mínima de 30 s, token de un solo uso y límite de partidas por IP.
+- En VINILO APP: **Juegos → Pizzaiolo (juego QR)** (permiso `juegos`): ranking de la jornada en vivo con el QR del local, jugadores activos, último puntaje y premio; Modo TV; pestañas por sucursal; **🖨️ QR por mesa** genera una hoja para imprimir; **⚙️ Configurar** (ADMIN): activar/pausar, premio y preguntas de la trivia; el ADMIN puede borrar partidas (nombres inapropiados).
+- Los QR se generan en el servidor sin dependencias (`src/qr.js`, verificado con lectores reales). Si la app está detrás de otro dominio, se puede fijar `PUBLIC_URL`.
+- Tabla `juego_partidas`; configuración en `app_config` (`juego_config`).

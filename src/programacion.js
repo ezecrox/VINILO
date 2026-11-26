@@ -36,7 +36,7 @@ module.exports = function registrarProgramacion({ route, query, tx, fail, permit
 
   // ---------- Sucursales ----------
   route('GET', '/api/sucursales', async ({ user }) => {
-    permitirAlguno(user, 'sucursales', 'programacion', 'usuarios', 'misHoras', 'solicitudes', 'avisos');
+    permitirAlguno(user, 'sucursales', 'programacion', 'usuarios', 'misHoras', 'solicitudes', 'avisos', 'juegos');
     const { rows } = await query(
       `SELECT s.id, s.nombre, s.direccion, s.activo,
               coalesce(json_agg(json_build_object('id', u.id, 'nombre', u.nombre) ORDER BY u.nombre) FILTER (WHERE u.id IS NOT NULL), '[]') AS empleados
