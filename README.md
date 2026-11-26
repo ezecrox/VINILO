@@ -240,3 +240,8 @@ El ADMIN elige qué tragos se muestran con el botón **⚙️ Tragos**. Es un ju
 - **Animaciones**: cada venta nueva de una pizza o un trago dispara una animación al azar (pizza que cruza, sube, rebota o llueve; dos copas que brindan en el centro, desde los costados, en un lugar al azar o de a dos), con el nombre del producto. La pantalla consulta Fudo cada 20 s.
 - Logo del juego: `public/vinilo-club-blanco.png` (y la versión roja `vinilo-club.png`).
 - **Modo demo** (botón 🎬 Demo o `#/bolsa?demo=1`): ventas inventadas en vivo sobre los productos y precios reales de Fudo, para mostrar cómo funciona sin esperar a la noche. Tiene su propio crash (no afecta la bolsa real).
+
+## Avisos en el panel
+Menú **General → Avisos en el panel** (permiso `avisos`, ADMIN por defecto). El aviso aparece arriba de todo en el Panel de los usuarios elegidos (todos, ciertos roles y/o sucursales) hasta que cada uno toca **Entendido**; los leídos quedan en "Ver avisos leídos".
+Tipos: 📢 Aviso, ⚠️ Importante, 🚨 Urgente (va primero y titila). Vencimiento opcional (1 día, 3 días, 1 semana, 1 mes, fecha o sin vencimiento). Opción de mandarlo también como notificación push al celular.
+El administrador ve cuántos lo leyeron y quiénes sí/no, puede editarlo (y volver a mostrarlo a todos), pausarlo o borrarlo. Tablas `avisos` y `avisos_leidos`.

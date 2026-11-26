@@ -633,3 +633,25 @@ BEGIN
     INSERT INTO app_config (clave, valor) VALUES ('seed_checklist', '1');
   END IF;
 END $$;
+
+-- Avisos del administrador que aparecen en el Panel de los usuarios
+CREATE TABLE IF NOT EXISTS avisos (
+  id          SERIAL PRIMARY KEY,
+  titulo      VARCHAR(120) NOT NULL,
+  mensaje     TEXT NOT NULL,
+  tipo        VARCHAR(12) NOT NULL DEFAULT 'INFO',      -- INFO | IMPORTANTE | URGENTE
+  roles       TEXT NOT NULL DEFAULT '',                 -- CSV de códigos de rol ('' = todos)
+  sucursales  TEXT NOT NULL DEFAULT '',                 -- CSV de ids de sucursal ('' = todas)
+  desde       TIMESTAMPTZ NOT NULL DEFAULT now(),
+  hasta       TIMESTAMPTZ,                              -- NULL = sin vencimiento
+  activo      BOOLEAN NOT NULL DEFAULT TRUE,
+  push        BOOLEAN NOT NULL DEFAULT FALSE,
+  creado_por  INT REFERENCES usuarios(id),
+  creado_en   TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE TABLE IF NOT EXISTS avisos_leidos (
+  aviso_id   INT NOT NULL REFERENCES avisos(id) ON DELETE CASCADE,
+  usuario_id INT NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+  leido_en   TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (aviso_id, usuario_id)
+);

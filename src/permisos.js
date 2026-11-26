@@ -1,6 +1,7 @@
 // Catálogo de permisos configurables por rol (puntos de menú y acciones).
 const CATALOGO = [
   { grupo: 'General', clave: 'tablero', menu: 'Tablero en vivo', desc: 'Ver el estado del bar en vivo con datos de Fudo: mesas, comensales y ventas de la jornada' },
+  { grupo: 'General', clave: 'avisos', menu: 'Avisos en el panel', desc: 'Publicar avisos que aparecen en el Panel de todos los usuarios (o de algunos roles o sucursales)' },
   { grupo: 'Juegos', clave: 'juegos', menu: 'Bolsa de tragos', desc: 'Ver la bolsa de tragos: precios que suben y bajan según las ventas de Fudo (para mostrar en una pantalla)' },
   { grupo: 'Juegos', clave: 'juegosCrash', menu: 'Bolsa de tragos', desc: 'Lanzar un CRASH en la bolsa (bajan todos los precios por unos minutos)', requiere: 'juegos' },
   { grupo: 'General', clave: 'verStock', menu: 'Stock por almacén', desc: 'Ver el stock de los almacenes habilitados' },

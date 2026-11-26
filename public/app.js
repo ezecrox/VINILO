@@ -206,6 +206,7 @@
     transferencia: '<path d="M4 8h14"/><path d="m14 4 4 4-4 4"/><path d="M20 16H6"/><path d="m10 12-4 4 4 4"/>',
     consumo: '<path d="M6 3h12l-1.2 7.2A4.9 4.9 0 0 1 12 14.5a4.9 4.9 0 0 1-4.8-4.3L6 3Z"/><path d="M12 14.5V20"/><path d="M8 21h8"/><path d="M6.6 7h10.8"/>',
     bolsa: '<path d="M3 17l5-5 4 4 8-8"/><path d="M15 8h5v5"/><path d="M3 21h18"/>',
+    avisos: '<path d="M3 11v2a1 1 0 0 0 1 1h2l5 4V6L6 10H4a1 1 0 0 0-1 1z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 5.5a9 9 0 0 1 0 13"/>',
     tablero: '<path d="M3 3v18h18"/><path d="m7 15 4-4 3 3 5-6"/><circle cx="19" cy="5" r="2" fill="currentColor"/>',
     manuales: '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z"/><path d="M9 7h7M9 11h5"/>',
     checklist: '<rect x="4" y="3" width="16" height="18" rx="2"/><path d="m8 8 1.5 1.5L12 7M8 14l1.5 1.5L12 13"/><path d="M14 8h3M14 14h3"/>',
@@ -232,6 +233,7 @@
   const NAV = [
     { sec: 'General' },
     { id: 'tablero', lbl: 'Tablero en vivo', ok: () => puede('tablero') },
+    { id: 'avisos', lbl: 'Avisos en el panel', ok: () => puede('avisos') },
     { id: 'panel', lbl: 'Panel', ok: () => true },
     { id: 'stock', lbl: 'Stock por almacén', ok: () => puede('verStock') },
     { id: 'pedidos', lbl: 'Notas de pedido', ok: () => puede('verPedidos'), pill: true },
@@ -268,7 +270,7 @@
   ];
 
   function renderShell() {
-    const links = NAV.filter((n) => !n.ok || n.ok()).map((n) => n.sec
+    const links = NAV.filter((n) => !n.ok || n.ok()).filter((n, i, arr) => !n.sec || (arr[i + 1] && !arr[i + 1].sec)).map((n) => n.sec
       ? `<div class="sec">${n.sec}</div>`
       : `<a class="nav" href="#/${n.id}" data-nav="${n.id}">${icono(n.id)}<span class="lbl">${n.lbl}</span>${n.pill ? '<span class="pill" id="pill-ped" hidden></span>' : ''}${n.pillOc ? '<span class="pill" id="pill-oc" hidden></span>' : ''}${n.pillCf ? '<span class="pill" id="pill-cf" hidden></span>' : ''}${n.pillSolG ? '<span class="pill" id="pill-solg" hidden></span>' : ''}</a>`).join('');
     $('#app').innerHTML = `
@@ -449,6 +451,94 @@
     (todos ? S.todosAlmacenes : S.almacenes).filter((a) => !soloActivos || a.activo).map((a) => `<option value="${a.id}" ${String(sel) === String(a.id) ? 'selected' : ''}>${esc(a.nombre)}</option>`).join('');
 
   // ---------- Panel: tareas pendientes ----------
+  // ---------- Avisos del administrador ----------
+  const AV_TIPO = { INFO: { ic: '📢', lbl: 'Aviso' }, IMPORTANTE: { ic: '⚠️', lbl: 'Importante' }, URGENTE: { ic: '🚨', lbl: 'Urgente' } };
+  const textoAviso = (t) => esc(t).replace(/(https?:\/\/[^\s<]+)/g, '<a href="$1" target="_blank" rel="noopener">$1</a>').replace(/\n/g, '<br>');
+  async function avisosPanel(cont) {
+    if (!cont) return;
+    let lista = [];
+    try { lista = await api('/api/avisos/mios'); } catch (_) { return; }
+    let verLeidos = false;
+    const pintar = () => {
+      const nuevos = lista.filter((a) => !a.leido), leidos = lista.filter((a) => a.leido);
+      const tarjeta = (a) => `<div class="av av-${a.tipo.toLowerCase()} ${a.leido ? 'leido' : ''}">
+        <div class="av-ic">${AV_TIPO[a.tipo].ic}</div>
+        <div class="av-c"><div class="av-top"><span class="av-tipo">${AV_TIPO[a.tipo].lbl}</span><span class="av-de">${esc(a.autor || 'Administración')} · ${fmtFecha(a.creado_en)}</span></div>
+          <h3>${esc(a.titulo)}</h3><p>${textoAviso(a.mensaje)}</p></div>
+        ${a.leido ? '' : `<button class="btn sm av-ok" data-av="${a.id}">✓ Entendido</button>`}</div>`;
+      cont.innerHTML = (nuevos.length ? `<div class="av-lista">${nuevos.map(tarjeta).join('')}</div>` : '')
+        + (leidos.length ? `<div class="av-ant"><a href="#" id="av-toggle">${verLeidos ? '▾ Ocultar' : '▸ Ver'} avisos leídos (${leidos.length})</a>${verLeidos ? `<div class="av-lista">${leidos.map(tarjeta).join('')}</div>` : ''}</div>` : '');
+      cont.querySelectorAll('[data-av]').forEach((b) => (b.onclick = async () => {
+        const a = lista.find((x) => x.id == b.dataset.av); const card = b.closest('.av');
+        try { await api(`/api/avisos/${a.id}/leido`, { method: 'POST' }); } catch (err) { toast(err.message, true); return; }
+        a.leido = true; card.classList.add('saliendo'); setTimeout(pintar, 300);
+      }));
+      const t = $('#av-toggle', cont); if (t) t.onclick = (e) => { e.preventDefault(); verLeidos = !verLeidos; pintar(); };
+    };
+    pintar();
+  }
+
+  VIEWS.avisos = async (main) => {
+    const [avisos, roles, sucs] = await Promise.all([api('/api/avisos'), api('/api/roles'), api('/api/sucursales').catch(() => [])]);
+    const rolesV = roles.filter((r) => r.codigo !== 'PROVEEDOR');
+    const nomRol = (c) => (roles.find((r) => r.codigo === c) || { nombre: c }).nombre;
+    const nomSuc = (id) => (sucs.find((s) => s.id === id) || { nombre: '#' + id }).nombre;
+    const paraTxt = (a) => [a.roles.length ? a.roles.map(nomRol).join(', ') : 'Todos los roles', a.sucursales.length ? a.sucursales.map(nomSuc).join(', ') : ''].filter(Boolean).join(' · ');
+    const estado = (a) => (!a.activo ? '<span class="badge">Pausado</span>' : a.vigente ? '<span class="badge ok">Visible</span>' : '<span class="badge">Vencido</span>');
+    main.innerHTML = `<div class="toolbar"><div><h1>Avisos en el panel</h1><p class="sub">Lo que publiques aparece arriba de todo en el Panel de cada usuario hasta que lo marque como <b>Entendido</b>. Podés elegir roles o sucursales y enviarlo también al celular.</p></div><div class="spacer"></div><button class="btn" id="av-nuevo">+ Nuevo aviso</button></div>
+      ${avisos.length ? `<div class="av-admin">${avisos.map((a) => { const pct = a.destinatarios ? Math.round((a.leyeron / a.destinatarios) * 100) : 0; return `
+        <div class="card av-fila ${a.vigente ? '' : 'inactive'}"><div class="av-ic">${AV_TIPO[a.tipo].ic}</div>
+          <div class="av-c"><div class="av-top">${estado(a)} <span class="av-de">${esc(a.autor || '')} · ${fmtFecha(a.creado_en)}${a.hasta ? ` · hasta el ${fmtDia(String(a.hasta).slice(0, 10))}` : ' · sin vencimiento'}${a.push ? ' · 🔔 enviado al celular' : ''}</span></div>
+            <h3>${esc(a.titulo)}</h3><p>${textoAviso(a.mensaje)}</p>
+            <div class="av-meta">👥 ${esc(paraTxt(a))}</div>
+            <div class="av-leido"><div class="tb-meter"><i style="width:${pct}%"></i></div><a href="#" data-lec="${a.id}"><b>${a.leyeron}</b> de ${a.destinatarios} lo leyeron</a></div></div>
+          <div class="av-acc"><button class="btn ghost sm" data-ed="${a.id}">Editar</button><button class="btn ghost sm" data-pu="${a.id}" title="Mandarlo como notificación al celular">🔔 Al celular</button>
+            <button class="btn ghost sm" data-act="${a.id}">${a.activo ? 'Pausar' : 'Activar'}</button><button class="btn ghost sm" data-del="${a.id}" style="color:var(--accent)">Borrar</button></div></div>`; }).join('')}</div>`
+        : '<div class="card empty" style="padding:40px"><div style="font-size:2rem">📢</div>Todavía no publicaste avisos.<br>Por ejemplo: “El sábado hay evento privado, todo el personal a las 19 h”.</div>'}`;
+    const form = (a) => {
+      const hoy = hoyISO(); const sum = (n) => { const d = new Date(hoy + 'T12:00:00'); d.setDate(d.getDate() + n); return isoLocal(d); };
+      a = a || { titulo: '', mensaje: '', tipo: 'INFO', roles: [], sucursales: [], hasta: sum(6), push: false };
+      const hasta = a.hasta ? String(a.hasta).slice(0, 10) : '';
+      const m = modal(`<h2>${a.id ? 'Editar aviso' : 'Nuevo aviso'}</h2><form id="f-av">
+        <div class="f"><label>Tipo</label><div class="bv-opc av-tipos">${Object.entries(AV_TIPO).map(([k, t]) => `<button type="button" data-t="${k}" class="${a.tipo === k ? 'on' : ''} t-${k.toLowerCase()}">${t.ic} ${t.lbl}</button>`).join('')}</div></div>
+        <div class="f mt"><label>Título *</label><input name="titulo" maxlength="120" required value="${esc(a.titulo)}" placeholder="Ej.: Evento privado el sábado"></div>
+        <div class="f mt"><label>Mensaje *</label><textarea name="mensaje" rows="4" maxlength="2000" required placeholder="Ej.: El sábado cerramos al público. Todo el personal a las 19 h.">${esc(a.mensaje)}</textarea></div>
+        <div class="f mt"><label>Para qué roles <span class="muted" style="font-weight:400">(sin marcar = todos)</span></label><div class="chk-grupo">${rolesV.map((r) => `<label class="check"><input type="checkbox" name="rol" value="${esc(r.codigo)}" ${a.roles.includes(r.codigo) ? 'checked' : ''}> ${esc(r.nombre)}</label>`).join('')}</div></div>
+        ${sucs.length ? `<div class="f mt"><label>Qué sucursales <span class="muted" style="font-weight:400">(sin marcar = todas)</span></label><div class="chk-grupo">${sucs.filter((s) => s.activo).map((s) => `<label class="check"><input type="checkbox" name="suc" value="${s.id}" ${a.sucursales.includes(s.id) ? 'checked' : ''}> ${esc(s.nombre)}</label>`).join('')}</div></div>` : ''}
+        <div class="f mt"><label>Se muestra hasta</label><div class="bv-opc" id="av-hasta">${[['1 día', sum(0)], ['3 días', sum(2)], ['1 semana', sum(6)], ['1 mes', sum(29)], ['Sin vencimiento', '']].map(([l, v]) => `<button type="button" data-v="${v}" class="${v === hasta ? 'on' : ''}">${l}</button>`).join('')}</div>
+          <input type="date" name="hasta" value="${hasta}" min="${hoy}" style="margin-top:8px;max-width:200px"></div>
+        ${a.id ? `<label class="check mt"><input type="checkbox" name="volver"> Volver a mostrarlo a todos (aunque ya lo hayan marcado como leído)</label>` : `<label class="check mt"><input type="checkbox" name="push" ${a.push ? 'checked' : ''}> 🔔 Enviarlo también como notificación al celular</label>`}
+        <div class="av-prev-t mt">Vista previa</div><div id="av-prev"></div>
+        <div class="form-actions"><button type="button" class="btn sec" data-close>Cancelar</button><button class="btn" type="submit">${a.id ? 'Guardar' : 'Publicar'}</button></div></form>`, { wide: true });
+      const f = $('#f-av', m); let tipo = a.tipo;
+      const prev = () => { $('#av-prev', m).innerHTML = `<div class="av av-${tipo.toLowerCase()}"><div class="av-ic">${AV_TIPO[tipo].ic}</div><div class="av-c"><div class="av-top"><span class="av-tipo">${AV_TIPO[tipo].lbl}</span><span class="av-de">${esc(S.user.nombre)} · ahora</span></div><h3>${esc(f.titulo.value || 'Título del aviso')}</h3><p>${textoAviso(f.mensaje.value || 'El mensaje aparece acá.')}</p></div><button type="button" class="btn sm av-ok">✓ Entendido</button></div>`; };
+      m.querySelectorAll('.av-tipos button').forEach((b) => (b.onclick = () => { m.querySelectorAll('.av-tipos button').forEach((x) => x.classList.remove('on')); b.classList.add('on'); tipo = b.dataset.t; prev(); }));
+      m.querySelectorAll('#av-hasta button').forEach((b) => (b.onclick = () => { m.querySelectorAll('#av-hasta button').forEach((x) => x.classList.remove('on')); b.classList.add('on'); f.hasta.value = b.dataset.v; }));
+      f.hasta.oninput = () => m.querySelectorAll('#av-hasta button').forEach((x) => x.classList.toggle('on', x.dataset.v === f.hasta.value));
+      f.titulo.oninput = prev; f.mensaje.oninput = prev; prev();
+      f.onsubmit = async (e) => {
+        e.preventDefault();
+        const body = { titulo: f.titulo.value, mensaje: f.mensaje.value, tipo, hasta: f.hasta.value || null,
+          roles: [...f.querySelectorAll('[name=rol]:checked')].map((x) => x.value), sucursales: [...f.querySelectorAll('[name=suc]:checked')].map((x) => Number(x.value)),
+          push: !!(f.push && f.push.checked), volver_a_mostrar: !!(f.volver && f.volver.checked) };
+        try {
+          const r = await api(a.id ? `/api/avisos/${a.id}` : '/api/avisos', { method: a.id ? 'PUT' : 'POST', body });
+          closeModal(); toast(a.id ? 'Aviso actualizado' : r.push && !r.push.error ? `Aviso publicado · llegó a ${r.push.enviados} celular${r.push.enviados === 1 ? '' : 'es'}` : 'Aviso publicado'); VIEWS.avisos(main);
+        } catch (err) { toast(err.message, true); }
+      };
+    };
+    $('#av-nuevo').onclick = () => form();
+    $$('[data-ed]').forEach((b) => (b.onclick = () => form(avisos.find((x) => x.id == b.dataset.ed))));
+    $$('[data-act]').forEach((b) => (b.onclick = async () => { const a = avisos.find((x) => x.id == b.dataset.act); try { await api(`/api/avisos/${a.id}`, { method: 'PUT', body: { activo: !a.activo } }); VIEWS.avisos(main); } catch (err) { toast(err.message, true); } }));
+    $$('[data-del]').forEach((b) => (b.onclick = () => { const a = avisos.find((x) => x.id == b.dataset.del);
+      const m = modal(`<h2>Borrar aviso</h2><p>¿Borrar <b>${esc(a.titulo)}</b>? Deja de verse en todos los paneles.</p><div class="form-actions"><button class="btn sec" data-close>Cancelar</button><button class="btn" id="av-del-ok">Borrar</button></div>`);
+      $('#av-del-ok', m).onclick = async () => { try { await api(`/api/avisos/${a.id}`, { method: 'DELETE' }); closeModal(); VIEWS.avisos(main); } catch (err) { toast(err.message, true); } }; }));
+    $$('[data-pu]').forEach((b) => (b.onclick = async () => { b.disabled = true; try { const r = await api(`/api/avisos/${b.dataset.pu}/push`, { method: 'POST' }); toast(`Enviado: llegó a ${r.enviados} celular${r.enviados === 1 ? '' : 'es'}${r.sin_activar ? ` · ${r.sin_activar} sin notificaciones activadas` : ''}`); } catch (err) { toast(err.message, true); } b.disabled = false; }));
+    $$('[data-lec]').forEach((b) => (b.onclick = async (e) => { e.preventDefault(); const a = avisos.find((x) => x.id == b.dataset.lec); const l = await api(`/api/avisos/${a.id}/lecturas`);
+      modal(`<h2>¿Quién lo leyó?</h2><p class="muted">${esc(a.titulo)}</p><div class="av-lec">${l.map((u) => `<div class="${u.leido_en ? 'si' : 'no'}"><span>${u.leido_en ? '✅' : '⏳'} ${esc(u.nombre)}</span><small>${esc(nomRol(u.rol))}${u.leido_en ? ' · ' + fmtFecha(u.leido_en) : ' · todavía no'}</small></div>`).join('') || '<p class="muted">Nadie corresponde a este aviso.</p>'}</div>
+        <div class="form-actions"><button class="btn" data-close>Cerrar</button></div>`); }));
+  };
+
   VIEWS.panel = async (main) => {
     const d = await api('/api/dashboard');
     const tareas = d.tareas || [];
@@ -457,7 +547,7 @@
     let html = `<h1>Hola, ${esc(S.user.nombre.split(' ')[0])}</h1>
       <p class="sub">${esc(S.user.rol_nombre || ROL_LBL[S.user.rol] || S.user.rol)}${S.user.proveedor ? ' · ' + esc(S.user.proveedor) : ''} · ${new Date().toLocaleDateString('es-AR', { weekday: 'long', day: 'numeric', month: 'long' })}
       · ${total ? `<b>${total} ${total === 1 ? 'tarea pendiente' : 'tareas pendientes'}</b>` : 'sin tareas pendientes'}</p>`;
-    html += `<div id="panel-push"></div><div id="panel-clima"></div>`;
+    html += `<div id="panel-avisos"></div><div id="panel-push"></div><div id="panel-clima"></div>`;
     if (puede('programacion')) html += `<div id="panel-cal"></div>`;
     html += tareas.length ? `<div class="tareas">${tareas.map((t) => `
       <section class="tarea pri-${t.prioridad}">
@@ -487,6 +577,7 @@
       html += `<div class="form-actions" style="justify-content:flex-start"><a class="btn" href="#/pedidos?nuevo=1" style="text-decoration:none">+ Nueva nota de pedido</a></div>`;
     }
     main.innerHTML = html;
+    avisosPanel($('#panel-avisos'));
     climaNoche($('#panel-clima'));
     bannerPush($('#panel-push'));
     if ($('#panel-cal')) calendarioHoyManiana($('#panel-cal'));
