@@ -879,7 +879,7 @@ require('./src/produccion')({ route, query, tx, fail, permitir, permitirAlguno, 
 
 // ---------- Personal (solicitudes de empleados) ----------
 require('./src/personal')({ route, query, tx, fail, permitir, permitirAlguno, isTrue, toInt, str, fechaOk });
-require('./src/clima')({ route });
+require('./src/clima')({ route, query });
 const push = require('./src/push');
 push.init({ query });
 push.registrar({ route, fail, permitir, str, toInt });
