@@ -275,7 +275,7 @@
       <div class="topbar"><button id="menu-btn" aria-label="Menú">☰</button><span class="logo-tile sm"><img src="/logo.png" alt=""></span><span class="logo-gato sm"><img src="/gato.png" alt=""></span><b>VINILO APP</b><button id="user-btn" class="top-user" aria-label="Mi cuenta">${icono('clave')}</button></div>
       <div class="layout">
         <nav class="side" id="side">
-          <div class="brand"><span class="logo-tile"><img src="/logo.png" alt="Vinilo"></span><span class="logo-gato"><img src="/gato.png" alt="Vinilo Bar"></span><div><b>VINILO APP</b></div></div>
+          <div class="brand"><div class="brand-logos"><span class="logo-tile"><img src="/logo.png" alt="Vinilo"></span><span class="logo-gato"><img src="/gato.png" alt="Vinilo Bar"></span></div><b>VINILO APP</b></div>
           ${links}
           <div class="who"><b>${esc(S.user.nombre)}</b>${esc(S.user.rol_nombre || ROL_LBL[S.user.rol] || S.user.rol)}${S.user.proveedor ? ' · ' + esc(S.user.proveedor) : ''}${S.user.permiso_compras && S.user.rol !== 'ADMIN' ? ' · Compras' : ''}
             <div class="links"><button id="pwd-btn">${icono('clave')}Contraseña</button><button id="wa-btn" title="Mi celular para avisos por WhatsApp">📱 WhatsApp</button><button id="push-btn" title="Notificaciones en este dispositivo">🔔 Avisos</button><button id="out-btn">${icono('salir')}Salir</button></div></div>
