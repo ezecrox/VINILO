@@ -253,3 +253,8 @@ El administrador ve cuántos lo leyeron y quiénes sí/no, puede editarlo (y vol
 - **🔄 Reiniciar** y **🏆 Mostrar ganador** (permiso `juegosControl`, ADMIN por defecto): reiniciar archiva las partidas terminadas de la jornada (estado `REINICIADA`, no se borran) y el ranking vuelve a cero; mostrar ganador abre a pantalla completa el podio del 3.º al 1.º con confeti, corona y el premio (se cierra con Esc o Cerrar).
 - Los QR se generan en el servidor sin dependencias (`src/qr.js`, verificado con lectores reales). Si la app está detrás de otro dominio, se puede fijar `PUBLIC_URL`.
 - Tabla `juego_partidas`; configuración en `app_config` (`juego_config`).
+
+## Juegos → Pong Pizza (cancha en la pantalla, control en el celular)
+- **Juegos → Pong Pizza** (permiso `juegos`) abre la cancha con un QR. Dos personas lo escanean (`/pong?sala=CODIGO`, página `public/pong.html`), ponen su nombre y su celular se vuelve el control: arrastran el dedo para mover la pala de pizzero (roja a la izquierda, verde a la derecha). La pelota es una pizza.
+- Cuenta regresiva al estar los dos, puntos con cartel, vibración en el celular al pegarle y al recibir un punto, partido a 3, 5, 7 o 10 puntos, festejo del ganador y revancha (los dos tocan 🔁 en el celular o el botón de la pantalla). **Liberar cancha** / **Que jueguen otros** desconecta a los jugadores para que entren otros. Si alguien se desconecta, el partido queda en pausa y al volver recupera su pala.
+- Tiempo real por WebSocket propio sin dependencias (`src/ws.js`); salas en memoria (`src/pong.js`). La física corre en la pantalla; el servidor solo reenvía los movimientos (~25 por segundo por jugador). Teclado para probar sin celulares: W/S y ↑/↓.

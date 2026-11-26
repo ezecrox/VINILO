@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#c8281e">
+<title>Pong Pizza · Vinilo</title>
+<link rel="icon" href="/favicon.png?v=2" type="image/png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Nunito:wght@600;800&display=swap" rel="stylesheet">
+<style>
+:root{--rojo:#c8281e;--verde:#2f8f3c;--ink:#20130f;--mut:#7a6760;--line:#eadcd5}
+*{box-sizing:border-box;min-width:0;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;overscroll-behavior:none}
+body{background:#140d0b;color:#fff;font:16px/1.45 Nunito,system-ui,sans-serif;display:flex;justify-content:center}
+.app{width:100%;max-width:480px;height:100%;display:flex;flex-direction:column;background:#1d1311}
+h1,h2,.lil{font-family:"Lilita One",Nunito,sans-serif;font-weight:400;margin:0}
+.cab{background:var(--rojo);padding:calc(10px + env(safe-area-inset-top)) 16px 10px;display:flex;align-items:center;gap:10px}
+.cab img{width:40px;height:40px;border-radius:50%;background:#fff}.cab b{font:21px "Lilita One";display:block;line-height:1}.cab small{font-weight:800;opacity:.9}
+.cab .marc{margin-left:auto;font:26px "Lilita One";white-space:nowrap}
+.vista{flex:1;display:flex;flex-direction:column;padding:16px;gap:12px;min-height:0}
+.panel{background:#fff;color:var(--ink);border-radius:18px;padding:18px;display:flex;flex-direction:column;gap:12px}
+.panel p{margin:0;color:var(--mut)}
+label{font-weight:800}
+input{font:700 18px Nunito;padding:14px;border:2px solid var(--line);border-radius:14px;width:100%;color:var(--ink)}
+.btn{font:800 18px Nunito;border:0;border-radius:16px;padding:16px;min-height:56px;background:var(--rojo);color:#fff;box-shadow:0 5px 0 #8e1a13;width:100%;cursor:pointer}
+.btn:active{transform:translateY(3px);box-shadow:0 2px 0 #8e1a13}
+.btn.verde{background:var(--verde);box-shadow:0 5px 0 #1f6129}
+.btn:focus-visible,input:focus-visible{outline:3px solid #ff8a1f;outline-offset:2px}
+.err{color:var(--rojo);font-weight:800;min-height:20px}
+.lado{border-radius:16px;padding:14px;text-align:center;font-weight:800}
+.lado.izq{background:var(--rojo)}.lado.der{background:var(--verde)}
+.lado b{display:block;font:30px "Lilita One"}
+.estado{text-align:center;font-weight:800;color:#e8c9bf;min-height:24px}
+.pad{flex:1;position:relative;border-radius:22px;background:repeating-linear-gradient(0deg,#2a1b17 0 22px,#251714 22px 44px);border:3px solid #3d2a25;touch-action:none;user-select:none;overflow:hidden;min-height:260px}
+.pad .pala{position:absolute;left:12%;right:12%;height:22%;border-radius:16px;display:grid;place-items:center;font:20px "Lilita One";transition:background .2s;box-shadow:0 8px 20px rgba(0,0,0,.4)}
+.pad.izq .pala{background:linear-gradient(90deg,#e04a3f,#a51d15)}.pad.der .pala{background:linear-gradient(90deg,#43ad52,#24702f)}
+.pad .guia{position:absolute;inset:auto 0 10px;text-align:center;color:#a8908a;font-weight:800;font-size:14px;pointer-events:none}
+.pad.inactivo{opacity:.45}
+.fin{text-align:center}.fin .lil{font-size:40px}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="cab"><img src="/gato.png" alt=""><div><b>Pong Pizza</b><small id="sub">Vinilo</small></div><span class="marc" id="marc"></span></header>
+  <main class="vista" id="vista"></main>
+</div>
+<script>
+{
+const $ = (s) => document.querySelector(s);
+const esc = (t) => String(t == null ? '' : t).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+const leer = (k) => { try { return localStorage.getItem(k) || ''; } catch (_) { return ''; } };
+const guardar = (k, v) => { try { localStorage.setItem(k, v); } catch (_) { /* sin storage */ } };
+const SALA = (new URLSearchParams(location.search).get('sala') || '').toUpperCase();
+let ID = leer('pong_id'); if (!ID) { ID = Math.random().toString(36).slice(2) + Date.now().toString(36); guardar('pong_id', ID); }
+const vista = $('#vista');
+let ws = null, nombre = leer('pz_nombre'), lado = null, unido = false, liberado = false, est = {}, wake = null;
+
+function conectar() {
+  ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws/pong?sala=${encodeURIComponent(SALA)}`);
+  ws.onopen = () => { if (unido) ws.send(JSON.stringify({ t: 'unir', nombre, id: ID })); };
+  ws.onmessage = (e) => { let m; try { m = JSON.parse(e.data); } catch (_) { return; } recibir(m); };
+  ws.onclose = () => { if (!liberado) { $('#sub').textContent = 'Reconectando…'; setTimeout(conectar, 1500); } };
+}
+const enviar = (o) => { if (ws && ws.readyState === 1) ws.send(JSON.stringify(o)); };
+
+function recibir(m) {
+  if (m.t === 'error') { if (!unido) { const e = $('#err'); if (e) e.textContent = m.msg; else pantallaError(m.msg); } return; }
+  if (m.t === 'lleno') { const e = $('#err'); if (e) e.textContent = m.msg; $('#go') && ($('#go').disabled = false); return; }
+  if (m.t === 'unido') { unido = true; lado = m.lado; $('#sub').textContent = `Sos ${lado === 'izq' ? 'la pala ROJA' : 'la pala VERDE'}`; control(); pedirPantallaEncendida(); return; }
+  if (m.t === 'estado') { est = m; actualizar(); return; }
+  if (m.t === 'vibrar') { try { navigator.vibrate && navigator.vibrate(m.ms || 50); } catch (_) { /* nada */ } return; }
+  if (m.t === 'pantalla') { if (!m.conectada) $('#estado') && ($('#estado').textContent = 'La pantalla del bar se desconectó…'); return; }
+  if (m.t === 'liberado') { liberado = true; unido = false; vista.innerHTML = '<div class="panel"><h2 style="color:#20130f">¡Gracias por jugar!</h2><p>La cancha se liberó para otros jugadores. Escaneá el QR de la pantalla para volver a jugar.</p></div>'; $('#marc').textContent = ''; }
+}
+
+function pantallaError(msg) { vista.innerHTML = `<div class="panel"><h2 style="color:#20130f">Ups</h2><p>${esc(msg)}</p></div>`; }
+
+function unirse() {
+  vista.innerHTML = `<div class="panel"><h2 style="color:#20130f">¡A jugar Pong Pizza!</h2><p>Dos jugadores, cada uno con su celular. Mové tu pala de pizzero arrastrando el dedo y no dejes pasar la pizza. La cancha se ve en la pantalla del bar.</p>
+    <label for="nom">Tu nombre</label><input id="nom" maxlength="14" placeholder="Ej.: Caro" value="${esc(nombre)}" autocomplete="given-name">
+    <div class="err" id="err"></div><button class="btn" id="go">Entrar a la cancha</button></div>`;
+  $('#go').onclick = () => { const n = $('#nom').value.trim(); if (n.length < 2) { $('#err').textContent = 'Poné tu nombre'; return; } nombre = n; guardar('pz_nombre', n); $('#go').disabled = true; unido = false; enviar({ t: 'unir', nombre, id: ID }); };
+}
+
+let pad, pala;
+function control() {
+  vista.innerHTML = `<div class="lado ${lado}">Sos la pala<b>${lado === 'izq' ? 'ROJA · izquierda' : 'VERDE · derecha'}</b></div>
+    <div class="estado" id="estado">Esperando al otro jugador…</div>
+    <div class="pad ${lado}" id="pad"><div class="pala" id="pala">${esc(nombre)}</div><div class="guia">Arrastrá el dedo hacia arriba y abajo</div></div>
+    <div id="extra"></div>`;
+  pad = $('#pad'); pala = $('#pala');
+  let ultimo = -1, pend = null, tEnvio = 0;
+  const mover = (clientY) => {
+    const r = pad.getBoundingClientRect(); const v = Math.max(0, Math.min(1, (clientY - r.top) / r.height));
+    pala.style.top = `${v * 78}%`;
+    pend = v; const ahora = performance.now();
+    if (ahora - tEnvio > 30 && Math.abs(v - ultimo) > 0.003) { enviar({ t: 'y', v: Math.round(v * 1000) / 1000 }); ultimo = v; tEnvio = ahora; pend = null; }
+  };
+  setInterval(() => { if (pend != null && Math.abs(pend - ultimo) > 0.003) { enviar({ t: 'y', v: pend }); ultimo = pend; tEnvio = performance.now(); pend = null; } }, 40);
+  pad.addEventListener('pointerdown', (e) => { pad.setPointerCapture(e.pointerId); mover(e.clientY); });
+  pad.addEventListener('pointermove', (e) => { if (e.pressure > 0 || e.pointerType === 'mouse' && e.buttons) mover(e.clientY); });
+  pad.addEventListener('touchmove', (e) => { e.preventDefault(); }, { passive: false });
+  pala.style.top = "39%";
+  actualizar();
+}
+
+function actualizar() {
+  if (!unido || !$('#estado')) return;
+  const yo = lado, otro = lado === 'izq' ? 'der' : 'izq';
+  if (est.izq != null) $('#marc').textContent = `${est.izq} – ${est.der}`;
+  const nomOtro = est.nombres ? est.nombres[otro] : null;
+  const txt = { esperando: nomOtro ? `Esperando a ${nomOtro}…` : 'Esperando al otro jugador…', cuenta: `¡Prepárate! ${est.cuenta || ''}`, jugando: `Contra ${nomOtro || 'tu rival'} · a ${est.objetivo} puntos`,
+    gol: est.ultimoPunto === yo ? '¡Punto para vos! 🍕' : `Punto de ${nomOtro || 'tu rival'}`, pausa: 'Partido en pausa: se desconectó un jugador', fin: '' }[est.fase] || '';
+  $('#estado').textContent = txt;
+  pad.classList.toggle('inactivo', est.fase === 'fin');
+  $('#extra').innerHTML = est.fase === 'fin' ? `<div class="panel fin"><div class="lil" style="color:${est.ganador === yo ? '#2f8f3c' : '#c8281e'}">${est.ganador === yo ? '¡Ganaste! 🏆' : 'Perdiste 😅'}</div>
+    <p>${est.izq} a ${est.der}</p><button class="btn verde" id="rev">${est.listos && est.listos[yo] ? 'Esperando al rival…' : '🔁 Revancha'}</button></div>` : '';
+  const rev = $('#rev'); if (rev) rev.onclick = () => { enviar({ t: 'listo' }); rev.textContent = 'Esperando al rival…'; };
+}
+
+async function pedirPantallaEncendida() { try { if ('wakeLock' in navigator && !wake) { wake = await navigator.wakeLock.request('screen'); wake.addEventListener('release', () => { wake = null; }); } } catch (_) { /* no soportado */ } }
+document.addEventListener('visibilitychange', () => { if (!document.hidden && unido) pedirPantallaEncendida(); });
+
+if (!SALA) pantallaError('Escaneá el QR que aparece en la pantalla del bar para entrar a la cancha.');
+else { unirse(); conectar(); }
+}
+</script>
+</body>
+</html>

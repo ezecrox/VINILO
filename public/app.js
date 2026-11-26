@@ -205,6 +205,7 @@
     recepcion: '<path d="M12 3v11"/><path d="m7.5 9.5 4.5 4.5 4.5-4.5"/><path d="M3 14v4a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-4"/>',
     transferencia: '<path d="M4 8h14"/><path d="m14 4 4 4-4 4"/><path d="M20 16H6"/><path d="m10 12-4 4 4 4"/>',
     consumo: '<path d="M6 3h12l-1.2 7.2A4.9 4.9 0 0 1 12 14.5a4.9 4.9 0 0 1-4.8-4.3L6 3Z"/><path d="M12 14.5V20"/><path d="M8 21h8"/><path d="M6.6 7h10.8"/>',
+    pong: '<rect x="2" y="6" width="3" height="9" rx="1"/><rect x="19" y="9" width="3" height="9" rx="1"/><circle cx="12" cy="12" r="3"/>',
     pizzaiolo: '<path d="M12 2 2 21h20z"/><circle cx="10" cy="14" r="1.4" fill="currentColor"/><circle cx="14" cy="16" r="1.4" fill="currentColor"/><circle cx="12" cy="10" r="1.2" fill="currentColor"/>',
     bolsa: '<path d="M3 17l5-5 4 4 8-8"/><path d="M15 8h5v5"/><path d="M3 21h18"/>',
     avisos: '<path d="M3 11v2a1 1 0 0 0 1 1h2l5 4V6L6 10H4a1 1 0 0 0-1 1z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.5 5.5a9 9 0 0 1 0 13"/>',
@@ -267,6 +268,7 @@
     { sec: 'Juegos' },
     { id: 'bolsa', lbl: 'Bolsa de tragos', ok: () => puede('juegos') },
     { id: 'pizzaiolo', lbl: 'Pizzaiolo (juego QR)', ok: () => puede('juegos') },
+    { id: 'pong', lbl: 'Pong Pizza', ok: () => puede('juegos') },
     { sec: 'Ayuda' },
     { id: 'manuales', lbl: 'Manuales', ok: () => true },
   ];
@@ -1977,6 +1979,147 @@
     };
     await cargar();
     VIEWS.pizzaiolo._t = setInterval(() => { if (!location.hash.startsWith('#/pizzaiolo')) { clearInterval(VIEWS.pizzaiolo._t); document.body.classList.remove('tv'); return; } if (!document.hidden) cargar(); }, 10000);
+  };
+
+  // ---------- Juegos: Pong Pizza (cancha en la pantalla, control en el celular) ----------
+  VIEWS.pong = async (main) => {
+    if (VIEWS.pong._fin) VIEWS.pong._fin();
+    main.innerHTML = `<div class="pz pg">
+      <div class="pz-top"><div class="pz-marca"><img src="/gato.png" alt=""><div><h1>Pong Pizza</h1><p id="pg-sub">Conectando la cancha…</p></div></div>
+        <div class="pz-acc"><label class="pg-obj">A <select id="pg-obj"><option>3</option><option selected>5</option><option>7</option><option>10</option></select> puntos</label>
+          <button class="bv-btn" id="pg-lib">🔓 Liberar cancha</button><button class="bv-btn" id="pg-tv">📺 Modo TV</button></div></div>
+      <div class="pg-cancha" id="pg-wrap"><canvas id="pg-c"></canvas><div class="pg-over" id="pg-over"></div></div>
+      <p class="pg-ayuda">Probalo sin celulares: W / S mueven la pala roja y ↑ / ↓ la verde.</p></div>`;
+    const cv = $('#pg-c'), ctx = cv.getContext('2d'), over = $('#pg-over');
+    const W = 1600, H = 900, PW = 26, PH = 170, PX = 70, R = 30;
+    let sala = null, qrSvg = '', link = '', ws = null, vivo = true;
+    const J = { izq: null, der: null };
+    const G = { fase: 'esperando', izq: 0, der: 0, objetivo: 5, cuenta: 0, ultimoPunto: null, ganador: null, listos: { izq: false, der: false }, t: 0 };
+    const pal = { izq: { y: H / 2, obj: H / 2 }, der: { y: H / 2, obj: H / 2 } };
+    const bola = { x: W / 2, y: H / 2, vx: 0, vy: 0, rot: 0, vel: 0 };
+    const teclas = {};
+    const ambos = () => J.izq && J.izq.conectado && J.der && J.der.conectado;
+    const nombre = (l) => (J[l] ? J[l].nombre : l === 'izq' ? 'Rojo' : 'Verde');
+    const enviar = (o) => { if (ws && ws.readyState === 1) ws.send(JSON.stringify(o)); };
+    const estado = () => enviar({ t: 'estado', fase: G.fase, izq: G.izq, der: G.der, objetivo: G.objetivo, cuenta: G.cuenta, ultimoPunto: G.ultimoPunto, ganador: G.ganador, listos: G.listos, nombres: { izq: J.izq && J.izq.nombre, der: J.der && J.der.nombre } });
+    const vibrar = (lado, ms) => enviar({ t: 'vibrar', lado, ms });
+
+    // ---- conexión ----
+    const conectar = () => {
+      let guardada = ''; try { guardada = sessionStorage.getItem('pong_sala') || ''; } catch (_) { /* nada */ }
+      ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws/pong?rol=tv&token=${encodeURIComponent(S.token)}&sala=${guardada}`);
+      ws.onmessage = async (e) => {
+        let m; try { m = JSON.parse(e.data); } catch (_) { return; }
+        if (m.t === 'sala') { sala = m.codigo; try { sessionStorage.setItem('pong_sala', sala); } catch (_) { /* nada */ }
+          try { const q = await api('/api/pong/qr?sala=' + sala); qrSvg = q.qr; link = q.link; } catch (_) { /* nada */ } $('#pg-sub').textContent = `Sala ${sala} · escaneá el QR con el celular`; pintarOver(); estado(); }
+        else if (m.t === 'jugadores') { J.izq = m.izq; J.der = m.der; revisar(); pintarOver(); estado(); }
+        else if (m.t === 'y') { pal[m.lado].obj = PH / 2 + m.v * (H - PH); }
+        else if (m.t === 'listo' && G.fase === 'fin') { G.listos[m.lado] = true; estado(); if (G.listos.izq && G.listos.der) nuevoPartido(); else pintarOver(); }
+      };
+      ws.onclose = () => { if (vivo) { $('#pg-sub').textContent = 'Reconectando la cancha…'; setTimeout(conectar, 1500); } };
+    };
+
+    // ---- reglas ----
+    const saque = (haciaDer) => { const ang = (Math.random() * 0.7 - 0.35); bola.vel = 760; bola.x = W / 2; bola.y = H / 2; bola.vx = Math.cos(ang) * bola.vel * (haciaDer ? 1 : -1); bola.vy = Math.sin(ang) * bola.vel; };
+    const cuentaAtras = (luego) => { G.fase = 'cuenta'; G.cuenta = 3; estado(); pintarOver();
+      const paso = () => { if (!vivo) return; G.cuenta--; if (G.cuenta <= 0) { G.fase = 'jugando'; luego(); estado(); pintarOver(); } else { estado(); pintarOver(); setTimeout(paso, 800); } }; setTimeout(paso, 800); };
+    const nuevoPartido = () => { G.izq = 0; G.der = 0; G.ganador = null; G.listos = { izq: false, der: false }; G.ultimoPunto = null; cuentaAtras(() => saque(Math.random() < 0.5)); };
+    const revisar = () => {
+      if (G.fase === 'esperando' && ambos()) nuevoPartido();
+      else if (['jugando', 'cuenta', 'gol'].includes(G.fase) && !ambos()) { G.fase = 'pausa'; estado(); }
+      else if (G.fase === 'pausa' && ambos()) cuentaAtras(() => saque(G.ultimoPunto !== 'izq'));
+      else if (!J.izq && !J.der) { G.fase = 'esperando'; G.izq = 0; G.der = 0; estado(); }
+    };
+    const punto = (lado) => {
+      G[lado]++; G.ultimoPunto = lado; vibrar(lado === 'izq' ? 'der' : 'izq', 250); vibrar(lado, 60);
+      if (G[lado] >= G.objetivo) { G.fase = 'fin'; G.ganador = lado; bola.vx = bola.vy = 0; estado(); pintarOver(); confetiPong(); return; }
+      G.fase = 'gol'; G.t = performance.now(); bola.vx = bola.vy = 0; estado(); pintarOver();
+      setTimeout(() => { if (G.fase === 'gol') { G.fase = 'jugando'; saque(lado === 'izq'); estado(); pintarOver(); } }, 1400);
+    };
+
+    // ---- física ----
+    let tPrev = performance.now(), raf = 0;
+    const tick = (t) => {
+      if (!vivo) return; const dt = Math.min(0.033, (t - tPrev) / 1000); tPrev = t;
+      if (teclas.w) pal.izq.obj -= 900 * dt; if (teclas.s) pal.izq.obj += 900 * dt; if (teclas.ArrowUp) pal.der.obj -= 900 * dt; if (teclas.ArrowDown) pal.der.obj += 900 * dt;
+      for (const l of ['izq', 'der']) { const p = pal[l]; p.obj = Math.max(PH / 2, Math.min(H - PH / 2, p.obj)); p.y += (p.obj - p.y) * Math.min(1, dt * 22); }
+      if (G.fase === 'jugando') {
+        bola.x += bola.vx * dt; bola.y += bola.vy * dt; bola.rot += (bola.vx > 0 ? 1 : -1) * dt * 6;
+        if (bola.y < R) { bola.y = R; bola.vy = Math.abs(bola.vy); } if (bola.y > H - R) { bola.y = H - R; bola.vy = -Math.abs(bola.vy); }
+        const golpe = (l, px, dir) => { const p = pal[l];
+          if ((dir > 0 ? bola.vx < 0 : bola.vx > 0) && Math.abs(bola.x - px) < R + PW / 2 && Math.abs(bola.y - p.y) < PH / 2 + R * 0.7) {
+            const off = Math.max(-1, Math.min(1, (bola.y - p.y) / (PH / 2))), ang = off * 0.95; bola.vel = Math.min(1900, bola.vel * 1.07);
+            bola.vx = Math.cos(ang) * bola.vel * dir; bola.vy = Math.sin(ang) * bola.vel; bola.x = px + dir * (R + PW / 2 + 1); vibrar(l, 40); } };
+        golpe('izq', PX, 1); golpe('der', W - PX, -1);
+        if (bola.x < -R) punto('der'); else if (bola.x > W + R) punto('izq');
+      }
+      dibujar(); raf = requestAnimationFrame(tick);
+    };
+
+    // ---- dibujo ----
+    const fondo = (() => { const c = document.createElement('canvas'); c.width = W; c.height = H; const g = c.getContext('2d');
+      const gr = g.createLinearGradient(0, 0, 0, H); gr.addColorStop(0, '#2a1a15'); gr.addColorStop(1, '#1a0f0c'); g.fillStyle = gr; g.fillRect(0, 0, W, H);
+      g.globalAlpha = 0.06; for (let y = 0; y < H; y += 46) { g.fillStyle = y % 92 ? '#000' : '#fff'; g.fillRect(0, y, W, 23); } g.globalAlpha = 1;
+      g.fillStyle = 'rgba(200,40,30,.10)'; g.fillRect(0, 0, W / 2, H); g.fillStyle = 'rgba(47,143,60,.10)'; g.fillRect(W / 2, 0, W / 2, H);
+      g.fillStyle = '#d8301f'; for (let y = 24; y < H; y += 48) { g.beginPath(); g.arc(W / 2, y, 7, 0, Math.PI * 2); g.fill(); }
+      g.strokeStyle = 'rgba(255,255,255,.12)'; g.lineWidth = 4; g.beginPath(); g.arc(W / 2, H / 2, 120, 0, Math.PI * 2); g.stroke();
+      return c; })();
+    const pala = (x, y, color, dir) => {
+      ctx.save(); ctx.translate(x, y);
+      ctx.fillStyle = '#7a4b2a'; ctx.fillRect(dir > 0 ? -PW / 2 - 46 : PW / 2, -7, 46, 14); // mango
+      const g = ctx.createLinearGradient(-PW / 2, 0, PW / 2, 0); g.addColorStop(0, '#e8c48a'); g.addColorStop(1, '#c79a5c');
+      ctx.fillStyle = g; ctx.beginPath(); ctx.roundRect(-PW / 2, -PH / 2, PW, PH, 10); ctx.fill();
+      ctx.fillStyle = color; ctx.beginPath(); ctx.roundRect(dir > 0 ? -PW / 2 : PW / 2 - 8, -PH / 2 + 6, 8, PH - 12, 4); ctx.fill();
+      ctx.restore(); };
+    const pizza = () => {
+      ctx.save(); ctx.translate(bola.x, bola.y); ctx.rotate(bola.rot);
+      ctx.fillStyle = 'rgba(0,0,0,.35)'; ctx.beginPath(); ctx.ellipse(6, 10, R, R * 0.9, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#e0a24a'; ctx.beginPath(); ctx.arc(0, 0, R, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#d8301f'; ctx.beginPath(); ctx.arc(0, 0, R * 0.78, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#fbf3df'; [[-9, -6, 7], [8, -9, 6], [3, 9, 7], [-10, 9, 4]].forEach(([x, y, r]) => { ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill(); });
+      ctx.fillStyle = '#2f8f3c'; ctx.beginPath(); ctx.ellipse(10, 4, 6, 3, 0.6, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#2b1308'; for (let i = 0; i < 8; i++) { const a = i / 8 * Math.PI * 2; ctx.beginPath(); ctx.arc(Math.cos(a) * R * 0.92, Math.sin(a) * R * 0.92, 2.4, 0, Math.PI * 2); ctx.fill(); }
+      ctx.restore(); };
+    const dibujar = () => {
+      ctx.drawImage(fondo, 0, 0);
+      ctx.textAlign = 'center'; ctx.font = '900 150px Nunito, system-ui, sans-serif'; ctx.fillStyle = 'rgba(255,255,255,.14)';
+      ctx.fillText(G.izq, W / 2 - 200, 170); ctx.fillText(G.der, W / 2 + 200, 170);
+      ctx.font = '800 38px Nunito, system-ui, sans-serif'; ctx.fillStyle = '#ff8a7e'; ctx.fillText(nombre('izq'), W / 4, H - 34); ctx.fillStyle = '#86d692'; ctx.fillText(nombre('der'), W * 3 / 4, H - 34);
+      pala(PX, pal.izq.y, '#d8301f', 1); pala(W - PX, pal.der.y, '#2f8f3c', -1);
+      if (G.fase !== 'esperando' && G.fase !== 'fin') pizza();
+    };
+    const ajustar = () => { const r = $('#pg-wrap').getBoundingClientRect(); const dpr = Math.min(2, devicePixelRatio || 1); cv.width = W; cv.height = H; cv.style.width = '100%'; cv.style.height = 'auto'; void r; void dpr; };
+
+    // ---- carteles sobre la cancha ----
+    const slot = (l) => `<div class="pg-slot ${l} ${J[l] ? (J[l].conectado ? 'ok' : 'off') : ''}"><span>${l === 'izq' ? 'Pala roja' : 'Pala verde'}</span><b>${J[l] ? esc(J[l].nombre) + (J[l].conectado ? '' : ' (desconectado)') : 'Esperando jugador…'}</b></div>`;
+    const pintarOver = () => {
+      let h = '';
+      if (G.fase === 'esperando' || G.fase === 'pausa') h = `<div class="pg-espera"><div class="pg-qr">${qrSvg}</div><div><h2>${G.fase === 'pausa' ? 'Partido en pausa' : '¡Escaneá y jugá!'}</h2>
+        <p>${G.fase === 'pausa' ? 'Se desconectó un jugador. Si vuelve a entrar, el partido sigue.' : 'Escaneá el QR con el celular, poné tu nombre y tu celular se vuelve el control. Se juega de a dos.'}</p>${slot('izq')}${slot('der')}<p class="pg-cod">Sala <b>${esc(sala || '…')}</b></p></div></div>`;
+      else if (G.fase === 'cuenta') h = `<div class="pg-cuenta">${G.cuenta}</div>`;
+      else if (G.fase === 'gol') h = `<div class="pg-gol ${G.ultimoPunto}">¡Punto de ${esc(nombre(G.ultimoPunto))}! 🍕</div>`;
+      else if (G.fase === 'fin') h = `<div class="pg-fin"><div class="pg-trofeo">🏆</div><h2 class="${G.ganador}">¡Ganó ${esc(nombre(G.ganador))}!</h2><p class="pg-res">${G.izq} a ${G.der}</p>
+        <p>${G.listos.izq || G.listos.der ? `${esc(nombre(G.listos.izq ? 'izq' : 'der'))} quiere la revancha…` : 'Para la revancha, los dos tocan 🔁 en el celular.'}</p>
+        <div class="pg-fin-acc"><button class="bv-btn" id="pg-rev">🔁 Revancha ya</button><button class="bv-btn" id="pg-otros">👥 Que jueguen otros</button></div></div>`;
+      over.innerHTML = h; over.className = 'pg-over' + (h ? ' on' : '');
+      const rev = $('#pg-rev'); if (rev) rev.onclick = nuevoPartido;
+      const otros = $('#pg-otros'); if (otros) otros.onclick = liberar;
+    };
+    const confetiPong = () => { const n = 70; for (let i = 0; i < n; i++) { const p = document.createElement('i'); p.className = 'pg-cf'; p.style.left = Math.random() * 100 + '%'; p.style.background = ['#c8281e', '#ffcf3f', '#2f8f3c', '#fff', '#ff8a1f'][i % 5];
+      p.style.animationDelay = Math.random() * 1.2 + 's'; p.style.animationDuration = 2 + Math.random() * 1.8 + 's'; over.appendChild(p); setTimeout(() => p.remove(), 4500); } };
+    const liberar = () => { enviar({ t: 'liberar' }); J.izq = J.der = null; G.fase = 'esperando'; G.izq = G.der = 0; G.ganador = null; pintarOver(); };
+
+    // ---- controles de la pantalla ----
+    $('#pg-obj').onchange = (e) => { G.objetivo = Number(e.target.value); estado(); };
+    $('#pg-lib').onclick = liberar;
+    $('#pg-tv').onclick = () => { document.body.classList.toggle('tv'); $('#pg-tv').textContent = document.body.classList.contains('tv') ? '✕ Salir' : '📺 Modo TV';
+      try { if (document.body.classList.contains('tv')) document.documentElement.requestFullscreen && document.documentElement.requestFullscreen(); else document.fullscreenElement && document.exitFullscreen(); } catch (_) { /* nada */ } };
+    const kd = (e) => { if (['w', 's', 'ArrowUp', 'ArrowDown'].includes(e.key)) { teclas[e.key] = true; if (e.key.startsWith('Arrow')) e.preventDefault(); } };
+    const ku = (e) => { teclas[e.key] = false; };
+    addEventListener('keydown', kd); addEventListener('keyup', ku);
+    ajustar(); pintarOver(); conectar(); raf = requestAnimationFrame(tick);
+    const vigia = setInterval(() => { if (!location.hash.startsWith('#/pong')) VIEWS.pong._fin(); }, 500);
+    VIEWS.pong._fin = () => { vivo = false; clearInterval(vigia); cancelAnimationFrame(raf); removeEventListener('keydown', kd); removeEventListener('keyup', ku); document.body.classList.remove('tv'); try { ws && ws.close(); } catch (_) { /* nada */ } VIEWS.pong._fin = null; };
   };
 
   // ---------- Manuales ----------
