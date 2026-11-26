@@ -782,3 +782,14 @@ body.tv .bv-logo-img { height: 72px; }
 @media (prefers-reduced-motion: reduce) { #bv-anim .bv-an { display: none; } }
 .bv-demo-bar { margin: 12px -18px 0; padding: 8px 18px; background: #1e293b; color: #fde68a; text-align: center; font-size: .9rem; border-top: 1px solid #334155; border-bottom: 1px solid #334155; }
 .bv-demo-bar a { color: #fde68a; } .bv-btn.on { background: #fde68a; color: #1e293b; border-color: #fde68a; }
+/* Logo del gato */
+.logo-gato { width: 52px; height: 52px; border-radius: 50%; background: #fff; overflow: hidden; display: inline-flex; flex: none; box-shadow: 0 0 0 2px rgba(255,255,255,.15); }
+.logo-gato img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.logo-gato.sm { width: 30px; height: 30px; }
+.brand { gap: 8px !important; }
+.login .logo { flex-direction: column; text-align: center; gap: 10px; }
+.login .logo .logos { display: flex; align-items: center; justify-content: center; gap: 16px; }
+.login .logo .logos img { height: 84px; }
+.login .logo .logos img.gato { height: 96px; width: 96px; border-radius: 50%; }
+.login .logo b { font-size: 1.35rem; }
+.brand b { white-space: nowrap; }

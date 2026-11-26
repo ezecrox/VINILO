@@ -1,4 +1,4 @@
-/* Vinilo · Gestión de Almacén — SPA sin dependencias */
+/* VINILO APP — SPA sin dependencias */
 (() => {
   'use strict';
 
@@ -141,7 +141,7 @@
     $('#app').innerHTML = `
       <div class="login">
         <form id="login-form">
-          <div class="logo"><img src="/logo.png" alt="Vinilo"><div><b>VINILO</b><small>Gestión de Almacén</small></div></div>
+          <div class="logo"><div class="logos"><img src="/logo.png" alt="Vinilo"><img src="/gato.png" alt="Vinilo Bar" class="gato"></div><b>VINILO APP</b></div>
           <div class="f"><label for="u">Usuario</label><input id="u" autocomplete="username" required autofocus></div>
           <div class="f"><label for="p">Contraseña</label><input id="p" type="password" autocomplete="current-password" required></div>
           <div class="err" id="login-err"></div>
@@ -272,10 +272,10 @@
       ? `<div class="sec">${n.sec}</div>`
       : `<a class="nav" href="#/${n.id}" data-nav="${n.id}">${icono(n.id)}<span class="lbl">${n.lbl}</span>${n.pill ? '<span class="pill" id="pill-ped" hidden></span>' : ''}${n.pillOc ? '<span class="pill" id="pill-oc" hidden></span>' : ''}${n.pillCf ? '<span class="pill" id="pill-cf" hidden></span>' : ''}${n.pillSolG ? '<span class="pill" id="pill-solg" hidden></span>' : ''}</a>`).join('');
     $('#app').innerHTML = `
-      <div class="topbar"><button id="menu-btn" aria-label="Menú">☰</button><span class="logo-tile sm"><img src="/logo.png" alt=""></span><b>VINILO</b><button id="user-btn" class="top-user" aria-label="Mi cuenta">${icono('clave')}</button></div>
+      <div class="topbar"><button id="menu-btn" aria-label="Menú">☰</button><span class="logo-tile sm"><img src="/logo.png" alt=""></span><span class="logo-gato sm"><img src="/gato.png" alt=""></span><b>VINILO APP</b><button id="user-btn" class="top-user" aria-label="Mi cuenta">${icono('clave')}</button></div>
       <div class="layout">
         <nav class="side" id="side">
-          <div class="brand"><span class="logo-tile"><img src="/logo.png" alt="Vinilo"></span><div><b>VINILO</b><small>Gestión de Almacén</small></div></div>
+          <div class="brand"><span class="logo-tile"><img src="/logo.png" alt="Vinilo"></span><span class="logo-gato"><img src="/gato.png" alt="Vinilo Bar"></span><div><b>VINILO APP</b></div></div>
           ${links}
           <div class="who"><b>${esc(S.user.nombre)}</b>${esc(S.user.rol_nombre || ROL_LBL[S.user.rol] || S.user.rol)}${S.user.proveedor ? ' · ' + esc(S.user.proveedor) : ''}${S.user.permiso_compras && S.user.rol !== 'ADMIN' ? ' · Compras' : ''}
             <div class="links"><button id="pwd-btn">${icono('clave')}Contraseña</button><button id="wa-btn" title="Mi celular para avisos por WhatsApp">📱 WhatsApp</button><button id="push-btn" title="Notificaciones en este dispositivo">🔔 Avisos</button><button id="out-btn">${icono('salir')}Salir</button></div></div>
