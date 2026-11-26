@@ -94,6 +94,14 @@ module.exports = function registrarJuego({ route, query, fail, permitir }) {
     return { sucursal: { id: Number(s.id), nombre: s.nombre }, fecha, top, ultimo: ult ? { ...ult, id: Number(ult.id), puntos: Number(ult.puntos) } : null,
       ...est.rows[0], activo: !!c.activo, premio: c.premio, link, qr: qr.svg(link, { color: '#1a1010' }) };
   });
+  // Reiniciar: archiva las partidas terminadas de la jornada (el ranking vuelve a cero; las que están en juego siguen y entran al nuevo)
+  route('POST', '/api/juego/reiniciar', async ({ user, body }) => {
+    permitir(user, 'juegosControl');
+    const s = await sucursal(body && body.s); if (!s) fail(404, 'Sucursal inválida');
+    const r = await query("UPDATE juego_partidas SET estado = 'REINICIADA' WHERE sucursal_id = $1 AND jornada = $2 AND estado = 'TERMINADA' RETURNING id", [s.id, inicioJornada().fecha]);
+    console.log(`Pizzaiolo: ${user.nombre} reinició el ranking de ${s.nombre} (${r.rows.length} partidas archivadas)`);
+    return { ok: true, archivadas: r.rows.length };
+  });
   route('GET', '/api/juego/config', async ({ user }) => { permitir(user, 'juegos'); return config(); });
   route('PUT', '/api/juego/config', async ({ user, body }) => {
     if (user.rol !== 'ADMIN') fail(403, 'Solo el administrador configura el juego');

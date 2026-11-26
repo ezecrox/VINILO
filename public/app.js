@@ -1862,6 +1862,47 @@
   };
 
   // ---------- Juegos: Pizzaiolo de la Noche (QR) ----------
+  // Festejo: podio del 3.º al 1.º con confeti, a pantalla completa
+  function podioGanador(d) {
+    const top = d.top.slice(0, 3); const orden = [top[1], top[0], top[2]]; // 2.º, 1.º, 3.º
+    const alto = [62, 100, 44], med = ['🥈', '🥇', '🥉'], puesto = [2, 1, 3], cls = ['p2', 'p1', 'p3'];
+    const cap = document.createElement('div'); cap.className = 'pod'; cap.setAttribute('role', 'dialog'); cap.setAttribute('aria-label', 'Ganador del Pizzaiolo');
+    cap.innerHTML = `<canvas class="pod-conf"></canvas>
+      <div class="pod-in"><div class="pod-tit"><img src="/gato.png" alt=""><div><small>${esc(d.sucursal.nombre)}</small><h2>¡Pizzaiolo de la noche!</h2></div></div>
+        <div class="pod-esc">${orden.map((t, i) => (t ? `<div class="pod-col ${cls[i]}" style="--h:${alto[i]}%;--d:${[1.6, 3.4, 0.4][i]}s">
+          <div class="pod-quien">${i === 1 ? '<div class="pod-corona">👑</div>' : ''}<b>${esc(t.nombre)}</b><span>${t.puntos} pts</span></div>
+          <div class="pod-bloque"><span class="pod-med">${med[i]}</span><span class="pod-n">${puesto[i]}</span></div></div>` : '<div class="pod-col vacio"></div>')).join('')}</div>
+        ${d.premio ? `<div class="pod-premio">🏆 ${esc(d.premio)}</div>` : ''}
+        <button class="pod-x" id="pod-x">Cerrar</button></div>`;
+    document.body.appendChild(cap);
+    // Confeti
+    const cv = cap.querySelector('canvas'), ctx = cv.getContext('2d'); let W = 0, H = 0, piezas = [], fin = false;
+    const tam = () => { W = cv.width = innerWidth * devicePixelRatio; H = cv.height = innerHeight * devicePixelRatio; };
+    tam(); addEventListener('resize', tam);
+    const COL = ['#c8281e', '#ffcf3f', '#2f8f3c', '#fff', '#ff8a1f', '#165f96'];
+    const lanzar = (n, x) => { for (let i = 0; i < n; i++) piezas.push({ x: x != null ? x : Math.random() * W, y: x != null ? H * 0.75 : -20 * devicePixelRatio, vx: (Math.random() - 0.5) * (x != null ? 14 : 3) * devicePixelRatio,
+      vy: (x != null ? -(10 + Math.random() * 12) : 2 + Math.random() * 3) * devicePixelRatio, r: Math.random() * Math.PI, vr: (Math.random() - 0.5) * 0.3, w: (6 + Math.random() * 8) * devicePixelRatio, h: (4 + Math.random() * 6) * devicePixelRatio, c: COL[i % COL.length], pizza: Math.random() < 0.06 }); };
+    const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    const paso = () => {
+      if (fin) return; ctx.clearRect(0, 0, W, H);
+      piezas.forEach((p) => { p.vy += 0.25 * devicePixelRatio; p.vx *= 0.99; p.x += p.vx; p.y += p.vy; p.r += p.vr;
+        ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.r);
+        if (p.pizza) { ctx.font = `${28 * devicePixelRatio}px serif`; ctx.fillText('🍕', -14 * devicePixelRatio, 10 * devicePixelRatio); } else { ctx.fillStyle = p.c; ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h); }
+        ctx.restore(); });
+      piezas = piezas.filter((p) => p.y < H + 60);
+      requestAnimationFrame(paso);
+    };
+    if (!reduce) {
+      requestAnimationFrame(paso); lanzar(60);
+      setTimeout(() => { lanzar(120, W * 0.3); lanzar(120, W * 0.7); }, 3600);
+      const lluvia = setInterval(() => { if (fin) return clearInterval(lluvia); lanzar(14); }, 400);
+      setTimeout(() => { lanzar(100, W * 0.5); }, 6000);
+    }
+    const cerrar = () => { fin = true; removeEventListener('resize', tam); removeEventListener('keydown', tecla); cap.classList.add('saliendo'); setTimeout(() => cap.remove(), 400); };
+    const tecla = (e) => { if (e.key === 'Escape') cerrar(); };
+    addEventListener('keydown', tecla); cap.querySelector('#pod-x').onclick = cerrar;
+  }
+
   VIEWS.pizzaiolo = async (main) => {
     clearInterval(VIEWS.pizzaiolo._t);
     const sucs = (await api('/api/sucursales').catch(() => [])).filter((s) => s.activo);
@@ -1871,7 +1912,7 @@
     let previos = null;
     main.innerHTML = `<div class="pz">
       <div class="pz-top"><div class="pz-marca"><img src="/gato.png" alt=""><div><h1>Pizzaiolo de la Noche</h1><p id="pz-sub">Juego por QR para los comensales</p></div></div>
-        <div class="pz-acc">${S.user.rol === 'ADMIN' ? '<button class="bv-btn" id="pz-conf">⚙️ Configurar</button>' : ''}<button class="bv-btn" id="pz-qrs">🖨️ Imprimir QR</button><button class="bv-btn" id="pz-tv">📺 Modo TV</button></div></div>
+        <div class="pz-acc">${puede('juegosControl') ? '<button class="bv-btn pz-gana" id="pz-ganador">🏆 Mostrar ganador</button><button class="bv-btn" id="pz-reset">🔄 Reiniciar</button>' : ''}${S.user.rol === 'ADMIN' ? '<button class="bv-btn" id="pz-conf">⚙️ Configurar</button>' : ''}<button class="bv-btn" id="pz-qrs">🖨️ Imprimir QR</button><button class="bv-btn" id="pz-tv">📺 Modo TV</button></div></div>
       <div class="bv-tabs" id="pz-tabs" ${sucs.length < 2 ? 'hidden' : ''}>${sucs.map((s) => `<button data-s="${s.id}" class="${s.id === suc ? 'on' : ''}">${esc(s.nombre)}</button>`).join('')}</div>
       <div id="pz-body"><div class="bv-vacio">Cargando…</div></div></div>`;
     const pintar = (d) => {
@@ -1889,7 +1930,8 @@
         const m = modal(`<h2>Borrar partida</h2><p>¿Sacar a <b>${esc(t.nombre)}</b> (${t.puntos} pts) del ranking? Sirve para nombres inapropiados.</p><div class="form-actions"><button class="btn sec" data-close>Cancelar</button><button class="btn" id="pz-del-ok">Borrar</button></div>`);
         $('#pz-del-ok', m).onclick = async () => { try { await api('/api/juego/partidas/' + t.id, { method: 'DELETE' }); closeModal(); cargar(); } catch (err) { toast(err.message, true); } }; }));
     };
-    const cargar = async () => { try { pintar(await api(`/api/juego/tablero?s=${suc}`)); } catch (err) { $('#pz-body').innerHTML = `<div class="bv-vacio">⚠️ ${esc(err.message)}</div>`; } };
+    let ultimoDato = null;
+    const cargar = async () => { try { ultimoDato = await api(`/api/juego/tablero?s=${suc}`); pintar(ultimoDato); } catch (err) { $('#pz-body').innerHTML = `<div class="bv-vacio">⚠️ ${esc(err.message)}</div>`; } };
     $$('#pz-tabs button').forEach((b) => (b.onclick = () => { suc = Number(b.dataset.s); try { localStorage.setItem('vinilo_pz_suc', suc); } catch (_) { /* sin storage */ } previos = null; $$('#pz-tabs button').forEach((x) => x.classList.toggle('on', x === b)); cargar(); }));
     $('#pz-tv').onclick = () => { document.body.classList.toggle('tv'); $('#pz-tv').textContent = document.body.classList.contains('tv') ? '✕ Salir' : '📺 Modo TV';
       try { if (document.body.classList.contains('tv')) document.documentElement.requestFullscreen && document.documentElement.requestFullscreen(); else document.fullscreenElement && document.exitFullscreen(); } catch (_) { /* sin pantalla completa */ } };
@@ -1903,6 +1945,18 @@
         <body><div class="c"><img src="${location.origin}/gato.png"><h1>Pizzaiolo de la Noche</h1><p>Escaneá con tu celular, poné tu nombre y entrá al ranking</p><div class="q">${d.qr}</div>
         ${d.premio ? `<div class="pr">🏆 ${esc(d.premio)}</div>` : ''}<div class="s">${esc(d.sucursal.nombre)}</div></div><script>setTimeout(()=>print(),800)<\/script></body></html>`);
       w.document.close();
+    };
+    if ($('#pz-reset')) $('#pz-reset').onclick = () => {
+      const nom = sucs.find((s) => s.id === suc).nombre;
+      const m = modal(`<h2>🔄 Reiniciar el juego</h2><p>El ranking de <b>${esc(nom)}</b> vuelve a cero para arrancar una ronda nueva. Las partidas anteriores quedan archivadas (no se borran). Quien esté jugando ahora entra al ranking nuevo.</p>
+        <p class="stock-hint">Tip: antes de reiniciar, tocá <b>🏆 Mostrar ganador</b> para festejar al ganador de esta ronda.</p>
+        <div class="form-actions"><button class="btn sec" data-close>Cancelar</button><button class="btn" id="pz-reset-ok">Reiniciar ranking</button></div>`);
+      $('#pz-reset-ok', m).onclick = async () => { try { const r = await api('/api/juego/reiniciar', { method: 'POST', body: { s: suc } }); closeModal(); previos = null; toast(`Ranking reiniciado · ${r.archivadas} ${r.archivadas === 1 ? 'partida archivada' : 'partidas archivadas'}`); cargar(); } catch (err) { toast(err.message, true); } };
+    };
+    if ($('#pz-ganador')) $('#pz-ganador').onclick = async () => {
+      try { ultimoDato = await api(`/api/juego/tablero?s=${suc}`); } catch (err) { toast(err.message, true); return; }
+      if (!ultimoDato.top.length) { toast('Todavía nadie jugó en esta ronda', true); return; }
+      podioGanador(ultimoDato);
     };
     if ($('#pz-conf')) $('#pz-conf').onclick = async () => {
       const c = await api('/api/juego/config');

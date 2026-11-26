@@ -4,6 +4,7 @@ const CATALOGO = [
   { grupo: 'General', clave: 'avisos', menu: 'Avisos en el panel', desc: 'Publicar avisos que aparecen en el Panel de todos los usuarios (o de algunos roles o sucursales)' },
   { grupo: 'Juegos', clave: 'juegos', menu: 'Bolsa de tragos', desc: 'Ver la bolsa de tragos: precios que suben y bajan según las ventas de Fudo (para mostrar en una pantalla)' },
   { grupo: 'Juegos', clave: 'juegosCrash', menu: 'Bolsa de tragos', desc: 'Lanzar un CRASH en la bolsa (bajan todos los precios por unos minutos)', requiere: 'juegos' },
+  { grupo: 'Juegos', clave: 'juegosControl', menu: 'Pizzaiolo (juego QR)', desc: 'Reiniciar el ranking del Pizzaiolo y mostrar el podio del ganador', requiere: 'juegos' },
   { grupo: 'General', clave: 'verStock', menu: 'Stock por almacén', desc: 'Ver el stock de los almacenes habilitados' },
   { grupo: 'General', clave: 'minimos', menu: 'Stock por almacén', desc: 'Definir stock mínimo por almacén', requiere: 'verStock' },
   { grupo: 'General', clave: 'verPedidos', menu: 'Notas de pedido', desc: 'Ver notas de pedido entre almacenes' },
