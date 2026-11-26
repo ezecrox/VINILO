@@ -205,6 +205,7 @@
     recepcion: '<path d="M12 3v11"/><path d="m7.5 9.5 4.5 4.5 4.5-4.5"/><path d="M3 14v4a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-4"/>',
     transferencia: '<path d="M4 8h14"/><path d="m14 4 4 4-4 4"/><path d="M20 16H6"/><path d="m10 12-4 4 4 4"/>',
     consumo: '<path d="M6 3h12l-1.2 7.2A4.9 4.9 0 0 1 12 14.5a4.9 4.9 0 0 1-4.8-4.3L6 3Z"/><path d="M12 14.5V20"/><path d="M8 21h8"/><path d="M6.6 7h10.8"/>',
+    bolsa: '<path d="M3 17l5-5 4 4 8-8"/><path d="M15 8h5v5"/><path d="M3 21h18"/>',
     tablero: '<path d="M3 3v18h18"/><path d="m7 15 4-4 3 3 5-6"/><circle cx="19" cy="5" r="2" fill="currentColor"/>',
     manuales: '<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2Z"/><path d="M9 7h7M9 11h5"/>',
     checklist: '<rect x="4" y="3" width="16" height="18" rx="2"/><path d="m8 8 1.5 1.5L12 7M8 14l1.5 1.5L12 13"/><path d="M14 8h3M14 14h3"/>',
@@ -260,6 +261,8 @@
     { id: 'sucursales', lbl: 'Sucursales', ok: () => puede('sucursales') },
     { id: 'notificaciones', lbl: 'Notificaciones push', ok: () => puede('notificaciones') },
     { id: 'usuarios', lbl: 'Usuarios y roles', ok: () => puede('usuarios') },
+    { sec: 'Juegos' },
+    { id: 'bolsa', lbl: 'Bolsa de tragos', ok: () => puede('juegos') },
     { sec: 'Ayuda' },
     { id: 'manuales', lbl: 'Manuales', ok: () => true },
   ];
@@ -1449,21 +1452,21 @@
   const durTxt = (m) => (m == null ? '—' : m >= 60 ? `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')}` : `${m} min`);
 
   // Gráfico de líneas/áreas en SVG con cruz y tooltip (una sola escala)
-  function graficoLinea(cont, { series, formato = (v) => v, alto = 200, yMin = 0 }) {
+  function graficoLinea(cont, { series, formato = (v) => v, alto = 200, yMin = 0, yMax = null }) {
     const W = Math.max(280, cont.clientWidth || 600), H = alto, ml = 36, mr = 12, mt = 10, mb = 24;
     const todos = series.flatMap((s) => s.puntos);
     if (!todos.length) { cont.innerHTML = '<div class="tb-vacio">Sin datos todavía</div>'; return; }
     const t0 = Math.min(...todos.map((p) => p.x)), t1 = Math.max(...todos.map((p) => p.x));
-    const vmax = Math.max(1, ...todos.map((p) => p.y)); const paso = vmax <= 5 ? 1 : vmax <= 20 ? 5 : vmax <= 60 ? 10 : vmax <= 150 ? 25 : 50; const ymax = Math.ceil(vmax / paso) * paso;
+    const vmax = yMax != null ? yMax - yMin : Math.max(1, ...todos.map((p) => p.y)); const paso = vmax <= 5 ? 1 : vmax <= 20 ? 5 : vmax <= 60 ? 10 : vmax <= 150 ? 25 : 50; const ymax = yMax != null ? yMax : Math.ceil(vmax / paso) * paso;
     const X = (x) => ml + ((x - t0) / Math.max(1, t1 - t0)) * (W - ml - mr), Y = (y) => mt + (1 - (y - yMin) / Math.max(1, ymax - yMin)) * (H - mt - mb);
     let svg = `<svg viewBox="0 0 ${W} ${H}" width="100%" height="${H}" class="tb-svg" role="img">`;
-    for (let v = 0; v <= ymax; v += paso) svg += `<line x1="${ml}" x2="${W - mr}" y1="${Y(v)}" y2="${Y(v)}" class="tb-grid"/><text x="${ml - 6}" y="${Y(v) + 4}" class="tb-ax" text-anchor="end">${v}</text>`;
+    for (let v = Math.ceil(yMin / paso) * paso; v <= ymax; v += paso) svg += `<line x1="${ml}" x2="${W - mr}" y1="${Y(v)}" y2="${Y(v)}" class="tb-grid"/><text x="${ml - 6}" y="${Y(v) + 4}" class="tb-ax" text-anchor="end">${v}</text>`;
     const h0 = new Date(t0); h0.setMinutes(0, 0, 0);
     for (let h = h0.getTime() + 3600e3; h <= t1; h += 3600e3) { const hh = new Date(h).getHours(); if ((t1 - t0) > 10 * 3600e3 && hh % 2) continue; svg += `<text x="${X(h)}" y="${H - 6}" class="tb-ax" text-anchor="middle">${String(hh).padStart(2, '0')}h</text>`; }
     for (const s of series) {
       if (!s.puntos.length) continue;
       const d = s.puntos.map((p, i) => `${i ? 'L' : 'M'}${X(p.x).toFixed(1)},${Y(p.y).toFixed(1)}`).join('');
-      if (s.area) svg += `<path d="${d}L${X(s.puntos.at(-1).x).toFixed(1)},${Y(0)}L${X(s.puntos[0].x).toFixed(1)},${Y(0)}Z" fill="${s.color}" opacity=".12"/>`;
+      if (s.area) svg += `<path d="${d}L${X(s.puntos.at(-1).x).toFixed(1)},${Y(yMin)}L${X(s.puntos[0].x).toFixed(1)},${Y(yMin)}Z" fill="${s.color}" opacity=".12"/>`;
       svg += `<path d="${d}" fill="none" stroke="${s.color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" ${s.punteada ? 'stroke-dasharray="5 4"' : ''}/>`;
     }
     const ult = series[0].puntos.at(-1); if (ult) svg += `<circle cx="${X(ult.x)}" cy="${Y(ult.y)}" r="4.5" fill="${series[0].color}" stroke="#fff" stroke-width="2"/>`;
@@ -1573,6 +1576,99 @@
       if (!document.hidden) cargar();
     }, 60000);
     let rz; window.onresize = () => { clearTimeout(rz); rz = setTimeout(() => { if (ultimo && location.hash.startsWith('#/tablero')) pintar(ultimo); }, 250); };
+  };
+
+  // ---------- Juegos: Bolsa de tragos ----------
+  function sparkBolsa(serie, sube, w = 120, h = 34) {
+    if (!serie || serie.length < 2) return `<svg width="${w}" height="${h}"></svg>`;
+    const mn = Math.min(...serie, 1), mx = Math.max(...serie, 1), rg = Math.max(0.02, mx - mn);
+    const X = (i) => (i / (serie.length - 1)) * w, Y = (v) => h - 2 - ((v - mn) / rg) * (h - 4);
+    const d = serie.map((v, i) => `${i ? 'L' : 'M'}${X(i).toFixed(1)},${Y(v).toFixed(1)}`).join('');
+    return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" class="bv-spark ${sube ? 'up' : 'down'}"><line x1="0" x2="${w}" y1="${Y(1)}" y2="${Y(1)}" class="bv-base"/><path d="${d}L${w},${h}L0,${h}Z" class="bv-area"/><path d="${d}" class="bv-line"/></svg>`;
+  }
+  const flecha = (v) => (v > 0.05 ? '▲' : v < -0.05 ? '▼' : '■');
+  const clsVar = (v) => (v > 0.05 ? 'up' : v < -0.05 ? 'down' : 'eq');
+  const pctTxt = (v) => `${v > 0 ? '+' : ''}${v.toLocaleString('es-AR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
+
+  VIEWS.bolsa = async (main) => {
+    clearInterval(VIEWS.bolsa._t);
+    document.body.classList.add('bolsa-on');
+    main.innerHTML = `<div class="bv">
+      <div class="bv-top"><div class="bv-marca"><span class="bv-logo">VNL</span><div><h1>Bolsa de tragos</h1><p id="bv-sub">Abriendo el mercado…</p></div></div>
+        <div class="bv-acc"><span class="bv-reloj" id="bv-reloj"></span>${S.user.rol === 'ADMIN' ? '<button class="bv-btn" id="bv-conf">⚙️ Tragos</button>' : ''}<button class="bv-btn" id="bv-tv">📺 Modo TV</button></div></div>
+      <div class="bv-tabs" id="bv-tabs" hidden></div>
+      <div class="bv-cinta"><div class="bv-cinta-in" id="bv-cinta"></div></div>
+      <div id="bv-body"><div class="bv-vacio">Leyendo las ventas de Fudo…</div></div></div>`;
+    let cuentas = [], cuenta = (() => { try { return localStorage.getItem('vinilo_bv_cuenta') || ''; } catch (_) { return ''; } })(), previo = new Map();
+    try { cuentas = await api('/api/bolsa/cuentas'); } catch (_) { cuentas = []; }
+    if (!cuentas.some((c) => c.id === cuenta)) cuenta = cuentas[0] ? cuentas[0].id : '';
+    const tabs = () => { const t = $('#bv-tabs'); t.hidden = cuentas.length < 2; t.innerHTML = cuentas.map((c) => `<button class="${c.id === cuenta ? 'on' : ''}" data-c="${esc(c.id)}">${esc(c.nombre)}</button>`).join('');
+      t.querySelectorAll('button').forEach((b) => (b.onclick = () => { cuenta = b.dataset.c; try { localStorage.setItem('vinilo_bv_cuenta', cuenta); } catch (_) { /* sin storage */ } previo = new Map(); tabs(); cargar(); })); };
+    tabs();
+    const reloj = () => { const e = $('#bv-reloj'); if (e) e.textContent = new Date().toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23' }); };
+    reloj();
+
+    const pintar = (d) => {
+      const ts = d.tragos.slice();
+      $('#bv-sub').innerHTML = `${esc(d.sucursal)} · ${d.abierto ? `mercado abierto desde las ${horaAR(d.apertura)} · ${d.unidades} tragos operados` : 'mercado cerrado: abre con el primer trago de la noche'}${d.desactualizado ? ' · <b>sin conexión con Fudo</b>' : ''}`;
+      // Cinta
+      const enCinta = (d.abierto ? ts.filter((t) => t.vendidos > 0).sort((a, b) => b.ultima_hora - a.ultima_hora || b.vendidos - a.vendidos) : ts.sort((a, b) => a.nombre.localeCompare(b.nombre))).slice(0, 30);
+      const items = enCinta.map((t) => `<span class="bv-tk ${clsVar(t.var_dia)}"><b>${esc(t.nombre.toUpperCase())}</b> ${pesos(t.precio)} <i>${flecha(t.var_dia)} ${pctTxt(t.var_dia)}</i></span>`).join('');
+      $('#bv-cinta').innerHTML = items + items;
+      $('#bv-cinta').style.animationDuration = Math.max(25, enCinta.length * 4) + 's';
+      if (!d.abierto) {
+        $('#bv-body').innerHTML = `<div class="bv-cerrado"><div class="bv-campana">🔔</div><h2>El mercado todavía no abrió</h2><p>La rueda empieza con el primer trago vendido en Fudo (o a las 18 h). Estos son los precios de apertura:</p>
+          <div class="bv-grid">${ts.slice(0, 24).map((t) => `<div class="bv-tile eq"><div class="bv-tn">${esc(t.nombre)}</div><div class="bv-tp">${pesos(t.precio)}</div><div class="bv-tv">■ 0,0%</div></div>`).join('')}</div></div>`;
+        return;
+      }
+      const op = ts.filter((t) => t.vendidos > 0).sort((a, b) => b.vendidos - a.vendidos);
+      const quietos = ts.filter((t) => !t.vendidos).sort((a, b) => a.var_dia - b.var_dia);
+      const subas = [...op].sort((a, b) => b.var_30 - a.var_30).filter((t) => t.var_30 > 0.05).slice(0, 5);
+      const bajas = [...ts].sort((a, b) => a.var_30 - b.var_30).filter((t) => t.var_30 < -0.05).slice(0, 5);
+      const ix = d.indice;
+      const fila = (t, k) => `<div class="bv-mv"><span>${esc(t.nombre)}</span><b>${pesos(t.precio)}</b><i class="${clsVar(t[k])}">${flecha(t[k])} ${pctTxt(t[k])}</i></div>`;
+      $('#bv-body').innerHTML = `
+        <div class="bv-head">
+          <div class="bv-idx"><span>ÍNDICE VINILO</span><b class="${clsVar(ix.var_dia)}">${ix.valor.toLocaleString('es-AR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</b>
+            <i class="${clsVar(ix.var_dia)}">${flecha(ix.var_dia)} ${pctTxt(ix.var_dia)} hoy</i><i class="${clsVar(ix.var_30)}">${flecha(ix.var_30)} ${pctTxt(ix.var_30)} últ. 30 min</i></div>
+          <div class="bv-idxg" id="bv-idxg"></div>
+          <div class="bv-mov"><h3>🚀 Suben (30 min)</h3>${subas.map((t) => fila(t, 'var_30')).join('') || '<p class="bv-nada">Nada en alza</p>'}</div>
+          <div class="bv-mov"><h3>📉 Bajan (30 min)</h3>${bajas.map((t) => fila(t, 'var_30')).join('') || '<p class="bv-nada">Nada en baja</p>'}</div>
+        </div>
+        <div class="bv-grid">${op.map((t) => { const p0 = previo.get(t.id); const fl = p0 == null || p0 === t.precio ? '' : p0 < t.precio ? 'fl-up' : 'fl-down';
+          return `<div class="bv-tile ${clsVar(t.var_dia)} ${fl}" title="Precio de carta ${pesos(t.base)} · máx ${pesos(t.maximo)} · mín ${pesos(t.minimo)}">
+            <div class="bv-tn">${esc(t.nombre)}</div><div class="bv-tp">${pesos(t.precio)}</div>
+            <div class="bv-tv">${flecha(t.var_dia)} ${pctTxt(t.var_dia)}</div>${sparkBolsa(t.serie, t.var_dia >= 0)}
+            <div class="bv-tf"><span>Vol. ${t.vendidos}</span><span>máx ${pesosK(t.maximo)}</span><span>mín ${pesosK(t.minimo)}</span></div></div>`; }).join('')}</div>
+        ${quietos.length ? `<div class="bv-quietos"><h3>Sin operar hoy <small>${quietos.length} tragos</small></h3><div>${quietos.map((t) => `<span class="${clsVar(t.var_dia)}">${esc(t.nombre)} <b>${pesos(t.precio)}</b> <i>${flecha(t.var_dia)} ${pctTxt(t.var_dia)}</i></span>`).join('')}</div></div>` : ''}
+        <p class="bv-nota">Juego de pantalla: cada trago sube cuando se pide y baja cuando no sale, y siempre tiende a volver a su precio de carta. Los precios de Fudo no cambian.</p>`;
+      const g = $('#bv-idxg');
+      if (g) { const pts = ix.serie.map((p) => ({ x: new Date(p.t).getTime(), y: p.v })); const mn = Math.min(...pts.map((p) => p.y), 1000), mx = Math.max(...pts.map((p) => p.y), 1000);
+        graficoLinea(g, { series: [{ nombre: 'Índice', color: ix.var_dia >= 0 ? '#22c55e' : '#ef4444', puntos: pts, area: true }], formato: (v) => v.toLocaleString('es-AR', { maximumFractionDigits: 1 }), alto: 150, yMin: Math.floor((mn - 10) / 10) * 10, yMax: Math.ceil((mx + 10) / 10) * 10 }); }
+      previo = new Map(ts.map((t) => [t.id, t.precio]));
+    };
+    const cargar = async () => {
+      const pedida = cuenta;
+      try { const d = await api('/api/bolsa' + (cuenta ? '?cuenta=' + encodeURIComponent(cuenta) : '')); if (pedida === cuenta) pintar(d); }
+      catch (err) { $('#bv-body').innerHTML = `<div class="bv-vacio">⚠️ ${esc(err.message)}</div>`; }
+    };
+    $('#bv-tv').onclick = () => { document.body.classList.toggle('tv'); $('#bv-tv').textContent = document.body.classList.contains('tv') ? '✕ Salir' : '📺 Modo TV';
+      try { if (document.body.classList.contains('tv')) document.documentElement.requestFullscreen && document.documentElement.requestFullscreen(); else document.fullscreenElement && document.exitFullscreen(); } catch (_) { /* sin pantalla completa */ } };
+    if ($('#bv-conf')) $('#bv-conf').onclick = async () => {
+      const lista = await api('/api/bolsa/config' + (cuenta ? '?cuenta=' + encodeURIComponent(cuenta) : ''));
+      const m = modal(`<h2>Tragos de la bolsa</h2><p class="stock-hint">Son los productos de Fudo de la categoría <b>Tragos</b>. Destildá los que no querés mostrar en la pantalla (por ejemplo, "fuera de carta" o medidas).</p>
+        <input id="bc-q" placeholder="Buscar…" style="margin-bottom:8px"><div class="chk-grupo chk-lista" id="bc-l" style="max-height:50vh">${lista.map((p) => `<label class="check" data-n="${esc(p.nombre.toLowerCase())}"><input type="checkbox" value="${esc(p.id)}" ${p.oculto ? '' : 'checked'}> ${esc(p.nombre)} <span class="muted">· ${pesos(p.base)}${p.activo ? '' : ' · inactivo en Fudo'}</span></label>`).join('')}</div>
+        <div class="form-actions"><button class="btn sec" data-close>Cancelar</button><button class="btn" id="bc-ok">Guardar</button></div>`);
+      $('#bc-q', m).oninput = (e) => { const q = e.target.value.toLowerCase(); m.querySelectorAll('#bc-l label').forEach((l) => (l.style.display = l.dataset.n.includes(q) ? '' : 'none')); };
+      $('#bc-ok', m).onclick = async () => { const ocultos = [...m.querySelectorAll('#bc-l input')].filter((i) => !i.checked).map((i) => i.value);
+        try { await api('/api/bolsa/config' + (cuenta ? '?cuenta=' + encodeURIComponent(cuenta) : ''), { method: 'PUT', body: { ocultos } }); closeModal(); toast('Listo'); cargar(); } catch (err) { toast(err.message, true); } };
+    };
+    await cargar();
+    let n = 0;
+    VIEWS.bolsa._t = setInterval(() => {
+      if (!location.hash.startsWith('#/bolsa')) { clearInterval(VIEWS.bolsa._t); document.body.classList.remove('tv', 'bolsa-on'); return; }
+      reloj(); if (++n % 30 === 0 && !document.hidden) cargar();
+    }, 1000);
   };
 
   // ---------- Manuales ----------

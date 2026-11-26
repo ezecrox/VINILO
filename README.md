@@ -227,3 +227,9 @@ Nombres opcionales: `FUDO_NOMBRE` (default VINILO GALPON) y `FUDO_BAR_NOMBRE` (d
 En **Usuarios**, el botón **👁 Ver como** abre la aplicación tal como la ve ese usuario (menú, permisos, almacenes, sus datos).
 Es **solo lectura**: el servidor rechaza cualquier alta, cambio o borrado mientras dure. El token dura 2 h y se invalida si el administrador deja de ser ADMIN o se desactiva.
 Una barra arriba indica a quién se está viendo y tiene el botón **Volver a mi usuario**. Cada uso queda en **Usuarios → Accesos** como evento "Ver como".
+
+## Juegos → Bolsa de tragos
+Pantalla tipo bolsa de valores con los tragos (productos de Fudo cuya categoría es **Tragos**). Permiso `juegos` (solo ADMIN por defecto).
+Cada 5 minutos el precio de cada trago se mueve según lo vendido en Fudo: sube cuando se pide (+4,5 % por 1 unidad, rinde menos cada unidad extra), baja de a poco si no sale, y siempre tiende a volver al precio de carta (límites 70 %–160 %). El mercado abre a las 18 h o con el primer trago vendido.
+Muestra la cinta con cotizaciones, el **Índice VINILO** (base 1000), lo que más sube y baja en 30 minutos, una tarjeta por trago con precio, variación, gráfico, volumen y máx/mín del día, y los tragos sin operar. Modo TV y pestañas por sucursal (usa las mismas cuentas de Fudo del tablero).
+El ADMIN elige qué tragos se muestran con el botón **⚙️ Tragos**. Es un juego de pantalla: **los precios de Fudo no se modifican**.

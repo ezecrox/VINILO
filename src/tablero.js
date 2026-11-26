@@ -228,3 +228,4 @@ module.exports = function registrarTablero({ route, query, fail, permitir }) {
   });
 };
 module.exports.inicioJornada = inicioJornada;
+module.exports.leerItems = leerItems;

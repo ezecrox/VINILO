@@ -887,6 +887,7 @@ const whatsapp = require('./src/whatsapp');
 whatsapp.init({ query });
 whatsapp.registrar({ route, fail, permitir, isTrue, toInt, str });
 require('./src/tablero')({ route, query, fail, permitir });
+require('./src/bolsa')({ route, query, fail, permitir });
 require('./src/checklist')({ route, query, tx, fail, permitir, permitirAlguno, isTrue, toInt, str, fechaOk });
 require('./src/programacion')({ route, query, tx, fail, permitir, permitirAlguno, isTrue, toInt, str, fechaOk });
 
