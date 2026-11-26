@@ -85,7 +85,7 @@ input.campo{font:700 18px Nunito;padding:14px;border:2px solid var(--line);borde
 const $ = (s) => document.querySelector(s);
 const esc = (t) => String(t == null ? '' : t).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 const qs = new URLSearchParams(location.search);
-const SUC = Number(qs.get('s')) || 0; let MESA = Number(qs.get('m')) || null;
+const SUC = Number(qs.get('s')) || 0;
 const vista = $('#vista'), hud = $('#hud');
 const J = { nombre: '', token: null, preguntas: [], r1: [], r2: { buenos: 0, malos: 0 }, r3: [], pts: [0, 0, 0], t0: 0 };
 let timers = []; const limpiar = () => { timers.forEach((t) => { clearInterval(t); clearTimeout(t); cancelAnimationFrame(t); }); timers = []; };
@@ -102,30 +102,28 @@ const puntosHorno = (p) => (p > 104 ? 0 : Math.max(0, Math.round(100 - Math.abs(
 let INFO = null;
 
 async function arrancar() {
-  if (!SUC) { vista.innerHTML = '<h2>Escaneá el QR de tu mesa</h2><p>Este juego se abre desde el código QR que está en cada mesa.</p>'; return; }
+  if (!SUC) { vista.innerHTML = '<h2>Escaneá el QR del bar</h2><p>Este juego se abre desde el código QR de la pantalla del bar.</p>'; return; }
   try { INFO = await api(`/api/juego/info?s=${SUC}`); } catch (e) { vista.innerHTML = `<h2>Ups</h2><p>${esc(e.message)}</p>`; return; }
-  $('#local').textContent = INFO.sucursal.nombre + (MESA ? ` · mesa ${MESA}` : '');
+  $('#local').textContent = INFO.sucursal.nombre;
   if (!INFO.activo) { vista.innerHTML = '<h2>El juego está en pausa</h2><p>Volvé a escanear el QR más tarde. ¡Gracias!</p>'; return; }
   inicio();
 }
 
 function inicio() {
   limpiar(); hud.hidden = true; J.pts = [0, 0, 0]; J.r1 = []; J.r2 = { buenos: 0, malos: 0 }; J.r3 = [];
-  vista.innerHTML = `${MESA ? `<span class="mesa">📍 Mesa ${MESA} · ${esc(INFO.sucursal.nombre)}</span>` : ''}<h2>¿Sos el mejor pizzaiolo de la noche?</h2>
+  vista.innerHTML = `<span class="mesa">📍 ${esc(INFO.sucursal.nombre)}</span><h2>¿Sos el mejor pizzaiolo de la noche?</h2>
     <p>3 rondas, menos de 2 minutos. Tu puntaje aparece en la pantalla del bar.</p>
     <div class="rondas">
       <div><svg><use href="#i-horno"/></svg><span><b>Al punto</b><small>Sacá la pizza del horno justo a tiempo</small></span></div>
       <div><svg><use href="#i-tom"/></svg><span><b>Armá la Margherita</b><small>Tocá tomate, mozzarella y albahaca. ¡Nada de ananá!</small></span></div>
       <div><svg><use href="#i-pre"/></svg><span><b>Trivia del bar</b><small>Pizzas, horno y tragos, contra reloj</small></span></div></div>
     ${INFO.premio ? `<div class="premio">🏆 ${esc(INFO.premio)}</div>` : ''}
-    <div class="${MESA ? '' : 'fila'}"><div><label for="nom">Tu nombre</label><input id="nom" class="campo" maxlength="16" placeholder="Ej.: Caro" value="${esc(J.nombre || leer('pz_nombre'))}" autocomplete="given-name"></div>
-      ${MESA ? '' : '<div><label for="mesa">Mesa</label><input id="mesa" class="campo" inputmode="numeric" maxlength="3" placeholder="N°"></div>'}</div>
+    <div><label for="nom">Tu nombre</label><input id="nom" class="campo" maxlength="16" placeholder="Ej.: Caro" value="${esc(J.nombre || leer('pz_nombre'))}" autocomplete="given-name"></div>
     <div class="err" id="err"></div><button class="btn" id="go">¡A jugar!</button>`;
   $('#go').onclick = async () => {
     const n = $('#nom').value.trim(); if (n.length < 2) { $('#err').textContent = 'Poné tu nombre'; $('#nom').focus(); return; }
-    if (!MESA && $('#mesa')) { const m = Number($('#mesa').value); if (m > 0) { MESA = m; $('#local').textContent = INFO.sucursal.nombre + ` · mesa ${MESA}`; } }
     $('#go').disabled = true; $('#err').textContent = '';
-    try { const r = await api('/api/juego/iniciar', { s: SUC, mesa: MESA, nombre: n }); J.token = r.token; J.preguntas = r.preguntas; J.nombre = n; guardar('pz_nombre', n); J.t0 = Date.now(); ronda1(); }
+    try { const r = await api('/api/juego/iniciar', { s: SUC, nombre: n }); J.token = r.token; J.preguntas = r.preguntas; J.nombre = n; guardar('pz_nombre', n); J.t0 = Date.now(); ronda1(); }
     catch (e) { $('#err').textContent = e.message; $('#go').disabled = false; }
   };
 }
@@ -221,11 +219,11 @@ async function terminar() {
   try { r = await api('/api/juego/terminar', { token: J.token, r1: J.r1, r2: J.r2, r3: J.r3 }); }
   catch (e) { vista.innerHTML = `<h2>Ups</h2><p>${esc(e.message)}</p><button class="btn" id="otra">Jugar otra vez</button>`; $('#otra').onclick = inicio; return; }
   let top = []; try { top = await api(`/api/juego/top?s=${SUC}`); } catch (_) { top = []; }
-  const yoEn = top.findIndex((t) => t.nombre === J.nombre && t.puntos === r.puntos && (t.mesa || null) === (MESA || null));
+  const yoEn = top.findIndex((t) => t.nombre === J.nombre && t.puntos === r.puntos);
   vista.innerHTML = `<h2>¡Listo, ${esc(J.nombre)}!</h2><div class="total">${r.puntos}</div>
     <div class="puesto">${r.puesto === 1 ? '🏆 ¡Vas primero en el ranking!' : `Vas ${r.puesto}° de ${r.de} esta noche`}</div>
     <div class="desg"><div><span>Al punto</span><b>${r.r1}</b></div><div><span>Armá la Margherita</span><b>${r.r2}</b></div><div><span>Trivia del bar (${r.correctas} de ${J.preguntas.length})</span><b>${r.r3}</b></div></div>
-    ${top.length ? `<h2 style="font-size:22px;margin-top:6px">Ranking de la noche</h2><div class="top">${top.map((t, i) => `<div class="${i === yoEn ? 'yo' : ''}"><span class="n">${i + 1}</span><span>${esc(t.nombre)}${t.mesa ? `<small>mesa ${t.mesa}</small>` : ''}</span><span class="p">${t.puntos}</span></div>`).join('')}</div>` : ''}
+    ${top.length ? `<h2 style="font-size:22px;margin-top:6px">Ranking de la noche</h2><div class="top">${top.map((t, i) => `<div class="${i === yoEn ? 'yo' : ''}"><span class="n">${i + 1}</span><span>${esc(t.nombre)}</span><span class="p">${t.puntos}</span></div>`).join('')}</div>` : ''}
     ${INFO.premio ? `<div class="premio">🏆 ${esc(INFO.premio)}</div>` : ''}
     <button class="btn" id="otra">Jugar otra vez</button>`;
   $('#otra').onclick = inicio;

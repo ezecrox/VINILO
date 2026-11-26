@@ -1871,7 +1871,7 @@
     let previos = null;
     main.innerHTML = `<div class="pz">
       <div class="pz-top"><div class="pz-marca"><img src="/gato.png" alt=""><div><h1>Pizzaiolo de la Noche</h1><p id="pz-sub">Juego por QR para los comensales</p></div></div>
-        <div class="pz-acc">${S.user.rol === 'ADMIN' ? '<button class="bv-btn" id="pz-conf">⚙️ Configurar</button>' : ''}<button class="bv-btn" id="pz-qrs">🖨️ QR por mesa</button><button class="bv-btn" id="pz-tv">📺 Modo TV</button></div></div>
+        <div class="pz-acc">${S.user.rol === 'ADMIN' ? '<button class="bv-btn" id="pz-conf">⚙️ Configurar</button>' : ''}<button class="bv-btn" id="pz-qrs">🖨️ Imprimir QR</button><button class="bv-btn" id="pz-tv">📺 Modo TV</button></div></div>
       <div class="bv-tabs" id="pz-tabs" ${sucs.length < 2 ? 'hidden' : ''}>${sucs.map((s) => `<button data-s="${s.id}" class="${s.id === suc ? 'on' : ''}">${esc(s.nombre)}</button>`).join('')}</div>
       <div id="pz-body"><div class="bv-vacio">Cargando…</div></div></div>`;
     const pintar = (d) => {
@@ -1880,10 +1880,10 @@
       const ids = new Set(d.top.map((t) => t.id)); const nuevos = previos ? d.top.filter((t) => !previos.has(t.id)).map((t) => t.id) : []; previos = ids;
       $('#pz-body').innerHTML = `<div class="pz-grid">
         <div><h2 class="pz-h">Ranking de la noche</h2>
-          ${d.top.length ? `<div class="pz-rk">${d.top.slice(0, 10).map((t, i) => `<div class="${nuevos.includes(t.id) ? 'nuevo' : ''}"><span class="n">${i + 1}</span><span class="q">${esc(t.nombre)}${t.mesa ? `<small>mesa ${t.mesa}</small>` : ''}</span><span class="p">${t.puntos}</span>${S.user.rol === 'ADMIN' ? `<button class="pz-x" data-del="${t.id}" title="Borrar esta partida">✕</button>` : ''}</div>`).join('')}</div>`
+          ${d.top.length ? `<div class="pz-rk">${d.top.slice(0, 10).map((t, i) => `<div class="${nuevos.includes(t.id) ? 'nuevo' : ''}"><span class="n">${i + 1}</span><span class="q">${esc(t.nombre)}</span><span class="p">${t.puntos}</span>${S.user.rol === 'ADMIN' ? `<button class="pz-x" data-del="${t.id}" title="Borrar esta partida">✕</button>` : ''}</div>`).join('')}</div>`
             : '<div class="pz-vacio">Todavía nadie jugó esta noche.<br>¡Escaneá el QR y estrená el ranking!</div>'}</div>
         <div class="pz-lado"><div class="pz-qr">${d.qr}</div><div class="pz-esc">Escaneá y jugá</div>
-          <div class="pz-vivo"><span><b>${d.jugando}</b> jugando ahora</span><span><b>${d.partidas}</b> ${d.partidas === 1 ? 'partida' : 'partidas'} esta noche${d.mesas ? ` · ${d.mesas} ${d.mesas === 1 ? 'mesa' : 'mesas'}` : ''}</span>${d.ultimo ? `<span>Último: <b>${esc(d.ultimo.nombre)}</b>${d.ultimo.mesa ? ` (mesa ${d.ultimo.mesa})` : ''} · ${d.ultimo.puntos} pts</span>` : ''}</div>
+          <div class="pz-vivo"><span><b>${d.jugando}</b> jugando ahora</span><span><b>${d.partidas}</b> ${d.partidas === 1 ? 'partida' : 'partidas'} esta noche</span>${d.ultimo ? `<span>Último: <b>${esc(d.ultimo.nombre)}</b> · ${d.ultimo.puntos} pts</span>` : ''}</div>
           ${d.premio ? `<div class="pz-premio">🏆 ${esc(d.premio)}</div>` : ''}<a class="pz-link" href="${esc(d.link)}" target="_blank" rel="noopener">Abrir el juego ↗</a></div></div>`;
       $$('#pz-body [data-del]').forEach((b) => (b.onclick = () => { const t = d.top.find((x) => x.id == b.dataset.del);
         const m = modal(`<h2>Borrar partida</h2><p>¿Sacar a <b>${esc(t.nombre)}</b> (${t.puntos} pts) del ranking? Sirve para nombres inapropiados.</p><div class="form-actions"><button class="btn sec" data-close>Cancelar</button><button class="btn" id="pz-del-ok">Borrar</button></div>`);
@@ -1893,21 +1893,16 @@
     $$('#pz-tabs button').forEach((b) => (b.onclick = () => { suc = Number(b.dataset.s); try { localStorage.setItem('vinilo_pz_suc', suc); } catch (_) { /* sin storage */ } previos = null; $$('#pz-tabs button').forEach((x) => x.classList.toggle('on', x === b)); cargar(); }));
     $('#pz-tv').onclick = () => { document.body.classList.toggle('tv'); $('#pz-tv').textContent = document.body.classList.contains('tv') ? '✕ Salir' : '📺 Modo TV';
       try { if (document.body.classList.contains('tv')) document.documentElement.requestFullscreen && document.documentElement.requestFullscreen(); else document.fullscreenElement && document.exitFullscreen(); } catch (_) { /* sin pantalla completa */ } };
-    $('#pz-qrs').onclick = () => {
-      const m = modal(`<h2>🖨️ QR por mesa</h2><p>Cada QR abre el juego con el número de mesa ya cargado. Imprimilos y pegalos en las mesas de <b>${esc(sucs.find((s) => s.id === suc).nombre)}</b>.</p>
-        <div class="row"><div class="f"><label>Desde la mesa</label><input type="number" id="qd" value="1" min="1"></div><div class="f"><label>Hasta la mesa</label><input type="number" id="qh" value="20" min="1"></div></div>
-        <div class="form-actions"><button class="btn sec" data-close>Cancelar</button><button class="btn" id="q-ok">Generar e imprimir</button></div>`);
-      $('#q-ok', m).onclick = async () => {
-        let d; try { d = await api(`/api/juego/qrs?s=${suc}&desde=${$('#qd', m).value}&hasta=${$('#qh', m).value}`); } catch (err) { toast(err.message, true); return; }
-        const w = window.open('', '_blank'); if (!w) { toast('Permití las ventanas emergentes para imprimir', true); return; }
-        w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>QR mesas · ${esc(d.sucursal)}</title><link href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Nunito:wght@700;800&display=swap" rel="stylesheet">
-          <style>body{margin:0;font-family:Nunito,sans-serif}.h{display:grid;grid-template-columns:repeat(2,1fr);gap:10mm;padding:10mm}.c{border:2px dashed #c8281e;border-radius:6mm;padding:6mm;text-align:center;break-inside:avoid}
-          .c h2{font-family:'Lilita One';color:#c8281e;margin:0;font-size:22pt}.c p{margin:2mm 0;font-weight:800}.c svg{width:55mm;height:55mm}.c .m{font-family:'Lilita One';font-size:28pt;color:#20130f}.c small{color:#7a6760}
-          .c img{width:16mm;height:16mm;border-radius:50%;vertical-align:middle}@media print{.h{padding:0}}</style></head><body><div class="h">
-          ${d.mesas.map((x) => `<div class="c"><img src="${location.origin}/gato.png"><h2>Pizzaiolo de la Noche</h2><p>Escaneá, jugá y entrá al ranking del bar</p>${x.svg}<div class="m">Mesa ${x.mesa}</div><small>${esc(d.sucursal)}</small></div>`).join('')}</div>
-          <script>setTimeout(()=>print(),800)<\/script></body></html>`);
-        w.document.close(); closeModal();
-      };
+    $('#pz-qrs').onclick = async () => {
+      let d; try { d = await api(`/api/juego/tablero?s=${suc}`); } catch (err) { toast(err.message, true); return; }
+      const w = window.open('', '_blank'); if (!w) { toast('Permití las ventanas emergentes para imprimir', true); return; }
+      w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>QR Pizzaiolo · ${esc(d.sucursal.nombre)}</title><link href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Nunito:wght@700;800&display=swap" rel="stylesheet">
+        <style>@page{size:A4;margin:12mm}body{margin:0;font-family:Nunito,sans-serif;text-align:center;color:#20130f}.c{border:3px solid #c8281e;border-radius:10mm;padding:12mm 10mm}
+        h1{font-family:'Lilita One';color:#c8281e;font-size:38pt;margin:4mm 0 0}p{font-size:16pt;font-weight:800;margin:3mm 0 8mm}.q{width:120mm;height:120mm;margin:0 auto}.q svg{width:100%;height:100%}
+        img{width:30mm;height:30mm;border-radius:50%}.s{font-size:13pt;color:#7a6760;margin-top:6mm}${d.premio ? '.pr{background:#2f8f3c;color:#fff;border-radius:6mm;padding:4mm;font-size:15pt;font-weight:800;margin-top:6mm}' : ''}</style></head>
+        <body><div class="c"><img src="${location.origin}/gato.png"><h1>Pizzaiolo de la Noche</h1><p>Escaneá con tu celular, poné tu nombre y entrá al ranking</p><div class="q">${d.qr}</div>
+        ${d.premio ? `<div class="pr">🏆 ${esc(d.premio)}</div>` : ''}<div class="s">${esc(d.sucursal.nombre)}</div></div><script>setTimeout(()=>print(),800)<\/script></body></html>`);
+      w.document.close();
     };
     if ($('#pz-conf')) $('#pz-conf').onclick = async () => {
       const c = await api('/api/juego/config');

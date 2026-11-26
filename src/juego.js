@@ -1,4 +1,4 @@
-// Juego QR "Pizzaiolo de la Noche": los comensales escanean el QR de la mesa y juegan en el celular (sin usuario).
+// Juego QR "Pizzaiolo de la Noche": los comensales escanean el QR de la pantalla del bar y juegan en el celular con su nombre (sin usuario).
 // El puntaje lo calcula el servidor; el ranking de la jornada se ve en VINILO APP (Juegos → Pizzaiolo de la Noche).
 const crypto = require('crypto');
 const qr = require('./qr');
@@ -44,7 +44,7 @@ module.exports = function registrarJuego({ route, query, fail, permitir }) {
     const c = await config(); if (!c.activo) fail(403, 'El juego no está disponible en este momento.');
     const s = await sucursal(body && body.s); if (!s) fail(404, 'Local inválido');
     const nombre = limpiarNombre(body.nombre); if (nombre.length < 2) fail(400, 'Poné tu nombre (al menos 2 letras)');
-    const mesa = Number(body.mesa); const mesaOk = Number.isInteger(mesa) && mesa > 0 && mesa < 1000 ? mesa : null;
+    const mesaOk = null; // un único QR para todo el local: sin número de mesa
     const ip = ipDe(req), ahora = Date.now(); const h = (intentosIp.get(ip) || []).filter((t) => ahora - t < 3600e3);
     if (h.length >= 25) fail(429, 'Jugaste muchas veces seguidas. Probá de nuevo en un rato.');
     h.push(ahora); intentosIp.set(ip, h);
@@ -93,13 +93,6 @@ module.exports = function registrarJuego({ route, query, fail, permitir }) {
     const link = `${baseUrl(req)}/jugar?s=${s.id}`;
     return { sucursal: { id: Number(s.id), nombre: s.nombre }, fecha, top, ultimo: ult ? { ...ult, id: Number(ult.id), puntos: Number(ult.puntos) } : null,
       ...est.rows[0], activo: !!c.activo, premio: c.premio, link, qr: qr.svg(link, { color: '#1a1010' }) };
-  });
-  route('GET', '/api/juego/qrs', async ({ user, url, req }) => {
-    permitir(user, 'juegos');
-    const s = await sucursal(url.searchParams.get('s')); if (!s) fail(404, 'Sucursal inválida');
-    const desde = Math.max(1, Number(url.searchParams.get('desde')) || 1), hasta = Math.min(desde + 59, Math.max(desde, Number(url.searchParams.get('hasta')) || 20));
-    const out = []; for (let m = desde; m <= hasta; m++) { const link = `${baseUrl(req)}/jugar?s=${s.id}&m=${m}`; out.push({ mesa: m, link, svg: qr.svg(link) }); }
-    return { sucursal: s.nombre, mesas: out };
   });
   route('GET', '/api/juego/config', async ({ user }) => { permitir(user, 'juegos'); return config(); });
   route('PUT', '/api/juego/config', async ({ user, body }) => {
