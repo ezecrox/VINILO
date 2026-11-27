@@ -39,7 +39,7 @@ module.exports = function registrarConsumoPersonal({ route, query, fail, permiti
         if (!rel || !Number.isFinite(cant) || cant <= 0) continue;
         const precio = Number(a.price ?? a.unitPrice);
         filas.push({ uid, venta: String(sr.id), fecha: a.createdAt, fid: String(rel.id), nombre: a.name || a.productName || null, cant,
-          importe: Number.isFinite(precio) ? Math.round(precio * cant * 100) / 100 : null });
+          importe: Number.isFinite(precio) ? Math.round(precio * 100) / 100 : null }); // en Fudo, price = total de la línea
       }
       await query('DELETE FROM consumos_personal WHERE importacion_id IS NULL AND cuenta = $1 AND fecha >= $2 AND fecha < $3', [cta.id, desde.toISOString(), hasta.toISOString()]);
       for (const x of filas) {
@@ -54,15 +54,6 @@ module.exports = function registrarConsumoPersonal({ route, query, fail, permiti
     }
     return res;
   }
-  // Diagnóstico puntual: cómo informa Fudo la venta 6691 (GALPON)
-  setTimeout(async () => {
-    try {
-      const cta = fudo.cuentasTablero().find((c) => c.id === 'galpon'); if (!cta) return;
-      const v = await cta.get('/sales/6691', { include: 'items' });
-      const its = (v.included || []).filter((x) => x.type === 'Item').map((x) => ({ id: x.id, at: x.attributes, prod: x.relationships && x.relationships.product && x.relationships.product.data }));
-      console.log('Diag venta 6691: ' + JSON.stringify({ venta: v.data && v.data.attributes, rel_items: v.data && v.data.relationships && v.data.relationships.items, items: its }));
-    } catch (e) { console.warn('Diag venta 6691 falló:', e.message); }
-  }, 15000);
   // Carga inicial de noviembre 2026 (una sola vez, en segundo plano al arrancar)
   setTimeout(async () => {
     try {

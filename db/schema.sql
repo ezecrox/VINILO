@@ -746,3 +746,10 @@ CREATE INDEX IF NOT EXISTS idx_cp_usuario ON consumos_personal (usuario_id, fech
 CREATE INDEX IF NOT EXISTS idx_cp_imp ON consumos_personal (importacion_id);
 -- Carga inicial del consumo del personal (sin importación asociada: no mueve stock)
 ALTER TABLE consumos_personal ALTER COLUMN importacion_id DROP NOT NULL;
+-- Corrección (una vez): el price de los ítems de Fudo es el total de la línea; antes se multiplicaba por la cantidad
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM app_config WHERE clave = 'cp_importe_total_linea') THEN
+    UPDATE consumos_personal SET importe = round(importe / cantidad, 2) WHERE importe IS NOT NULL AND cantidad > 0;
+    INSERT INTO app_config (clave, valor) VALUES ('cp_importe_total_linea', '1');
+  END IF;
+END $$;

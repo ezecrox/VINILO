@@ -212,7 +212,7 @@ module.exports = function registrarConsumos({ route, query, tx, fail, permitir, 
         const sr = it.relationships && it.relationships.sale && it.relationships.sale.data;
         const precio = Number(a.price ?? a.unitPrice);
         personal.push({ uid, venta: sr ? String(sr.id) : null, fecha: a.createdAt, fid: pid, nombre: a.name || a.productName || null, cant,
-          importe: Number.isFinite(precio) ? Math.round(precio * cant * 100) / 100 : null });
+          importe: Number.isFinite(precio) ? Math.round(precio * 100) / 100 : null }); // en Fudo, price = total de la línea
       }
     }
     if (!porProducto.size) fail(404, `No hay ventas en el Fudo de ${cta.nombre} para ese período (${leido.items.length} ítems leídos, ${cancelados} cancelados).`);
