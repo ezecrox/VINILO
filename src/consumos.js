@@ -19,7 +19,7 @@ const esCancelado = (it, ventas) => {
 };
 
 /** Lee de Fudo los ítems vendidos entre desde y hasta (Date). Recorre de lo más nuevo hacia atrás. */
-async function leerItemsFudo(desde, hasta) {
+async function leerItemsFudo(desde, hasta, get = fudo.fudoGet) {
   const items = [];
   const ventas = new Map();
   let incluirVenta = true;
@@ -28,7 +28,7 @@ async function leerItemsFudo(desde, hasta) {
     if (incluirVenta) params.include = 'sale';
     let data;
     try {
-      data = await fudo.fudoGet('/items', params);
+      data = await get('/items', params);
     } catch (e) {
       // Si la API no acepta include=sale, se reintenta sin él
       if (incluirVenta && /HTTP 400/.test(e.message)) { incluirVenta = false; page--; continue; }
@@ -54,16 +54,19 @@ module.exports = function registrarConsumos({ route, query, tx, fail, permitir, 
   const puede = (u, p) => u.permisos.includes(p);
   const verPermiso = (u) => { if (!puede(u, 'consumir') && !puede(u, 'verMovimientos')) fail(403, 'No tenés permiso para esta operación'); };
 
-  async function ultimoPeriodo() {
+  // Cuentas de Fudo: galpon (principal) y bar (si está configurada)
+  const cuentas = () => fudo.cuentasTablero().map(({ id, nombre }) => ({ id, nombre }));
+  const cuentaDe = (v) => { const c = fudo.cuentasTablero().find((x) => x.id === v) || fudo.cuentasTablero()[0]; if (!c) fail(400, 'La integración con Fudo no está configurada'); return c; };
+  async function ultimoPeriodo(cuenta = 'galpon') {
     const { rows } = await query(
-      "SELECT id, desde, hasta, estado FROM consumo_importaciones WHERE estado <> 'ANULADA' ORDER BY hasta DESC LIMIT 1");
+      "SELECT id, desde, hasta, estado FROM consumo_importaciones WHERE estado <> 'ANULADA' AND cuenta = $1 ORDER BY hasta DESC LIMIT 1", [cuenta]);
     return rows[0] ? { ...rows[0], id: Number(rows[0].id) } : null;
   }
 
   route('GET', '/api/consumos-fudo', async ({ user }) => {
     verPermiso(user);
     const { rows } = await query(
-      `SELECT ci.id, ci.desde, ci.hasta, ci.estado, ci.items_leidos, ci.items_cancelados, ci.movimiento_id, ci.creado_en, ci.confirmado_en,
+      `SELECT ci.id, ci.cuenta, ci.desde, ci.hasta, ci.estado, ci.items_leidos, ci.items_cancelados, ci.movimiento_id, ci.creado_en, ci.confirmado_en,
               a.nombre AS almacen, u.nombre AS creado_por, uc.nombre AS confirmado_por,
               (SELECT count(*)::int FROM consumo_import_items x WHERE x.importacion_id = ci.id) AS lineas,
               (SELECT coalesce(sum(x.cantidad),0)::int FROM consumo_import_items x WHERE x.importacion_id = ci.id AND x.incluir AND x.producto_id IS NOT NULL) AS unidades,
@@ -74,7 +77,9 @@ module.exports = function registrarConsumos({ route, query, tx, fail, permitir, 
        ORDER BY ci.hasta DESC, ci.id DESC LIMIT 200`);
     return {
       configurado: fudo.configurado(),
-      ultimo: await ultimoPeriodo(),
+      cuentas: cuentas(),
+      ultimo: await ultimoPeriodo('galpon'),
+      ultimos: Object.fromEntries(await Promise.all(cuentas().map(async (c) => [c.id, await ultimoPeriodo(c.id)]))),
       importaciones: rows.map((r) => ({ ...r, id: Number(r.id), lineas: Number(r.lineas), unidades: Number(r.unidades), sin_vincular: Number(r.sin_vincular),
         items_leidos: Number(r.items_leidos), items_cancelados: Number(r.items_cancelados) })),
     };
@@ -117,18 +122,22 @@ module.exports = function registrarConsumos({ route, query, tx, fail, permitir, 
     if (hasta <= desde) fail(400, 'El fin del período debe ser posterior al inicio');
     if (hasta > new Date(Date.now() + 5 * 60 * 1000)) fail(400, 'El período no puede terminar en el futuro');
     if (hasta - desde > 93 * 24 * 3600 * 1000) fail(400, 'El período no puede superar los 3 meses');
+    const cta = cuentaDe(body.cuenta === 'bar' ? 'bar' : 'galpon');
     const { rows: solapa } = await query(
-      "SELECT id, desde, hasta FROM consumo_importaciones WHERE estado <> 'ANULADA' AND desde < $2 AND hasta > $1 ORDER BY desde LIMIT 1",
-      [desde.toISOString(), hasta.toISOString()]);
+      "SELECT id, desde, hasta FROM consumo_importaciones WHERE estado <> 'ANULADA' AND cuenta = $3 AND desde < $2 AND hasta > $1 ORDER BY desde LIMIT 1",
+      [desde.toISOString(), hasta.toISOString(), cta.id]);
     if (solapa.length) {
       const f = (d) => new Date(d).toLocaleString('es-AR', { timeZone: 'America/Argentina/Buenos_Aires', dateStyle: 'short', timeStyle: 'short' });
-      fail(409, `El período se superpone con la importación #${solapa[0].id} (${f(solapa[0].desde)} a ${f(solapa[0].hasta)}). Empezá desde ${f(solapa[0].hasta)} o anulá esa importación.`);
+      fail(409, `En ${cta.nombre} el período se superpone con la importación #${solapa[0].id} (${f(solapa[0].desde)} a ${f(solapa[0].hasta)}). Empezá desde ${f(solapa[0].hasta)} o anulá esa importación.`);
     }
     // Productos al día antes de vincular
-    try { await fudo.sincronizarProductos(pool, 'MANUAL'); } catch (_) { /* se informa al vincular */ }
+    try { if (cta.id === 'bar') await fudo.sincronizarProductosBar(pool, 'MANUAL'); else await fudo.sincronizarProductos(pool, 'MANUAL'); } catch (_) { /* se informa al vincular */ }
 
     let leido;
-    try { leido = await leerItemsFudo(desde, hasta); } catch (e) { fail(502, e.message); }
+    try { leido = await leerItemsFudo(desde, hasta, cta.get); } catch (e) { fail(502, e.message); }
+    const colFudo = cta.id === 'bar' ? 'fudo_bar_id' : 'fudo_id';
+    // Almacén sugerido: el que se llama como la sucursal (VINILO BAR / EL GALPON VINILO)
+    const { rows: almSug } = await query("SELECT id FROM almacenes WHERE activo AND nombre ILIKE $1 ORDER BY id LIMIT 1", [cta.id === 'bar' ? '%BAR%' : '%GALP%']);
     const porProducto = new Map();
     let cancelados = 0;
     for (const it of leido.items) {
@@ -143,16 +152,16 @@ module.exports = function registrarConsumos({ route, query, tx, fail, permitir, 
       acc.cantidad += cant;
       porProducto.set(pid, acc);
     }
-    if (!porProducto.size) fail(404, `No hay ventas en Fudo para ese período (${leido.items.length} ítems leídos, ${cancelados} cancelados).`);
+    if (!porProducto.size) fail(404, `No hay ventas en el Fudo de ${cta.nombre} para ese período (${leido.items.length} ítems leídos, ${cancelados} cancelados).`);
 
     return tx(async (client) => {
       const { rows } = await client.query(
-        `INSERT INTO consumo_importaciones (desde, hasta, items_leidos, items_cancelados, creado_por) VALUES ($1,$2,$3,$4,$5) RETURNING id`,
-        [desde.toISOString(), hasta.toISOString(), leido.items.length, cancelados, user.id]);
+        `INSERT INTO consumo_importaciones (desde, hasta, items_leidos, items_cancelados, creado_por, cuenta, almacen_id) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
+        [desde.toISOString(), hasta.toISOString(), leido.items.length, cancelados, user.id, cta.id, almSug[0] && (!user.almacenes || user.almacenes.includes(Number(almSug[0].id))) ? Number(almSug[0].id) : null]);
       const impId = Number(rows[0].id);
       let sinVincular = 0;
       for (const [fid, v] of porProducto) {
-        const { rows: p } = await client.query('SELECT id, nombre, gestion_stock FROM productos WHERE fudo_id = $1', [fid]);
+        const { rows: p } = await client.query(`SELECT id, nombre, gestion_stock FROM productos WHERE ${colFudo} = $1`, [fid]);
         const prod = p[0];
         if (!prod) sinVincular++;
         const gestiona = prod && isTrue(prod.gestion_stock);
@@ -161,7 +170,7 @@ module.exports = function registrarConsumos({ route, query, tx, fail, permitir, 
            VALUES ($1,$2,$3,$4,$5,$6,$7)`,
           [impId, fid, prod ? Number(prod.id) : null, (prod ? prod.nombre : v.nombre) || `Producto Fudo ${fid}`, v.cantidad, Math.round(v.cantidad), !!gestiona]);
       }
-      return { id: impId, productos: porProducto.size, sin_vincular: sinVincular, items_leidos: leido.items.length, cancelados };
+      return { id: impId, cuenta: cta.id, productos: porProducto.size, sin_vincular: sinVincular, items_leidos: leido.items.length, cancelados };
     });
   });
 

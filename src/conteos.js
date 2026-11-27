@@ -1,6 +1,6 @@
 // Conteo de inventario desde el celular: varios usuarios cuentan a la vez, se guarda cada producto al instante
 // y quien tiene "Ajuste de inventario" revisa diferencias y aplica (genera un movimiento de AJUSTE).
-module.exports = function registrarConteos({ route, query, tx, fail, permitir, permitirAlguno, registrarMovimiento, almacenActivo, isTrue, toInt, str, veAlmacen, exigirAlmacen, sqlAlm }) {
+module.exports = function registrarConteos({ route, query, tx, fail, permitir, permitirAlguno, registrarMovimiento, almacenActivo, isTrue, toInt, str, veAlmacen, exigirAlmacen, sqlAlm, sqlProdSuc = () => '' }) {
   const puede = (u, p) => u.permisos.includes(p);
   const puedeCerrar = (u) => puede(u, 'cerrarConteo') || puede(u, 'ajustar');
   const idPos = (v) => { const n = toInt(v); return Number.isInteger(n) && n > 0 ? n : null; };
@@ -69,7 +69,7 @@ module.exports = function registrarConteos({ route, query, tx, fail, permitir, p
        LEFT JOIN stock s ON s.almacen_id = c.almacen_id AND s.producto_id = p.id
        LEFT JOIN conteo_items i ON i.conteo_id = c.id AND i.producto_id = p.id
        LEFT JOIN usuarios uc ON uc.id = i.contado_por
-       WHERE c.id = $1 AND ((c.categoria IS NULL OR p.categoria = c.categoria) OR i.producto_id IS NOT NULL)
+       WHERE c.id = $1 AND ((c.categoria IS NULL OR p.categoria = c.categoria) OR i.producto_id IS NOT NULL) ${sqlProdSuc(user, 'p.id')}
        ORDER BY p.categoria NULLS LAST, p.nombre`, [c.id]);
     const productos = rows.map((r) => ({
       id: Number(r.id), codigo: r.codigo, codigo_barras: r.codigo_barras, nombre: r.nombre, categoria: r.categoria, unidad: r.unidad,

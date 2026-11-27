@@ -22,6 +22,9 @@ const veAlmacen = (user, id) => !user.almacenes || user.almacenes.includes(Numbe
 const exigirAlmacen = (user, id, etiqueta = '') => {
   if (id !== null && id !== undefined && id !== '' && !veAlmacen(user, id)) fail(403, `No tenés acceso a ese almacén${etiqueta ? ' (' + etiqueta + ')' : ''}`);
 };
+// Productos visibles según las sucursales del usuario: los de sus sucursales y los que no tienen sucursal (compartidos)
+const sqlProdSuc = (user, col = 'productos.id') => (user && user.sucursales ? ` AND (NOT EXISTS (SELECT 1 FROM producto_sucursales ps WHERE ps.producto_id = ${col})
+  OR EXISTS (SELECT 1 FROM producto_sucursales ps WHERE ps.producto_id = ${col} AND ps.sucursal_id = ANY('{${user.sucursales.map(Number).filter(Number.isInteger).join(',')}}'::int[])))` : '');
 // Fragmento SQL seguro (ids enteros validados) para filtrar por almacenes visibles
 const sqlAlm = (user, col) => (user.almacenes ? ` AND ${col} = ANY('{${user.almacenes.map(Number).filter(Number.isInteger).join(',')}}'::int[])` : '');
 
@@ -79,7 +82,8 @@ async function currentUser(req) {
   if (!payload) return null;
   const { rows } = await query(
     `SELECT u.id, u.username, u.nombre, u.rol, u.activo, u.permiso_compras, u.proveedor_id, u.legajo, p.nombre AS proveedor,
-            r.nombre AS rol_nombre, r.permisos AS rol_permisos, r.almacenes AS rol_almacenes
+            r.nombre AS rol_nombre, r.permisos AS rol_permisos, r.almacenes AS rol_almacenes,
+            (SELECT string_agg(us.sucursal_id::text, ',') FROM usuario_sucursales us WHERE us.usuario_id = u.id) AS sucursales_csv
      FROM usuarios u LEFT JOIN proveedores p ON p.id = u.proveedor_id LEFT JOIN roles r ON r.codigo = u.rol WHERE u.id = $1`, [payload.uid]);
   const u = rows[0];
   if (!u || !isTrue(u.activo)) return null;
@@ -90,6 +94,8 @@ async function currentUser(req) {
     proveedor_id: u.proveedor_id ? Number(u.proveedor_id) : null, proveedor: u.proveedor || null, legajo: u.legajo || null,
     almacenes: u.rol === 'ADMIN' || u.rol === 'PROVEEDOR' || u.rol_almacenes === null || u.rol_almacenes === undefined || u.rol_almacenes === ''
       ? null : String(u.rol_almacenes).split(',').map(Number).filter(Number.isInteger),
+    // Sucursales para la visibilidad de productos: null = ve todos (ADMIN o usuario sin sucursal asignada)
+    sucursales: u.rol === 'ADMIN' || !u.sucursales_csv ? null : String(u.sucursales_csv).split(',').map(Number).filter(Number.isInteger),
   };
   user.permisos = permisosDe(user, u.rol_permisos);
   // "Ver como": token emitido por un ADMIN para ver la app como este usuario (solo lectura, 2 h)
@@ -495,7 +501,8 @@ route('PUT', '/api/almacenes/:id', async ({ user, body, params }) => {
 
 // ---------- Productos ----------
 const PRODUCTO_COLS = `id, codigo, nombre, categoria, unidad, alerta_vencimiento, fecha_vencimiento,
-  alerta_cuidado, alerta_frio, nota_alerta, activo, fudo_id, gestion_stock, gestion_produccion, codigo_barras,
+  alerta_cuidado, alerta_frio, nota_alerta, activo, fudo_id, fudo_bar_id, gestion_stock, gestion_produccion, codigo_barras,
+  (SELECT string_agg(ps.sucursal_id::text, ',') FROM producto_sucursales ps WHERE ps.producto_id = productos.id) AS sucursales_csv,
   CASE WHEN fecha_vencimiento IS NULL THEN NULL ELSE (fecha_vencimiento - CURRENT_DATE) END AS dias_venc`;
 
 function normalizarProducto(r) {
@@ -510,6 +517,8 @@ function normalizarProducto(r) {
     gestion_produccion: isTrue(r.gestion_produccion),
     fecha_vencimiento: r.fecha_vencimiento || null,
     dias_venc: r.dias_venc === null || r.dias_venc === '' || r.dias_venc === undefined ? null : Number(r.dias_venc),
+    sucursales: r.sucursales_csv ? String(r.sucursales_csv).split(',').map(Number) : [],
+    sucursales_csv: undefined,
   };
 }
 
@@ -517,7 +526,7 @@ function normalizarProducto(r) {
 route('GET', '/api/productos', async ({ user, url }) => {
   permitir(user, 'verProductos');
   const todos = url.searchParams.get('todos') === '1' && user.permisos.includes('productos');
-  const { rows } = await query(`SELECT ${PRODUCTO_COLS} FROM productos ${todos ? '' : 'WHERE gestion_stock'} ORDER BY nombre`);
+  const { rows } = await query(`SELECT ${PRODUCTO_COLS} FROM productos WHERE ${todos ? 'TRUE' : 'gestion_stock'} ${sqlProdSuc(user)} ORDER BY nombre`);
   return rows.map(normalizarProducto);
 });
 
@@ -552,6 +561,7 @@ route('POST', '/api/productos', async ({ user, body }) => {
     const { rows } = await query(
       `INSERT INTO productos (codigo, nombre, categoria, unidad, alerta_vencimiento, fecha_vencimiento, alerta_cuidado, alerta_frio, nota_alerta, activo, gestion_stock, gestion_produccion)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,coalesce($11::boolean, TRUE),coalesce($12::boolean, FALSE)) RETURNING id`, datosProducto(body));
+    await guardarSucursalesProducto(Number(rows[0].id), body.sucursales);
     return { id: Number(rows[0].id) };
   } catch (e) {
     if (e.code === '23505' || /duplicate|unique/i.test(e.message)) fail(409, 'Ya existe un producto con ese código');
@@ -571,8 +581,16 @@ route('PUT', '/api/productos/:id', async ({ user, body, params }) => {
     if (e.code === '23505' || /duplicate|unique/i.test(e.message)) fail(409, 'Ya existe un producto con ese código');
     throw e;
   }
+  await guardarSucursalesProducto(toInt(params.id), body.sucursales);
   return { ok: true };
 });
+// Sucursales de un producto (si no viene la lista, no se tocan)
+async function guardarSucursalesProducto(id, lista) {
+  if (!Array.isArray(lista)) return;
+  const ids = [...new Set(lista.map(toInt).filter((x) => Number.isInteger(x) && x > 0))];
+  await query('DELETE FROM producto_sucursales WHERE producto_id = $1', [id]);
+  for (const s of ids) await query('INSERT INTO producto_sucursales (producto_id, sucursal_id) VALUES ($1,$2) ON CONFLICT DO NOTHING', [id, s]);
+}
 
 // Importación del maestro: crea o actualiza por código
 route('POST', '/api/productos/importar', async ({ user, body }) => {
@@ -605,7 +623,7 @@ route('GET', '/api/stock', async ({ user }) => {
   permitir(user, 'verStock');
   const [alm, prods, st, mins] = await Promise.all([
     query('SELECT id, nombre, activo FROM almacenes ORDER BY id'),
-    query(`SELECT ${PRODUCTO_COLS} FROM productos WHERE gestion_stock ORDER BY nombre`),
+    query(`SELECT ${PRODUCTO_COLS} FROM productos WHERE gestion_stock ${sqlProdSuc(user)} ORDER BY nombre`),
     query('SELECT almacen_id, producto_id, cantidad FROM stock WHERE cantidad <> 0'),
     query('SELECT almacen_id, producto_id, minimo FROM stock_minimos'),
   ]);
@@ -847,29 +865,36 @@ const { pool } = require('./src/db');
 route('GET', '/api/fudo/estado', async ({ user }) => {
   permitirAlguno(user, 'compras', 'productos', 'proveedores');
   const ultimo = {};
-  for (const e of ['proveedores', 'productos']) {
+  for (const e of ['proveedores', 'productos', 'productos_bar']) {
     const { rows } = await query('SELECT * FROM fudo_sync_log WHERE entidad = $1 ORDER BY id DESC LIMIT 1', [e]);
     ultimo[e] = rows[0] || null;
   }
   const { rows: v } = await query(`SELECT (SELECT count(*)::int FROM proveedores WHERE fudo_id IS NOT NULL) AS prov,
-    (SELECT count(*)::int FROM productos WHERE fudo_id IS NOT NULL) AS prod`);
+    (SELECT count(*)::int FROM productos WHERE fudo_id IS NOT NULL) AS prod, (SELECT count(*)::int FROM productos WHERE fudo_bar_id IS NOT NULL) AS prod_bar`);
   return {
     configurado: fudo.configurado(), minutos: Number(process.env.FUDO_SYNC_MINUTES ?? 30),
     ultimo: ultimo.proveedores, ultimo_productos: ultimo.productos, ultimos: ultimo,
-    vinculados: Number(v[0].prov), vinculados_productos: Number(v[0].prod),
+    vinculados: Number(v[0].prov), vinculados_productos: Number(v[0].prod), vinculados_productos_bar: Number(v[0].prod_bar),
+    bar_configurado: fudo.cuentasTablero().some((c) => c.id === 'bar'), ultimo_productos_bar: ultimo.productos_bar,
   };
 });
 route('POST', '/api/fudo/sincronizar', async ({ user, url }) => {
   permitirAlguno(user, 'compras', 'productos', 'proveedores');
   if (!fudo.configurado()) fail(400, 'La integración con Fudo no está configurada: cargá FUDO_API_KEY y FUDO_API_SECRET en Render.');
   const entidad = url.searchParams.get('entidad') || 'proveedores';
+  if (entidad === 'productos_bar') { try { return await fudo.sincronizarProductosBar(pool, 'MANUAL'); } catch (e) { fail(502, e.message); } }
   const fn = entidad === 'productos' ? fudo.sincronizarProductos : fudo.sincronizarProveedores;
-  try { return await fn(pool, 'MANUAL'); } catch (e) { fail(502, e.message); }
+  try {
+    const r = await fn(pool, 'MANUAL');
+    // Al sincronizar productos se sincronizan también los del BAR (si está configurado)
+    if (entidad === 'productos' && fudo.cuentasTablero().some((c) => c.id === 'bar')) { try { r.bar = await fudo.sincronizarProductosBar(pool, 'MANUAL'); } catch (e) { r.bar = { error: e.message }; } }
+    return r;
+  } catch (e) { fail(502, e.message); }
 });
 
 // ---------- Consumos desde ventas de Fudo ----------
 require('./src/consumos')({ route, query, tx, fail, permitir, registrarMovimiento, almacenActivo, isTrue, toInt, str, pool, veAlmacen, exigirAlmacen });
-require('./src/conteos')({ route, query, tx, fail, permitir, permitirAlguno, registrarMovimiento, almacenActivo, isTrue, toInt, str, veAlmacen, exigirAlmacen, sqlAlm });
+require('./src/conteos')({ route, query, tx, fail, permitir, permitirAlguno, registrarMovimiento, almacenActivo, isTrue, toInt, str, veAlmacen, exigirAlmacen, sqlAlm, sqlProdSuc });
 require('./src/eliminar')({ route, query, tx, fail, toInt });
 
 const { calcularTareas } = require('./src/tareas');

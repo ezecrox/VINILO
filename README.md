@@ -273,3 +273,10 @@ El administrador ve cuántos lo leyeron y quiénes sí/no, puede editarlo (y vol
 ### Eliminar conteos e importaciones de Fudo (solo ADMIN)
 - 🗑 en el historial de **Conteo de inventario** (y en el detalle de cada conteo) y en **Consumos desde Fudo**.
 - En curso, borrador o anulado: se borra directamente. Si ya **cambió el stock** (conteo aplicado o importación confirmada), se elige: **revertir el stock** (deshace el movimiento y lo borra; si algún producto ya no tiene stock suficiente queda en 0 y se avisa) o **dejar el stock como está** (se borra solo el registro). Al eliminar una importación, su período se puede volver a importar. Código: `src/eliminar.js`.
+
+## Productos por sucursal (VINILO BAR / VINILO GALPON)
+
+- Cada producto puede pertenecer a una o varias sucursales (Productos → Editar → *Sucursales*). Un producto **sin sucursal** se considera compartido y lo ven todos.
+- **Visibilidad:** el usuario ve los productos de sus sucursales (Usuarios → sucursales asignadas) más los compartidos, en Productos, Stock y Conteos. ADMIN y los usuarios sin sucursal asignada ven todo.
+- **Sincronización Fudo:** la cuenta del GALPON usa `fudo_id`; la del BAR (`FUDO_BAR_API_KEY` / `FUDO_BAR_API_SECRET`) usa `fudo_bar_id`. Al sincronizar el BAR, un producto que ya existe con el mismo nombre (sin acentos ni mayúsculas) se vincula en lugar de duplicarse; los que solo existen en el BAR se crean con código `B<id>`. Opcional: `FUDO_SUCURSAL_ID` / `FUDO_BAR_SUCURSAL_ID` para fijar la sucursal de cada cuenta (por defecto se detecta por nombre).
+- **Consumos desde Fudo:** pestañas por cuenta (GALPON / BAR); cada una lleva su propio control de períodos superpuestos y sugiere el almacén de esa sucursal.

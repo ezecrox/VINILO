@@ -963,3 +963,6 @@ body.tv .pz-esc .esc { max-height: calc(100vh - 130px); margin: 0 auto; }
 .ct-rubro { font-size: 1.08rem; color: var(--side); }
 .ct-omit .check { align-items: flex-start; } .ct-omit details { margin-top: 6px; } .ct-omit summary { cursor: pointer; font-weight: 700; }
 .nowrap { white-space: nowrap; } .el-x { margin-left: 4px; } .elim-op .check { align-items: flex-start; }
+.suc-chip { font-size: .68rem; font-weight: 800; letter-spacing: .03em; }
+.suc-chip.bar { background: #fde8e6; color: #a51d15; } .suc-chip.gal { background: #e3eef8; color: #165f96; }
+.cf-ctas button.on { background: #165f96; border-color: #165f96; color: #fff; }

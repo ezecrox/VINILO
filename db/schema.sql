@@ -684,3 +684,26 @@ BEGIN
     INSERT INTO app_config (clave, valor) VALUES ('permiso_cerrar_conteo', '1');
   END IF;
 END $$;
+
+-- Productos por sucursal (un producto puede estar en una o en las dos) y vínculo con el Fudo de VINILO BAR
+CREATE TABLE IF NOT EXISTS producto_sucursales (
+  producto_id INT NOT NULL REFERENCES productos(id) ON DELETE CASCADE,
+  sucursal_id INT NOT NULL REFERENCES sucursales(id) ON DELETE CASCADE,
+  PRIMARY KEY (producto_id, sucursal_id)
+);
+CREATE INDEX IF NOT EXISTS idx_prod_suc_suc ON producto_sucursales (sucursal_id);
+ALTER TABLE productos ADD COLUMN IF NOT EXISTS fudo_bar_id VARCHAR(20);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_prod_fudo_bar ON productos (fudo_bar_id) WHERE fudo_bar_id IS NOT NULL;
+ALTER TABLE consumo_importaciones ADD COLUMN IF NOT EXISTS cuenta VARCHAR(10) NOT NULL DEFAULT 'galpon';
+-- Una sola vez: los productos que vienen del Fudo del Galpón quedan en VINILO GALPON
+DO $$
+DECLARE g INT;
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM app_config WHERE clave = 'productos_sucursal_galpon') THEN
+    SELECT id INTO g FROM sucursales WHERE nombre ILIKE '%GALP%' ORDER BY id LIMIT 1;
+    IF g IS NOT NULL THEN
+      INSERT INTO producto_sucursales (producto_id, sucursal_id) SELECT id, g FROM productos WHERE fudo_id IS NOT NULL ON CONFLICT DO NOTHING;
+    END IF;
+    INSERT INTO app_config (clave, valor) VALUES ('productos_sucursal_galpon', '1');
+  END IF;
+END $$;

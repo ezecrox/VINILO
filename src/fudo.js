@@ -156,8 +156,27 @@ async function sincronizarProveedores(pool, origen = 'MANUAL') {
 }
 
 // ---------- Productos ----------
-async function categoriasFudo() {
-  const cats = await listarTodo('/product-categories');
+async function listarCon(get, path) {
+  const todos = [];
+  for (let page = 1; page <= 500; page++) {
+    const data = await get(path, { 'page[size]': PAGE_SIZE, 'page[number]': page, sort: 'id' });
+    const lote = Array.isArray(data.data) ? data.data : [];
+    todos.push(...lote);
+    if (lote.length < PAGE_SIZE) break;
+  }
+  return todos;
+}
+// Sucursal de cada cuenta de Fudo (por nombre, o fijada por variable de entorno)
+async function sucursalDeCuenta(pool, cuenta) {
+  const env = cuenta === 'bar' ? process.env.FUDO_BAR_SUCURSAL_ID : process.env.FUDO_SUCURSAL_ID;
+  if (env) return Number(env);
+  const patron = cuenta === 'bar' ? '%BAR%' : '%GALP%';
+  const { rows } = await pool.query('SELECT id FROM sucursales WHERE nombre ILIKE $1 ORDER BY id LIMIT 1', [patron]);
+  return rows[0] ? Number(rows[0].id) : null;
+}
+const normNombre = (s) => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+async function categoriasFudo(get = null) {
+  const cats = get ? await listarCon(get, '/product-categories') : await listarTodo('/product-categories');
   const porId = new Map(cats.map((c) => [String(c.id), {
     nombre: limpio(c.attributes && c.attributes.name, 90),
     padre: c.relationships && c.relationships.parentCategory && c.relationships.parentCategory.data ? String(c.relationships.parentCategory.data.id) : null,
@@ -222,6 +241,9 @@ async function sincronizarProductos(pool, origen = 'MANUAL') {
           }
         }
       }
+      // Todos los productos del Fudo del Galpón quedan en su sucursal
+      const sucG = await sucursalDeCuenta(pool, 'galpon');
+      if (sucG) await pool.query('INSERT INTO producto_sucursales (producto_id, sucursal_id) SELECT id, $1 FROM productos WHERE fudo_id IS NOT NULL ON CONFLICT DO NOTHING', [sucG]);
       if (remotos.length) {
         const { rows: locales } = await pool.query('SELECT id, fudo_id FROM productos WHERE fudo_id IS NOT NULL AND activo');
         for (const p of locales) {
@@ -245,10 +267,85 @@ async function sincronizarProductos(pool, origen = 'MANUAL') {
   try { return await enCurso.productos; } finally { enCurso.productos = null; }
 }
 
-/** Sincroniza ambas entidades; un error en una no frena la otra. */
+/** Productos del Fudo de VINILO BAR: se vinculan por nombre con los existentes; los que solo existen en el BAR se crean. */
+async function sincronizarProductosBar(pool, origen = 'MANUAL') {
+  const cta = cuentasTablero().find((c) => c.id === 'bar');
+  if (!cta) throw new Error('Falta configurar el Fudo de VINILO BAR (FUDO_BAR_API_KEY y FUDO_BAR_API_SECRET en Render).');
+  if (enCurso.productosBar) return enCurso.productosBar;
+  enCurso.productosBar = (async () => {
+    const { rows: lg } = await pool.query("INSERT INTO fudo_sync_log (entidad, origen) VALUES ('productos_bar', $1) RETURNING id", [origen]);
+    const logId = lg[0].id;
+    const r = { leidos: 0, creados: 0, actualizados: 0, vinculados: 0, desactivados: 0, avisos: [] };
+    try {
+      const suc = await sucursalDeCuenta(pool, 'bar');
+      if (!suc) throw new Error('No encontré la sucursal VINILO BAR en Parametrización → Sucursales');
+      let etiqueta = () => null;
+      try { etiqueta = await categoriasFudo(cta.get); } catch (e) { r.avisos.push(`Categorías del BAR no disponibles: ${e.message}`); }
+      const remotos = await listarCon(cta.get, '/products');
+      r.leidos = remotos.length;
+      // Índice por nombre de los productos que todavía no están vinculados al BAR
+      const { rows: libres } = await pool.query('SELECT id, nombre FROM productos WHERE fudo_bar_id IS NULL');
+      const porNombre = new Map();
+      for (const p of libres) { const k = normNombre(p.nombre); porNombre.set(k, porNombre.has(k) ? null : p); } // null = nombre repetido, no se adivina
+      const vistos = new Set();
+      for (const item of remotos) {
+        const fid = String(item.id), a = item.attributes || {};
+        const nombre = limpio(a.name, 200); if (!nombre) continue;
+        vistos.add(fid);
+        const rel = item.relationships && item.relationships.productCategory && item.relationships.productCategory.data;
+        const categoria = rel ? etiqueta(rel.id) : null; const activo = a.active !== false;
+        let { rows } = await pool.query('SELECT * FROM productos WHERE fudo_bar_id = $1', [fid]);
+        let p = rows[0];
+        if (!p) {
+          const cand = porNombre.get(normNombre(nombre));
+          if (cand) { await pool.query('UPDATE productos SET fudo_bar_id = $2, actualizado_en = now() WHERE id = $1', [cand.id, fid]); porNombre.delete(normNombre(nombre)); r.vinculados++; p = { ...cand, fudo_id: 'x' }; }
+        }
+        if (p) {
+          // Si el producto es solo del BAR (no viene del Galpón), el BAR manda en nombre, categoría y activo
+          if (!p.fudo_id) {
+            const nuevaCat = categoria || p.categoria;
+            if (p.nombre !== nombre || (p.categoria || null) !== (nuevaCat || null) || (p.activo === true || p.activo === 't') !== activo) {
+              await pool.query('UPDATE productos SET nombre=$2, categoria=$3, activo=$4, fudo_sync_en=now(), actualizado_en=now() WHERE id=$1', [p.id, nombre, nuevaCat, activo]);
+              r.actualizados++;
+            }
+          }
+          await pool.query('INSERT INTO producto_sucursales (producto_id, sucursal_id) VALUES ($1,$2) ON CONFLICT DO NOTHING', [p.id, suc]);
+        } else {
+          const { rows: ocupado } = await pool.query('SELECT 1 FROM productos WHERE codigo = $1', [`B${fid}`]);
+          const codigo = ocupado.length ? `BAR${fid}` : `B${fid}`;
+          try {
+            const { rows: n } = await pool.query(`INSERT INTO productos (codigo, nombre, categoria, unidad, activo, fudo_bar_id, fudo_sync_en) VALUES ($1,$2,$3,'UN',$4,$5,now()) RETURNING id`, [codigo, nombre, categoria, activo, fid]);
+            await pool.query('INSERT INTO producto_sucursales (producto_id, sucursal_id) VALUES ($1,$2) ON CONFLICT DO NOTHING', [n[0].id, suc]);
+            r.creados++;
+          } catch (e) {
+            if (e.code === '23505' || /duplicate|unique/i.test(e.message)) r.avisos.push(`"${nombre}" (Fudo BAR ${fid}): código ${codigo} en uso`); else throw e;
+          }
+        }
+      }
+      // Borrados en el Fudo del BAR: los que son solo del BAR quedan inactivos
+      if (remotos.length) {
+        const { rows: locales } = await pool.query('SELECT id, fudo_bar_id FROM productos WHERE fudo_bar_id IS NOT NULL AND fudo_id IS NULL AND activo');
+        for (const p of locales) if (!vistos.has(String(p.fudo_bar_id))) { await pool.query('UPDATE productos SET activo = FALSE, fudo_sync_en = now(), actualizado_en = now() WHERE id = $1', [p.id]); r.desactivados++; }
+      }
+      await pool.query('UPDATE fudo_sync_log SET fin=now(), ok=TRUE, leidos=$2, creados=$3, actualizados=$4, desactivados=$5, detalle=$6 WHERE id=$1',
+        [logId, r.leidos, r.creados, r.actualizados + r.vinculados, r.desactivados, [`${r.vinculados} vinculados por nombre con productos existentes`, ...r.avisos].join('\n')]);
+      console.log(`Fudo productos BAR (${origen}): ${r.leidos} leídos, ${r.vinculados} vinculados por nombre, ${r.creados} nuevos, ${r.actualizados} actualizados, ${r.desactivados} desactivados`);
+      return r;
+    } catch (e) {
+      await pool.query('UPDATE fudo_sync_log SET fin=now(), ok=FALSE, detalle=$2 WHERE id=$1', [logId, String(e.message).slice(0, 1000)]).catch(() => {});
+      console.error('Error sincronizando productos del BAR con Fudo:', e.message);
+      throw e;
+    }
+  })();
+  try { return await enCurso.productosBar; } finally { enCurso.productosBar = null; }
+}
+
+/** Sincroniza todas las entidades; un error en una no frena las otras. */
 async function sincronizarTodo(pool, origen = 'MANUAL') {
   const out = {};
-  for (const [k, fn] of [['proveedores', sincronizarProveedores], ['productos', sincronizarProductos]]) {
+  const tareas = [['proveedores', sincronizarProveedores], ['productos', sincronizarProductos]];
+  if (cuentasTablero().some((c) => c.id === 'bar')) tareas.push(['productos_bar', sincronizarProductosBar]);
+  for (const [k, fn] of tareas) {
     try { out[k] = await fn(pool, origen); } catch (e) { out[k] = { error: e.message }; }
   }
   return out;
@@ -322,4 +419,4 @@ function cuentasTablero() {
   return (cuentasCache = c);
 }
 
-module.exports = { cambiarPrecioFudo, fudoEnviar, cuentasTablero, crearCliente, fudoGet, configurado, sincronizarProveedores, sincronizarProductos, sincronizarTodo, iniciarSincronizacionAutomatica, direccionLegible };
+module.exports = { sincronizarProductosBar, sucursalDeCuenta, cambiarPrecioFudo, fudoEnviar, cuentasTablero, crearCliente, fudoGet, configurado, sincronizarProveedores, sincronizarProductos, sincronizarTodo, iniciarSincronizacionAutomatica, direccionLegible };

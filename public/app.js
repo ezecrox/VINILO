@@ -841,7 +841,11 @@
   VIEWS['consumos-fudo'] = async (main) => {
     const d = await api('/api/consumos-fudo');
     const puedeImp = puede('consumir');
-    const ult = d.ultimo;
+    const ctas = d.cuentas && d.cuentas.length ? d.cuentas : [{ id: 'galpon', nombre: 'VINILO GALPON' }];
+    let cta = (() => { try { return localStorage.getItem('vinilo_cf_cuenta') || 'galpon'; } catch (_) { return 'galpon'; } })();
+    if (!ctas.some((c) => c.id === cta)) cta = ctas[0].id;
+    const ult = (d.ultimos || {})[cta] || (cta === 'galpon' ? d.ultimo : null);
+    const nomCta = (id) => (ctas.find((c) => c.id === id) || { nombre: id }).nombre;
     const ahora = new Date(); ahora.setSeconds(0, 0);
     const desdeDef = ult ? new Date(ult.hasta) : (() => { const x = new Date(); x.setDate(x.getDate() - 1); x.setHours(6, 0, 0, 0); return x; })();
     main.innerHTML = `
@@ -850,6 +854,7 @@
       ${!d.configurado ? '<div class="card" style="background:#faf8f5">🔌 La integración con Fudo no está configurada (FUDO_API_KEY / FUDO_API_SECRET en Render).</div>' : ''}
       ${puedeImp && d.configurado ? `<div class="card">
         <h2>Importar ventas</h2>
+        ${ctas.length > 1 ? `<div class="bv-opc cf-ctas" style="margin:-4px 0 12px">${ctas.map((c) => `<button type="button" data-cta="${c.id}" class="${c.id === cta ? 'on' : ''}">${esc(c.nombre)}</button>`).join('')}</div>` : ''}
         <p class="stock-hint" style="margin:-6px 0 12px">${ult ? `Último período importado: <b>${fmtFecha(ult.desde)} → ${fmtFecha(ult.hasta)}</b> (#${ult.id}, ${CF_EST[ult.estado].toLowerCase()}). Para no superponer, el nuevo período empieza ahí.` : 'Todavía no se importó ningún período.'}</p>
         <div class="row">
           <div class="f"><label>Desde</label><input type="datetime-local" id="cf-desde" value="${aInputLocal(desdeDef)}"></div>
@@ -864,13 +869,14 @@
         </div>
       </div>` : ''}
       <h2 class="mt">Importaciones</h2>
-      ${d.importaciones.length ? `<div class="tbl-wrap"><table><thead><tr><th>#</th><th>Período</th><th>Estado</th><th>Almacén</th><th class="num">Productos</th><th class="num">Unidades</th><th class="num">Sin vincular</th><th>Importó</th><th></th></tr></thead><tbody>
-        ${d.importaciones.map((i) => `<tr class="${i.estado === 'ANULADA' ? 'inactive' : ''}"><td><b>#${i.id}</b></td><td>${fmtFecha(i.desde)} → ${fmtFecha(i.hasta)}</td>
+      ${d.importaciones.length ? `<div class="tbl-wrap"><table><thead><tr><th>#</th>${ctas.length > 1 ? '<th>Sucursal</th>' : ''}<th>Período</th><th>Estado</th><th>Almacén</th><th class="num">Productos</th><th class="num">Unidades</th><th class="num">Sin vincular</th><th>Importó</th><th></th></tr></thead><tbody>
+        ${d.importaciones.map((i) => `<tr class="${i.estado === 'ANULADA' ? 'inactive' : ''}"><td><b>#${i.id}</b></td>${ctas.length > 1 ? `<td><span class="badge suc-chip ${i.cuenta === 'bar' ? 'bar' : 'gal'}">${esc(nomCta(i.cuenta).replace(/^VINILO\s*/i, ''))}</span></td>` : ''}<td>${fmtFecha(i.desde)} → ${fmtFecha(i.hasta)}</td>
           <td><span class="badge cf-${i.estado}">${CF_EST[i.estado]}</span></td><td>${esc(i.almacen || (i.estado === 'BORRADOR' ? '— a definir —' : ''))}</td>
           <td class="num">${i.lineas}</td><td class="num">${fmtN(i.unidades)}</td><td class="num ${i.sin_vincular ? 'stock-hint bad' : ''}">${i.sin_vincular || ''}</td>
           <td>${esc(i.creado_por)}</td><td class="num nowrap"><button class="btn ghost sm" data-ver="${i.id}">${i.estado === 'BORRADOR' && puedeImp ? 'Revisar' : 'Ver'}</button>${S.user.rol === 'ADMIN' ? `<button class="btn ghost sm el-x" data-elcf="${i.id}" title="Eliminar importación">🗑</button>` : ''}</td></tr>`).join('')}
         </tbody></table></div>` : '<div class="card empty">Todavía no hay importaciones.</div>'}`;
     $$('[data-ver]').forEach((b) => b.addEventListener('click', () => verConsumoFudo(Number(b.dataset.ver))));
+    $$('.cf-ctas [data-cta]').forEach((b) => (b.onclick = () => { try { localStorage.setItem('vinilo_cf_cuenta', b.dataset.cta); } catch (_) { /* nada */ } router(); }));
     $$('[data-elcf]').forEach((b) => (b.onclick = () => { const i = d.importaciones.find((x) => x.id == b.dataset.elcf);
       modalEliminar({ titulo: `la importación #${i.id}`, que: 'consumo', aplicado: i.estado === 'CONFIRMADA', url: '/api/consumos-fudo/' + i.id, alTerminar: () => router(),
         detalle: `Ventas de Fudo del ${fmtFecha(i.desde)} al ${fmtFecha(i.hasta)} · ${CF_EST[i.estado]}${i.almacen ? ' en ' + esc(i.almacen) : ''} · ${i.lineas} productos, ${fmtN(i.unidades)} unidades. Al eliminarla, ese período se puede volver a importar.` }); }));
@@ -887,7 +893,7 @@
       if (!desde || !hasta) return toast('Completá desde y hasta', true);
       const btn = $('#cf-imp'); btn.disabled = true; btn.textContent = 'Leyendo ventas de Fudo…';
       try {
-        const r = await api('/api/consumos-fudo/importar', { method: 'POST', body: { desde: new Date(desde).toISOString(), hasta: new Date(hasta).toISOString() } });
+        const r = await api('/api/consumos-fudo/importar', { method: 'POST', body: { cuenta: cta, desde: new Date(desde).toISOString(), hasta: new Date(hasta).toISOString() } });
         toast(`Importación #${r.id}: ${r.productos} productos vendidos${r.sin_vincular ? ` (${r.sin_vincular} sin vincular)` : ''}`);
         await router(); actualizarPill();
         verConsumoFudo(r.id);
@@ -3020,13 +3026,18 @@
   }
 
   // ---------- Productos (ADMIN) ----------
+  let SUCS_CACHE = null;
+  const sucursalesLista = async () => (SUCS_CACHE = SUCS_CACHE || (await api('/api/sucursales').catch(() => [])).filter((s) => s.activo));
+  const chipsSuc = (p, sucs) => (p.sucursales || []).map((id) => { const s = sucs.find((x) => x.id === id); return s ? `<span class="badge suc-chip ${/BAR/i.test(s.nombre) ? 'bar' : 'gal'}">${esc(s.nombre.replace(/^VINILO\s*/i, ''))}</span>` : ''; }).join(' ');
   VIEWS.productos = async (main) => {
-    const [productos, fe] = await Promise.all([api('/api/productos?todos=1'), api('/api/fudo/estado').catch(() => null)]);
-    const u = fe && fe.ultimo_productos;
+    const [productos, fe, sucs] = await Promise.all([api('/api/productos?todos=1'), api('/api/fudo/estado').catch(() => null), sucursalesLista()]);
+    const u = fe && fe.ultimo_productos, ub = fe && fe.ultimo_productos_bar;
+    const lineaSync = (x) => (x ? `Última: ${fmtFecha(x.fin || x.inicio)} · ${x.ok === false ? `<b class="bad">Error: ${esc(x.detalle || '')}</b>` : x.ok ? `${x.leidos} leídos, ${x.creados} nuevos, ${x.actualizados} actualizados, ${x.desactivados} desactivados` : 'en curso…'}` : 'Todavía no se sincronizó.');
     const fudoHtml = !fe ? '' : !fe.configurado
       ? `<div class="card" style="background:#faf8f5">🔌 <b>Fudo:</b> sincronización no configurada. Cargá <span class="code">FUDO_API_KEY</span> y <span class="code">FUDO_API_SECRET</span> en Render para traer los productos automáticamente.</div>`
       : `<div class="card" style="background:#faf8f5;display:flex;gap:14px;align-items:center;flex-wrap:wrap">
-          <div style="flex:1;min-width:260px">🔄 <b>Sincronizado con Fudo</b>${fe.minutos ? ` cada ${fe.minutos} min` : ''} · ${fe.vinculados_productos} productos vinculados<br>
+          <div style="flex:1;min-width:260px">🔄 <b>Sincronizado con Fudo</b>${fe.minutos ? ` cada ${fe.minutos} min` : ''} · <b>GALPON</b>: ${fe.vinculados_productos} productos${fe.bar_configurado ? ` · <b>BAR</b>: ${fe.vinculados_productos_bar} productos` : ''}<br>
+          ${fe.bar_configurado ? `<span class="stock-hint"><b>BAR</b> · ${lineaSync(ub)}${ub && ub.ok && ub.detalle ? ' · ' + esc(ub.detalle.split('\n')[0]) : ''}</span><br><span class="stock-hint"><b>GALPON</b> · </span>` : ''}
           <span class="stock-hint">${u ? `Última: ${fmtFecha(u.fin || u.inicio)} · ${u.ok === false ? `<b class="bad">Error: ${esc(u.detalle || '')}</b>` : u.ok ? `${u.leidos} leídos, ${u.creados} nuevos, ${u.actualizados} actualizados, ${u.desactivados} desactivados` : 'en curso…'}` : 'Todavía no se sincronizó.'}
           ${u && u.ok && u.detalle ? `<br>⚠ ${esc(u.detalle).replace(/\n/g, '<br>⚠ ')}` : ''}</span><br>
           <span class="stock-hint">De Fudo se toman nombre, categoría y estado. Stock, unidad y alertas se manejan solo en esta app.</span></div>
@@ -3036,6 +3047,7 @@
       ${fudoHtml}
       <div class="toolbar">
         <div class="grow"><label>Buscar</label><input id="pr-q" placeholder="Código, nombre o categoría…"></div>
+        ${sucs.length ? `<div class="f"><label>Sucursal</label><select id="pr-suc"><option value="">Todas</option>${sucs.map((s) => `<option value="${s.id}">${esc(s.nombre)}</option>`).join('')}<option value="ninguna">Sin sucursal (compartidos)</option></select></div>` : ''}
         <div class="f"><label>Categoría</label><select id="pr-cat"><option value="">Todas</option>${[...new Set(productos.map((p) => p.categoria).filter(Boolean))].sort().map((c) => `<option>${esc(c)}</option>`).join('')}</select></div>
         <div class="f"><label>Gestión de stock</label><select id="pr-gs"><option value="">Todos</option><option value="si">Con gestión de stock</option><option value="no">Solo maestro (sin gestión)</option><option value="prod">Con gestión de producción</option></select></div>
         <div class="f"><label>Alerta</label><select id="pr-al"><option value="">Todas</option><option value="any">Con alguna alerta</option><option value="venc">Vencimiento próximo</option><option value="cuid">De cuidado</option><option value="frio">Cadena de frío</option></select></div>
@@ -3049,12 +3061,13 @@
       const inac = $('#pr-inac').checked;
       const cat = $('#pr-cat').value;
       const gs = $('#pr-gs').value;
-      const rows = productos.filter((p) => (inac || p.activo)
+      const sf = $('#pr-suc') ? $('#pr-suc').value : '';
+      const rows = productos.filter((p) => (inac || p.activo) && (!sf || (sf === 'ninguna' ? !(p.sucursales || []).length : (p.sucursales || []).includes(Number(sf))))
         && (!cat || p.categoria === cat) && (!gs || (gs === 'prod' ? p.gestion_produccion : gs === 'si' ? p.gestion_stock : !p.gestion_stock))
         && (!q || `${p.codigo} ${p.nombre} ${p.categoria || ''}`.toLowerCase().includes(q))
         && (!al || (al === 'any' && tieneAlerta(p)) || (al === 'venc' && p.alerta_vencimiento) || (al === 'cuid' && p.alerta_cuidado) || (al === 'frio' && p.alerta_frio)));
       $('#pr-tbl').innerHTML = rows.length ? `<div class="tbl-wrap"><table><thead><tr><th>Código</th><th>Nombre</th><th>Categoría</th><th>Unidad</th><th>Stock</th><th>Alertas</th><th>Nota</th><th></th></tr></thead><tbody>
-        ${rows.map((p) => `<tr class="${p.activo ? '' : 'inactive'}"><td class="code">${esc(p.codigo)}</td><td>${esc(p.nombre)}${p.fudo_id ? ' <span class="badge b-rol" title="Sincronizado desde Fudo">Fudo</span>' : ''}${p.activo ? '' : ' (inactivo)'}</td><td>${esc(p.categoria || '')}</td><td>${esc(p.unidad)}</td>
+        ${rows.map((p) => `<tr class="${p.activo ? '' : 'inactive'}"><td class="code">${esc(p.codigo)}</td><td>${esc(p.nombre)}${p.fudo_id || p.fudo_bar_id ? ' <span class="badge b-rol" title="Sincronizado desde Fudo">Fudo</span>' : ''}${p.activo ? '' : ' (inactivo)'} ${chipsSuc(p, sucs)}</td><td>${esc(p.categoria || '')}</td><td>${esc(p.unidad)}</td>
           <td>${p.gestion_produccion ? `<button class="gs-tog prod" data-receta="${p.id}" title="Producto que se produce: tocá para ver o editar la receta">🍳 Receta</button> ` : ''}<button class="gs-tog ${p.gestion_stock ? 'on' : ''}" data-gs="${p.id}" title="${p.gestion_stock ? 'Se opera en la app (recepción, consumo, transferencias…). Tocá para pasarlo a solo maestro.' : 'Solo maestro: no se opera. Tocá para activar la gestión de stock.'}">${p.gestion_stock ? '✓ Gestiona' : 'Solo maestro'}</button></td>
           <td>${badgesAlerta(p)}</td><td class="muted">${esc(p.nota_alerta || '')}</td><td class="num"><button class="btn ghost sm" data-ed="${p.id}">Editar</button></td></tr>`).join('')}
         </tbody></table></div><div class="row" style="justify-content:space-between;align-items:center;margin-top:10px"><p class="muted" style="margin:0">${rows.length} de ${productos.length} productos · ${productos.filter((p) => p.gestion_stock).length} con gestión de stock</p>
@@ -3074,13 +3087,13 @@
       if ($('#pr-gs-off')) $('#pr-gs-off').onclick = () => cambiarGestion(rows.filter((p) => p.gestion_stock).map((p) => p.id), false, `${rows.filter((p) => p.gestion_stock).length} productos filtrados`);
       $$('[data-ed]').forEach((b) => b.addEventListener('click', () => editarProducto(productos.find((p) => p.id == b.dataset.ed))));
     };
-    ['#pr-q', '#pr-al', '#pr-inac', '#pr-cat', '#pr-gs'].forEach((s) => $(s).addEventListener('input', pintar));
+    ['#pr-q', '#pr-al', '#pr-inac', '#pr-cat', '#pr-gs', '#pr-suc'].forEach((s) => $(s) && $(s).addEventListener('input', pintar));
     $('#pr-new').onclick = () => editarProducto(null);
     if ($('#pr-sync')) $('#pr-sync').onclick = async () => {
       const b = $('#pr-sync'); b.disabled = true; b.textContent = 'Sincronizando…';
       try {
         const r = await api('/api/fudo/sincronizar?entidad=productos', { method: 'POST' });
-        toast(`Fudo: ${r.creados} nuevos, ${r.actualizados} actualizados, ${r.desactivados} desactivados`);
+        toast(`Fudo GALPON: ${r.creados} nuevos, ${r.actualizados} actualizados${r.bar ? (r.bar.error ? ` · BAR: error ${r.bar.error}` : ` · BAR: ${r.bar.vinculados} vinculados, ${r.bar.creados} nuevos`) : ''}`);
         router();
       } catch (err) { toast(err.message, true); b.disabled = false; b.textContent = 'Sincronizar con Fudo'; }
     };
@@ -3094,17 +3107,19 @@
     pintar();
   };
 
-  function editarProducto(p) {
+  async function editarProducto(p) {
+    const sucs = await sucursalesLista();
     const n = !p;
     p = p || { codigo: '', nombre: '', categoria: '', unidad: 'UN', alerta_vencimiento: false, fecha_vencimiento: '', alerta_cuidado: false, alerta_frio: false, nota_alerta: '', activo: true, gestion_stock: true, gestion_produccion: false };
     const m = modal(`<h2>${n ? 'Nuevo producto' : 'Editar producto'}</h2>
-      ${p.fudo_id ? `<p class="obs" style="margin-top:-6px">🔄 Vinculado a Fudo (ID ${esc(p.fudo_id)}): nombre, categoría y estado se actualizan desde Fudo. Unidad y alertas son solo de esta app.</p>` : ''}
+      ${p.fudo_id || p.fudo_bar_id ? `<p class="obs" style="margin-top:-6px">🔄 Vinculado a Fudo${p.fudo_id ? ` GALPON (ID ${esc(p.fudo_id)})` : ''}${p.fudo_bar_id ? ` BAR (ID ${esc(p.fudo_bar_id)})` : ''}: nombre, categoría y estado se actualizan desde Fudo. Unidad y alertas son solo de esta app.</p>` : ''}
       <form id="f-prod">
         <div class="row"><div class="f s"><label>Código *</label><input name="codigo" value="${esc(p.codigo)}" required maxlength="40"></div>
           <div class="f w"><label>Nombre *</label><input name="nombre" value="${esc(p.nombre)}" required maxlength="200"></div></div>
         <div class="row mt"><div class="f"><label>Categoría</label><input name="categoria" value="${esc(p.categoria || '')}" maxlength="80"></div>
           <div class="f s"><label>Unidad</label><input name="unidad" value="${esc(p.unidad)}" maxlength="20"></div>
           <div class="f"><label>Código de barras</label><input name="codigo_barras" value="${esc(p.codigo_barras || '')}" maxlength="40" inputmode="numeric" placeholder="EAN, opcional"></div></div>
+        ${sucs.length ? `<div class="f mt"><label>Sucursales <span class="muted" style="font-weight:400">(quién lo ve; sin marcar = todas)</span></label><div class="chk-grupo">${sucs.map((s) => `<label class="check"><input type="checkbox" name="suc" value="${s.id}" ${(p.sucursales || []).includes(s.id) ? 'checked' : ''}> ${esc(s.nombre)}</label>`).join('')}</div></div>` : ''}
         <div class="card mt" style="background:#faf8f5">
           <h2 style="font-size:1rem">Alertas</h2>
           <div class="row"><label class="check"><input type="checkbox" name="alerta_vencimiento" ${p.alerta_vencimiento ? 'checked' : ''}> ⏳ Vencimiento próximo</label>
@@ -3134,6 +3149,7 @@
         alerta_vencimiento: f.alerta_vencimiento.checked, fecha_vencimiento: f.fecha_vencimiento.value || null,
         alerta_cuidado: f.alerta_cuidado.checked, alerta_frio: f.alerta_frio.checked, nota_alerta: f.nota_alerta.value, activo: f.activo.checked,
         gestion_stock: f.gestion_stock.checked || f.gestion_produccion.checked, gestion_produccion: f.gestion_produccion.checked,
+        ...(sucs.length ? { sucursales: [...f.querySelectorAll('[name=suc]:checked')].map((x) => Number(x.value)) } : {}),
       };
       try {
         const r = await api(n ? '/api/productos' : '/api/productos/' + p.id, { method: n ? 'POST' : 'PUT', body });
