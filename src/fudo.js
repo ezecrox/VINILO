@@ -427,4 +427,4 @@ async function cuentasDeUsuario(pool, user) {
   for (const c of cs) { const s = await sucursalDeCuenta(pool, c.id); if (s === null || user.sucursales.includes(s)) out.push(c); }
   return out;
 }
-module.exports = { cuentasDeUsuario, sincronizarProductosBar, sucursalDeCuenta, cambiarPrecioFudo, fudoEnviar, cuentasTablero, crearCliente, fudoGet, configurado, sincronizarProveedores, sincronizarProductos, sincronizarTodo, iniciarSincronizacionAutomatica, direccionLegible };
+module.exports = { listarCon, cuentasDeUsuario, sincronizarProductosBar, sucursalDeCuenta, cambiarPrecioFudo, fudoEnviar, cuentasTablero, crearCliente, fudoGet, configurado, sincronizarProveedores, sincronizarProductos, sincronizarTodo, iniciarSincronizacionAutomatica, direccionLegible };

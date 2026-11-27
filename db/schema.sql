@@ -717,3 +717,30 @@ BEGIN
     INSERT INTO app_config (clave, valor) VALUES ('productos_sucursal_galpon', '1');
   END IF;
 END $$;
+
+-- Consumo del personal: cliente de Fudo (cuenta corriente) de cada empleado, por cuenta de Fudo (galpon / bar)
+CREATE TABLE IF NOT EXISTS usuario_fudo_clientes (
+  usuario_id     INT NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+  cuenta         VARCHAR(10) NOT NULL,
+  cliente_id     VARCHAR(20) NOT NULL,
+  cliente_nombre VARCHAR(200),
+  PRIMARY KEY (cuenta, cliente_id)
+);
+CREATE INDEX IF NOT EXISTS idx_ufc_usuario ON usuario_fudo_clientes (usuario_id);
+ALTER TABLE consumo_import_items ADD COLUMN IF NOT EXISTS usuario_id INT REFERENCES usuarios(id) ON DELETE SET NULL;
+-- Detalle por venta de lo consumido por cada empleado (para "Mis consumos")
+CREATE TABLE IF NOT EXISTS consumos_personal (
+  id              SERIAL PRIMARY KEY,
+  importacion_id  INT NOT NULL REFERENCES consumo_importaciones(id) ON DELETE CASCADE,
+  usuario_id      INT NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+  cuenta          VARCHAR(10) NOT NULL,
+  venta_id        VARCHAR(30),
+  fecha           TIMESTAMPTZ NOT NULL,
+  fudo_product_id VARCHAR(20),
+  producto_id     INT REFERENCES productos(id) ON DELETE SET NULL,
+  nombre          VARCHAR(200),
+  cantidad        NUMERIC(12,3) NOT NULL DEFAULT 0,
+  importe         NUMERIC(14,2)
+);
+CREATE INDEX IF NOT EXISTS idx_cp_usuario ON consumos_personal (usuario_id, fecha);
+CREATE INDEX IF NOT EXISTS idx_cp_imp ON consumos_personal (importacion_id);

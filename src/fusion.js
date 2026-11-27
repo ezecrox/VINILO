@@ -79,7 +79,7 @@ module.exports = function registrarFusion({ route, query, tx, fail, toInt }) {
       }
       // Historial: movimientos, pedidos, órdenes de compra e importaciones de Fudo
       const historial = {};
-      for (const t of ['movimiento_items', 'pedido_items', 'oc_items', 'consumo_import_items']) {
+      for (const t of ['movimiento_items', 'pedido_items', 'oc_items', 'consumo_import_items', 'consumos_personal']) {
         const r = await q(`UPDATE ${t} SET producto_id = $1 WHERE producto_id = $2 RETURNING 1`);
         historial[t] = r.rows.length;
       }

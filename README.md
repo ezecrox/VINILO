@@ -281,3 +281,10 @@ El administrador ve cuántos lo leyeron y quiénes sí/no, puede editarlo (y vol
 - **Sincronización Fudo:** la cuenta del GALPON usa `fudo_id`; la del BAR (`FUDO_BAR_API_KEY` / `FUDO_BAR_API_SECRET`) usa `fudo_bar_id`. Al sincronizar el BAR, un producto que ya existe con el mismo nombre (sin acentos ni mayúsculas) se vincula en lugar de duplicarse; los que solo existen en el BAR se crean con código `B<id>`. Opcional: `FUDO_SUCURSAL_ID` / `FUDO_BAR_SUCURSAL_ID` para fijar la sucursal de cada cuenta (por defecto se detecta por nombre).
 - **Consumos desde Fudo:** pestañas por cuenta (GALPON / BAR); cada una lleva su propio control de períodos superpuestos y sugiere el almacén de esa sucursal.
 - **Fusionar productos (ADMIN):** Productos → *🔗 Fusionar productos*. Une un producto del Fudo del GALPON con su equivalente del BAR (sugeridos por nombre parecido, o a mano). Queda un solo producto con `fudo_id` y `fudo_bar_id`, así cada importación de consumos lo identifica por el ID de su cuenta; stock por almacén y mínimos se combinan, y movimientos, conteos, recetas, pedidos e importaciones pasan al producto que queda.
+
+## Consumo del personal (cuenta corriente en Fudo)
+
+- **Usuarios → Editar → 🧾 Consumo del personal:** se elige el cliente de Fudo (cuenta corriente) del empleado en cada cuenta (GALPON / BAR). Un cliente solo puede estar asignado a un empleado.
+- **Consumos desde Fudo:** al importar, lo vendido a esos clientes queda separado en la opción **Consumo del personal** (agrupado por empleado). Igual se descuenta del stock al confirmar.
+- **Mis consumos** (Personal): cada empleado ve lo que consumió por mes, con fecha, sucursal, producto e importe. Las importaciones en borrador figuran como *Pendiente*; las anuladas no cuentan.
+- **Consumo del personal** (Personal, ADMIN / Usuarios / Horas): resumen mensual por empleado con el detalle.

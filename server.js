@@ -906,6 +906,7 @@ require('./src/consumos')({ route, query, tx, fail, permitir, registrarMovimient
 require('./src/conteos')({ route, query, tx, fail, permitir, permitirAlguno, registrarMovimiento, almacenActivo, isTrue, toInt, str, veAlmacen, exigirAlmacen, sqlAlm, sqlProdSuc });
 require('./src/eliminar')({ route, query, tx, fail, toInt });
 require('./src/fusion')({ route, query, tx, fail, toInt });
+require('./src/consumo_personal')({ route, query, fail, permitir, toInt, str, isTrue });
 
 const { calcularTareas } = require('./src/tareas');
 
