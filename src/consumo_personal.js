@@ -48,7 +48,7 @@ module.exports = function registrarConsumoPersonal({ route, query, fail, permiti
           VALUES (NULL,$1,$2,$3,$4,$5,$6,$7,$8,$9)`, [x.uid, cta.id, x.venta, x.fecha, x.fid, p[0] ? Number(p[0].id) : null, (p[0] ? p[0].nombre : x.nombre) || `Producto Fudo ${x.fid}`, x.cant, x.importe]);
       }
       const r = { cuenta: cta.id, nombre: cta.nombre, items_leidos: leido.items.length, ventas_con_cliente: leido.clientes.size, items_con_cliente: conCliente,
-        items: filas.length, empleados: new Set(filas.map((x) => x.uid)).size, importe: filas.reduce((t, x) => t + (x.importe || 0), 0) };
+        items: filas.length, empleados: new Set(filas.map((x) => x.uid)).size, importe: filas.reduce((t, x) => t + (x.importe || 0), 0), diag: leido.diag };
       console.log(`Consumo del personal · carga inicial ${origen} (${cta.nombre}) ${desde.toISOString()} → ${hasta.toISOString()}: ${JSON.stringify(r)}`);
       res.push(r);
     }
@@ -57,10 +57,10 @@ module.exports = function registrarConsumoPersonal({ route, query, fail, permiti
   // Carga inicial de noviembre 2026 (una sola vez, en segundo plano al arrancar)
   setTimeout(async () => {
     try {
-      const { rows } = await query("SELECT 1 FROM app_config WHERE clave = 'carga_personal_2026_11'");
+      const { rows } = await query("SELECT 1 FROM app_config WHERE clave = 'carga_personal_2026_11b'");
       if (rows.length || !fudo.cuentasTablero().length) return;
       const r = await cargaInicial(new Date('2026-11-01T00:00:00-03:00'), new Date(), 'ARRANQUE');
-      await query("INSERT INTO app_config (clave, valor) VALUES ('carga_personal_2026_11', $1) ON CONFLICT (clave) DO NOTHING", [JSON.stringify(r)]);
+      await query("INSERT INTO app_config (clave, valor) VALUES ('carga_personal_2026_11b', $1) ON CONFLICT (clave) DO NOTHING", [JSON.stringify(r)]);
     } catch (e) { console.warn('Consumo del personal · carga inicial falló:', e.message); }
   }, 20000);
 

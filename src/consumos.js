@@ -53,7 +53,31 @@ async function leerItemsFudo(desde, hasta, get = fudo.fudoGet) {
     }
     if (lote.length < PAGE || (masViejo && masViejo < desde)) break;
   }
-  return { items, ventas, clientes };
+  // Si las ventas incluidas no traen el cliente, se lee /sales del período (cliente y nombre de cliente por venta)
+  const faltan = new Set(items.map((it) => it.relationships && it.relationships.sale && it.relationships.sale.data && String(it.relationships.sale.data.id)).filter((id) => id && !clientes.has(id)));
+  const diag = { ventas_incluidas: ventas.size, ventas_sin_cliente: faltan.size, ventas_leidas: 0 };
+  if (faltan.size) {
+    try {
+      for (let page = 1; page <= 200; page++) {
+        const d = await get('/sales', { 'page[size]': PAGE, 'page[number]': page, sort: '-createdAt' });
+        const lote = Array.isArray(d.data) ? d.data : [];
+        let masVieja = null;
+        for (const v of lote) {
+          diag.ventas_leidas++;
+          const at = v.attributes || {};
+          const f = new Date(at.createdAt); if (!Number.isNaN(f.getTime())) masVieja = f;
+          if (!faltan.has(String(v.id))) continue;
+          if (!ventas.has(String(v.id))) ventas.set(String(v.id), at);
+          const c = v.relationships && v.relationships.customer && v.relationships.customer.data;
+          if (c || at.customerName) clientes.set(String(v.id), { id: c ? String(c.id) : null, nombre: at.customerName || null });
+          if (!diag.ejemplo && (c || at.customerName)) diag.ejemplo = { venta: v.id, cliente: c ? c.id : null, nombre: at.customerName || null };
+        }
+        if (lote.length < PAGE || (masVieja && masVieja < new Date(desde.getTime() - 24 * 3600e3))) break;
+      }
+    } catch (e) { diag.error_sales = e.message; }
+  }
+  diag.ventas_con_cliente = clientes.size;
+  return { items, ventas, clientes, diag };
 }
 
 module.exports = function registrarConsumos({ route, query, tx, fail, permitir, registrarMovimiento, almacenActivo, isTrue, toInt, str, pool, veAlmacen, exigirAlmacen }) {
