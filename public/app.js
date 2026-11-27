@@ -819,6 +819,25 @@
   const aInputLocal = (d) => { const x = new Date(d); x.setMinutes(x.getMinutes() - x.getTimezoneOffset()); return x.toISOString().slice(0, 16); };
   const CF_EST = { BORRADOR: 'Borrador', CONFIRMADA: 'Confirmada', ANULADA: 'Anulada' };
 
+  // Eliminar (solo ADMIN): si ya cambió el stock, permite revertirlo
+  function modalEliminar({ titulo, detalle, aplicado, que, url, alTerminar }) {
+    const m = modal(`<h2>🗑 Eliminar ${esc(titulo)}</h2><p>${detalle}</p>
+      ${aplicado ? `<div class="f mt elim-op"><label>Este ${esc(que)} ya cambió el stock. ¿Qué hacemos con el stock?</label>
+        <label class="check"><input type="radio" name="rev" value="1" checked> <span><b>Revertir el stock</b>: vuelve a como estaba antes de aplicarlo y se borra el movimiento</span></label>
+        <label class="check"><input type="radio" name="rev" value="0"> <span><b>Dejar el stock como está</b>: se borra solo el registro; el movimiento queda en el historial</span></label></div>` : ''}
+      <p class="stock-hint mt">No se puede deshacer.</p>
+      <div class="form-actions"><button class="btn sec" data-close>Cancelar</button><button class="btn danger" id="el-ok">Eliminar</button></div>`);
+    $('#el-ok', m).onclick = async () => {
+      const rev = $('input[name=rev]:checked', m); const r1 = rev && rev.value === '1';
+      try {
+        const r = await api(url + (r1 ? '?revertir=1' : ''), { method: 'DELETE' }); closeModal();
+        toast(`${titulo.charAt(0).toUpperCase() + titulo.slice(1)} eliminado${r.revertido ? ' y stock revertido' : ''}`);
+        if (r.avisos && r.avisos.length) modal(`<h2>Stock revertido con avisos</h2><p>Algunos productos ya no tenían stock suficiente para revertir y quedaron en 0:</p><ul>${r.avisos.map((a) => `<li>${esc(a)}</li>`).join('')}</ul><div class="form-actions"><button class="btn" data-close>Entendido</button></div>`);
+        alTerminar && alTerminar();
+      } catch (err) { toast(err.message, true); }
+    };
+  }
+
   VIEWS['consumos-fudo'] = async (main) => {
     const d = await api('/api/consumos-fudo');
     const puedeImp = puede('consumir');
@@ -849,9 +868,12 @@
         ${d.importaciones.map((i) => `<tr class="${i.estado === 'ANULADA' ? 'inactive' : ''}"><td><b>#${i.id}</b></td><td>${fmtFecha(i.desde)} → ${fmtFecha(i.hasta)}</td>
           <td><span class="badge cf-${i.estado}">${CF_EST[i.estado]}</span></td><td>${esc(i.almacen || (i.estado === 'BORRADOR' ? '— a definir —' : ''))}</td>
           <td class="num">${i.lineas}</td><td class="num">${fmtN(i.unidades)}</td><td class="num ${i.sin_vincular ? 'stock-hint bad' : ''}">${i.sin_vincular || ''}</td>
-          <td>${esc(i.creado_por)}</td><td class="num"><button class="btn ghost sm" data-ver="${i.id}">${i.estado === 'BORRADOR' && puedeImp ? 'Revisar' : 'Ver'}</button></td></tr>`).join('')}
+          <td>${esc(i.creado_por)}</td><td class="num nowrap"><button class="btn ghost sm" data-ver="${i.id}">${i.estado === 'BORRADOR' && puedeImp ? 'Revisar' : 'Ver'}</button>${S.user.rol === 'ADMIN' ? `<button class="btn ghost sm el-x" data-elcf="${i.id}" title="Eliminar importación">🗑</button>` : ''}</td></tr>`).join('')}
         </tbody></table></div>` : '<div class="card empty">Todavía no hay importaciones.</div>'}`;
     $$('[data-ver]').forEach((b) => b.addEventListener('click', () => verConsumoFudo(Number(b.dataset.ver))));
+    $$('[data-elcf]').forEach((b) => (b.onclick = () => { const i = d.importaciones.find((x) => x.id == b.dataset.elcf);
+      modalEliminar({ titulo: `la importación #${i.id}`, que: 'consumo', aplicado: i.estado === 'CONFIRMADA', url: '/api/consumos-fudo/' + i.id, alTerminar: () => router(),
+        detalle: `Ventas de Fudo del ${fmtFecha(i.desde)} al ${fmtFecha(i.hasta)} · ${CF_EST[i.estado]}${i.almacen ? ' en ' + esc(i.almacen) : ''} · ${i.lineas} productos, ${fmtN(i.unidades)} unidades. Al eliminarla, ese período se puede volver a importar.` }); }));
     $$('[data-pre]').forEach((b) => b.addEventListener('click', () => {
       const h = new Date(); h.setSeconds(0, 0);
       let de = new Date(h);
@@ -2486,7 +2508,10 @@
         <div class="tbl-wrap"><table><thead><tr><th>#</th><th>Rubro</th><th>Almacén</th><th>Estado</th><th class="num">Contados</th><th>Cerrado</th><th></th></tr></thead><tbody id="ct-hist">
         ${hist.map((c) => `<tr data-rubro="${esc(c.categoria || '(todos)')}"><td>${c.id}</td><td><b>${esc(c.categoria || 'Todos los rubros')}</b></td><td>${esc(c.almacen)}</td><td><span class="badge ${c.estado === 'APLICADO' ? 'b-COMPLETADO' : ''}">${c.estado === 'APLICADO' ? 'Aplicado' : 'Anulado'}</span></td>
           <td class="num">${c.contados}</td><td class="muted">${c.cerrado_en ? fmtFecha(c.cerrado_en) : ''}${c.cerrado_por ? ' · ' + esc(c.cerrado_por) : ''}</td>
-          <td class="num"><a class="btn ghost sm" href="#/conteo?id=${c.id}">Ver</a></td></tr>`).join('')}</tbody></table></div>` : ''}`;
+          <td class="num nowrap"><a class="btn ghost sm" href="#/conteo?id=${c.id}">Ver</a>${S.user.rol === 'ADMIN' ? `<button class="btn ghost sm el-x" data-elct="${c.id}" title="Eliminar conteo">🗑</button>` : ''}</td></tr>`).join('')}</tbody></table></div>` : ''}`;
+    $$('[data-elct]').forEach((b) => (b.onclick = () => { const c = lista.find((x) => x.id == b.dataset.elct);
+      modalEliminar({ titulo: `el conteo #${c.id}`, que: 'conteo', aplicado: c.estado === 'APLICADO' && !!c.movimiento_id, url: '/api/conteos/' + c.id, alTerminar: () => router(),
+        detalle: `${esc(c.categoria || 'Todos los rubros')} · ${esc(c.almacen)} · ${c.estado === 'APLICADO' ? 'aplicado' : c.estado === 'ANULADO' ? 'anulado' : 'en curso'} · ${c.contados} contados.` }); }));
     if ($('#ct-filtro')) $('#ct-filtro').onchange = (e) => $$('#ct-hist tr').forEach((tr) => { tr.hidden = !!e.target.value && tr.dataset.rubro !== e.target.value; });
     if ($('#ct-new')) $('#ct-new').onclick = async () => {
       const prods = await api('/api/productos');
@@ -2539,7 +2564,7 @@
       </div>
       <div id="ct-list" class="ct-list"></div>
       ${abierto ? `<div class="ct-pie">${d.puede_aplicar ? '<button class="btn" id="ct-aplicar">Revisar y cerrar</button>' : '<a class="btn" href="#/conteo">Terminé de contar</a>'}
-        ${d.puede_anular ? '<button class="btn ghost sm" id="ct-anular">Anular</button>' : ''}</div>` : ''}`;
+        ${d.puede_anular ? '<button class="btn ghost sm" id="ct-anular">Anular</button>' : ''}${S.user.rol === 'ADMIN' ? '<button class="btn ghost sm" id="ct-elim">🗑 Eliminar</button>' : ''}</div>` : S.user.rol === 'ADMIN' ? '<div class="ct-pie"><button class="btn ghost sm" id="ct-elim">🗑 Eliminar conteo</button></div>' : ''}`;
     const conDif = (p) => p.contado !== null && p.sistema !== null && p.contado !== p.sistema;
     const chips = () => {
       const c = d.productos.filter((p) => p.contado !== null).length, tot = d.productos.length;
@@ -2698,6 +2723,8 @@
       };
     }
     if ($('#ct-cat')) $('#ct-cat').addEventListener('change', (e) => { st.cat = e.target.value; pintar(); });
+    if ($('#ct-elim')) $('#ct-elim').onclick = () => modalEliminar({ titulo: `el conteo #${d.id}`, que: 'conteo', aplicado: d.estado === 'APLICADO' && !!d.movimiento_id, url: '/api/conteos/' + d.id,
+      alTerminar: () => { location.hash = '#/conteo'; }, detalle: `${esc(d.categoria || 'Todos los rubros')} · ${esc(d.almacen)} · ${d.contados} contados${d.estado === 'EN_CURSO' ? ' (en curso: se descarta lo contado)' : ''}.` });
     pintar();
   }
 

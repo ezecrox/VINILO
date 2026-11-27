@@ -269,3 +269,7 @@ El administrador ve cuántos lo leyeron y quiénes sí/no, puede editarlo (y vol
 - Con `contar` cualquiera abre conteos y cuenta en cualquier conteo en curso de sus almacenes, aunque lo haya abierto otro.
 - Permiso **`cerrarConteo`** ("Cerrar conteos"): aplicar o anular cualquier conteo aunque lo haya abierto otro usuario. Se otorgó una vez a los roles que tenían `ajustar` (que también puede cerrar). Quien abrió un conteo siempre puede anular el suyo.
 - Al cerrar, los productos sin contar se pueden **omitir** (su stock queda como está; opción por defecto) o poner en 0.
+
+### Eliminar conteos e importaciones de Fudo (solo ADMIN)
+- 🗑 en el historial de **Conteo de inventario** (y en el detalle de cada conteo) y en **Consumos desde Fudo**.
+- En curso, borrador o anulado: se borra directamente. Si ya **cambió el stock** (conteo aplicado o importación confirmada), se elige: **revertir el stock** (deshace el movimiento y lo borra; si algún producto ya no tiene stock suficiente queda en 0 y se avisa) o **dejar el stock como está** (se borra solo el registro). Al eliminar una importación, su período se puede volver a importar. Código: `src/eliminar.js`.
