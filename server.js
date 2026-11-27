@@ -66,6 +66,7 @@ function serveStatic(req, res, pathname) {
   if (!file.startsWith(PUBLIC_DIR)) { res.writeHead(403); return res.end(); }
   if (pathname === '/jugar' || pathname === '/jugar/') file = path.join(PUBLIC_DIR, 'juego.html'); // juego QR para comensales
   if (pathname === '/pong' || pathname === '/pong/') file = path.join(PUBLIC_DIR, 'pong.html'); // control del Pong Pizza
+  if (pathname === '/hornos' || pathname === '/hornos/') file = path.join(PUBLIC_DIR, 'hornos.html'); // control de Guerra de Hornos
   if (!fs.existsSync(file) || fs.statSync(file).isDirectory()) file = path.join(PUBLIC_DIR, 'index.html');
   // Siempre revalidar: así cada publicación nueva llega al navegador sin tener que forzar la recarga
   const st = fs.statSync(file);
@@ -1017,6 +1018,7 @@ const server = http.createServer(async (req, res) => {
   }
 });
 require('./src/pong')({ route, fail, permitir, server, currentUser });
+require('./src/hornos')({ route, fail, permitir, server, currentUser });
 
 
 // Prueba única (pedida por el dueño): cambiar en Fudo el precio de "Franco de Aji Picante" (ID 157) a 88888

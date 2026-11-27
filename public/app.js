@@ -205,6 +205,7 @@
     recepcion: '<path d="M12 3v11"/><path d="m7.5 9.5 4.5 4.5 4.5-4.5"/><path d="M3 14v4a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-4"/>',
     transferencia: '<path d="M4 8h14"/><path d="m14 4 4 4-4 4"/><path d="M20 16H6"/><path d="m10 12-4 4 4 4"/>',
     consumo: '<path d="M6 3h12l-1.2 7.2A4.9 4.9 0 0 1 12 14.5a4.9 4.9 0 0 1-4.8-4.3L6 3Z"/><path d="M12 14.5V20"/><path d="M8 21h8"/><path d="M6.6 7h10.8"/>',
+    hornos: '<path d="M3 20V12a9 8 0 0 1 18 0v8z"/><path d="M8 20v-4a4 4 0 0 1 8 0v4"/><path d="M12 4V2"/>',
     pong: '<rect x="2" y="6" width="3" height="9" rx="1"/><rect x="19" y="9" width="3" height="9" rx="1"/><circle cx="12" cy="12" r="3"/>',
     pizzaiolo: '<path d="M12 2 2 21h20z"/><circle cx="10" cy="14" r="1.4" fill="currentColor"/><circle cx="14" cy="16" r="1.4" fill="currentColor"/><circle cx="12" cy="10" r="1.2" fill="currentColor"/>',
     bolsa: '<path d="M3 17l5-5 4 4 8-8"/><path d="M15 8h5v5"/><path d="M3 21h18"/>',
@@ -273,6 +274,7 @@
     { id: 'bolsa', lbl: 'Bolsa de tragos', ok: () => puede('juegos') },
     { id: 'pizzaiolo', lbl: 'Pizzaiolo (juego QR)', ok: () => puede('juegos') },
     { id: 'pong', lbl: 'Pong Pizza', ok: () => puede('juegos') },
+    { id: 'hornos', lbl: 'Guerra de Hornos', ok: () => puede('juegos') },
     { sec: 'Ayuda' },
     { id: 'manuales', lbl: 'Manuales', ok: () => true },
   ];
@@ -2124,6 +2126,248 @@
   };
 
   // ---------- Juegos: Pong Pizza (cancha en la pantalla, control en el celular) ----------
+  // ---------- Juegos: Guerra de Hornos (equipos Tomate vs Albahaca; los celulares son el control) ----------
+  const GH_EQ = { tomate: { nom: 'Tomate', emo: '🍅', col: '#d8301f' }, albahaca: { nom: 'Albahaca', emo: '🌿', col: '#2f8f3c' } };
+  const GH_RONDAS = [
+    { id: 'amasado', nom: 'Amasado', emo: '🫓', dur: 30, pts: 1, ayuda: '¡Agitá el celular o tocá sin parar para amasar! Gana el equipo que primero tenga la masa lista.' },
+    { id: 'armado', nom: 'Armado', emo: '🍕', dur: 40, pts: 1, ayuda: 'Tocá SOLO el ingrediente que sigue en el pedido. Si tocás uno equivocado (¡ananá!), resta.' },
+    { id: 'horneado', nom: 'Horneado', emo: '🔥', dur: 45, pts: 1, ayuda: 'Tocá para avivar el fuego. Mantengan el horno en la zona justa: frío queda cruda, de más se quema.' },
+    { id: 'pala', nom: 'La Pala', emo: '🥖', dur: 25, pts: 2, ayuda: '¡Final! Tocá lo más rápido que puedas para llevar la pizza a tu horno. Vale doble.' },
+  ];
+  const GH_RECETAS = [['salsa', 'mozzarella', 'albahaca'], ['salsa', 'mozzarella', 'jamon', 'morron'], ['salsa', 'mozzarella', 'cebolla', 'aceitunas'], ['salsa', 'mozzarella', 'rucula', 'crudo']];
+  const GH_ING = { salsa: '🥫', mozzarella: '🧀', albahaca: '🌿', jamon: '🍖', morron: '🫑', cebolla: '🧅', aceitunas: '🫒', rucula: '🥬', crudo: '🥓', anana: '🍍', chocolate: '🍫', pescado: '🐟' };
+  const GH_ZONA = [380, 460], GH_QUEMA = 520;
+  const hornoSVG = (eq) => `<svg viewBox="0 0 400 300" class="gh-hsvg" aria-hidden="true">
+      <path d="M30 290V190Q30 40 200 40T370 190V290Z" fill="url(#gh-mos)"/><path d="M30 190Q30 40 200 40T370 190" fill="none" stroke="#6e2a17" stroke-width="8"/>
+      <rect x="168" y="0" width="64" height="48" fill="#8f3a22"/><g class="gh-humo">${[0, 1, 2].map((i) => `<circle cx="200" cy="-6" r="${12 + i * 5}" fill="#9a8a84" style="animation-delay:${i * 0.9}s"/>`).join('')}</g>
+      <ellipse class="gh-brillo" cx="200" cy="290" rx="190" ry="90" fill="url(#gh-fuego)"/>
+      <path d="M110 290V225Q110 160 200 160T290 225V290Z" fill="#1c0a05" stroke="#e7d2b8" stroke-width="9"/>
+      <g class="gh-llamas">${[[150, 1], [178, 1.3], [206, 0.9], [234, 1.2]].map(([x, s], i) => `<path d="M${x} 288c-16-26 3-44 10-70 9 26 29 46 13 70z" fill="${i % 2 ? '#ffb13b' : '#ff7a1f'}" style="transform-origin:${x + 7}px 288px;animation-delay:-${i * 0.2}s;--s:${s}"/>`).join('')}</g>
+      <g class="gh-pz" transform="translate(200 262) scale(.95 .32)"><circle r="42" class="gh-pz-masa"/><circle r="33" fill="#d8301f" class="gh-pz-salsa"/><circle cx="-12" cy="-8" r="8" fill="#fbf3df"/><circle cx="12" cy="-10" r="7" fill="#fbf3df"/><circle cx="3" cy="12" r="8" fill="#fbf3df"/></g>
+      <rect x="140" y="64" width="120" height="30" rx="7" fill="#e7d2b8"/><text x="200" y="86" text-anchor="middle" font-family="Lilita One, Nunito, sans-serif" font-size="20" fill="${GH_EQ[eq].col}">${GH_EQ[eq].nom.toUpperCase()}</text>
+    </svg>`;
+
+  VIEWS.hornos = async (main) => {
+    if (VIEWS.hornos._fin) VIEWS.hornos._fin();
+    const control = puede('juegosControl');
+    main.innerHTML = `<div class="pz gh">
+      <div class="pz-top"><div class="pz-marca"><img src="/gato.png" alt=""><div><h1>Guerra de Hornos</h1><p id="gh-sub">Conectando…</p></div></div>
+        <div class="pz-acc"><label class="pg-obj">Jugadores por lado <select id="gh-max">${[1, 2, 3, 4, 5, 6, 8, 10, 12, 15, 20, 25, 30].map((n) => `<option ${n === 10 ? 'selected' : ''}>${n}</option>`).join('')}</select></label>
+          ${control ? '<button class="bv-btn pz-ini" id="gh-ini">▶ Iniciar juego</button><button class="bv-btn pz-ini" id="gh-go" hidden>🔥 Comenzar partida</button><button class="bv-btn" id="gh-fin" hidden>⏹ Terminar</button>' : ''}
+          <button class="bv-btn" id="gh-mez">🔀 Mezclar equipos</button><button class="bv-btn" id="gh-lib">🔓 Liberar</button><button class="bv-btn" id="gh-tv">📺 Modo TV</button></div></div>
+      <div class="gh-wrap" id="gh-wrap"></div>
+      <p class="pg-ayuda">Probalo sin celulares: tecla <b>Q</b> toca por Tomate y <b>P</b> por Albahaca (cuando no hay jugadores en ese equipo).</p></div>`;
+    let sala = null, qrSvg = '', ws = null, vivo = true, max = 10, arranca = 0;
+    let J = []; // [{id, nombre, equipo, conectado}]
+    const G = { fase: 'previa', ronda: -1, t0: 0, pts: { tomate: 0, albahaca: 0 }, gana: null, ganador: null, receta: null };
+    const R = {}; // estado de la ronda por equipo
+    const stats = new Map(); // id → total de acciones (MVP)
+    const enviar = (o) => { if (ws && ws.readyState === 1) ws.send(JSON.stringify(o)); };
+    const equipoDe = new Map();
+    const delEq = (e) => J.filter((j) => j.equipo === e);
+    const nEq = (e) => Math.max(1, R[e] && R[e].n ? R[e].n : delEq(e).length);
+    const ronda = () => GH_RONDAS[G.ronda];
+    const restante = () => (G.fase === 'ronda' ? Math.max(0, G.t0 + ronda().dur * 1000 - Date.now()) : G.fase === 'intro' ? Math.max(0, G.t0 - Date.now()) : 0);
+
+    // ---- estado hacia los celulares ----
+    let ultEstado = 0;
+    const estado = () => {
+      ultEstado = Date.now();
+      const r = ronda();
+      enviar({ t: 'estado', fase: G.fase, ronda: r ? r.id : null, rondaNom: r ? r.nom : null, n: G.ronda + 1, total: GH_RONDAS.length, restante: G.fase === 'conteo10' ? Math.max(0, arranca - Date.now()) : restante(),
+        ayuda: r ? r.ayuda : '', receta: G.receta, pts: G.pts, gana: G.gana, ganador: G.ganador, zona: GH_ZONA, quema: GH_QUEMA,
+        temp: R.tomate && R.tomate.temp !== undefined ? { tomate: Math.round(R.tomate.temp), albahaca: Math.round(R.albahaca.temp) } : null,
+        prog: r && R.tomate ? { tomate: progreso('tomate'), albahaca: progreso('albahaca') } : null, pala: R.pala || 0 });
+    };
+
+    // ---- conexión ----
+    const conectar = () => {
+      let guardada = ''; try { guardada = sessionStorage.getItem('gh_sala') || ''; } catch (_) { /* nada */ }
+      ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws/hornos?rol=tv&token=${encodeURIComponent(S.token)}&sala=${guardada}`);
+      ws.onopen = () => enviar({ t: 'config', max });
+      ws.onmessage = async (e) => {
+        let m; try { m = JSON.parse(e.data); } catch (_) { return; }
+        if (m.t === 'sala') { sala = m.codigo; try { sessionStorage.setItem('gh_sala', sala); } catch (_) { /* nada */ }
+          try { const q = await api('/api/hornos/qr?sala=' + sala); qrSvg = q.qr; } catch (_) { /* nada */ } $('#gh-sub').textContent = `Sala ${sala} · escaneá el QR con el celular`; pintar(); estado(); }
+        else if (m.t === 'jugadores') { J = m.lista; equipoDe.clear(); J.forEach((j) => equipoDe.set(j.id, j.equipo)); pintarJugadores(); if (['previa', 'lobby', 'conteo10'].includes(G.fase)) pintar(); botones(); }
+        else if (m.t === 'in') for (const [id, [n, ok, bad]] of Object.entries(m.d)) entrada(equipoDe.get(id), id, n, ok, bad);
+      };
+      ws.onclose = () => { if (vivo) { $('#gh-sub').textContent = 'Reconectando…'; setTimeout(conectar, 1500); } };
+    };
+
+    // ---- reglas de cada ronda ----
+    const nuevoR = () => { for (const e of ['tomate', 'albahaca']) R[e] = { n: Math.max(1, delEq(e).length), taps: 0, ok: 0, bad: 0, temp: 250, enZona: 0, tick: 0, ema: 0 }; R.pala = 0; };
+    const entrada = (e, id, n, ok, bad) => {
+      if (G.fase !== 'ronda' || !e || !R[e]) return;
+      R[e].taps += n; R[e].tick += n; R[e].ok += ok; R[e].bad += bad;
+      if (id) stats.set(id, (stats.get(id) || 0) + n + ok * 8);
+    };
+    const progreso = (e) => {
+      const r = ronda(), x = R[e]; if (!r || !x) return 0;
+      if (r.id === 'amasado') return Math.min(1, x.taps / x.n / 100);
+      if (r.id === 'armado') return Math.round(((x.ok - x.bad) / x.n) * 10) / 10;
+      if (r.id === 'horneado') return Math.round(x.enZona * 10) / 10;
+      return 0;
+    };
+    const iniciarRonda = (i) => {
+      G.ronda = i; G.gana = null; nuevoR();
+      document.querySelectorAll('.gh-lado').forEach((l) => { l.classList.remove('enzona', 'quema', 'frio'); l.style.removeProperty('--coc'); });
+      if (GH_RONDAS[i].id === 'armado') G.receta = GH_RECETAS[Math.floor(Math.random() * GH_RECETAS.length)];
+      G.fase = 'intro'; G.t0 = Date.now() + 6000; pintar(); estado();
+    };
+    const terminarRonda = (gana) => {
+      const r = ronda();
+      if (!gana) {
+        const a = progreso('tomate'), b = progreso('albahaca');
+        if (r.id === 'pala') gana = R.pala < 0 ? 'tomate' : R.pala > 0 ? 'albahaca' : (R.tomate.taps / R.tomate.n >= R.albahaca.taps / R.albahaca.n ? 'tomate' : 'albahaca');
+        else gana = a === b ? (R.tomate.taps / R.tomate.n >= R.albahaca.taps / R.albahaca.n ? 'tomate' : 'albahaca') : a > b ? 'tomate' : 'albahaca';
+      }
+      G.gana = gana; G.pts[gana] += r.pts; G.fase = 'resultado'; G.t0 = Date.now();
+      enviar({ t: 'vibrar', equipo: gana, ms: 300 });
+      pintar(); estado();
+      setTimeout(() => { if (!vivo || G.fase !== 'resultado') return; if (G.ronda + 1 < GH_RONDAS.length) iniciarRonda(G.ronda + 1); else finPartida(); }, 5000);
+    };
+    const finPartida = () => { G.fase = 'fin'; G.ganador = G.pts.tomate > G.pts.albahaca ? 'tomate' : 'albahaca'; enviar({ t: 'vibrar', equipo: G.ganador, ms: 400 }); pintar(); estado(); confeti(); };
+    const nuevaPartida = () => { G.pts = { tomate: 0, albahaca: 0 }; G.ganador = null; stats.clear(); iniciarRonda(0); botones(); };
+
+    // ---- bucle ----
+    let tPrev = performance.now(), raf = 0, teclas = { q: 0, p: 0 };
+    const tick = (t) => {
+      if (!vivo) return; const dt = Math.min(0.1, (t - tPrev) / 1000); tPrev = t;
+      // teclado: solo para equipos sin jugadores (prueba)
+      for (const [k, e] of [['q', 'tomate'], ['p', 'albahaca']]) if (teclas[k]) { if (!delEq(e).length) entrada(e, null, teclas[k], 0, 0); teclas[k] = 0; }
+      if (G.fase === 'intro' && Date.now() >= G.t0) { G.fase = 'ronda'; G.t0 = Date.now(); for (const e of ['tomate', 'albahaca']) { R[e].n = Math.max(1, delEq(e).length); R[e].taps = 0; R[e].tick = 0; } pintar(); estado(); }
+      if (G.fase === 'ronda') {
+        const r = ronda();
+        for (const e of ['tomate', 'albahaca']) {
+          const x = R[e], porJug = x.tick / x.n; x.tick = 0;
+          x.ema += ((dt > 0 ? porJug / dt : 0) - x.ema) * Math.min(1, dt * 2.5); // toques por jugador por segundo (suavizado)
+          if (r.id === 'horneado') { x.temp += porJug * 65 - 0.6 * (x.temp - 150) * dt; x.temp = Math.max(100, Math.min(720, x.temp)); if (x.temp >= GH_ZONA[0] && x.temp <= GH_ZONA[1]) x.enZona += dt; }
+        }
+        if (r.id === 'pala') { R.pala += (R.albahaca.ema - R.tomate.ema) * 0.06 * dt; if (Math.abs(R.pala) >= 1) { R.pala = Math.sign(R.pala); terminarRonda(R.pala < 0 ? 'tomate' : 'albahaca'); } }
+        if (G.fase === 'ronda' && r.id === 'amasado') { const a = progreso('tomate') >= 1, b = progreso('albahaca') >= 1; if (a || b) terminarRonda(a && b ? null : a ? 'tomate' : 'albahaca'); }
+        if (G.fase === 'ronda' && restante() <= 0) terminarRonda(null);
+        if (Date.now() - ultEstado > 200) estado();
+      } else if (G.fase === 'intro' && Date.now() - ultEstado > 1000) estado();
+      dibujar(); raf = requestAnimationFrame(tick);
+    };
+
+    // ---- pantalla ----
+    const lado = (e) => `<div class="gh-lado ${e}">
+        <div class="gh-cab"><b>${GH_EQ[e].emo} Equipo ${GH_EQ[e].nom}</b><span id="gh-n-${e}"></span></div>
+        <div class="gh-escena"><div class="gh-horno">${hornoSVG(e)}</div>
+          <div class="gh-termo" id="gh-termo-${e}"><div class="gh-zona" style="bottom:${(GH_ZONA[0] - 100) / 6.2}%;height:${(GH_ZONA[1] - GH_ZONA[0]) / 6.2}%"></div><div class="gh-merc" id="gh-merc-${e}"></div><span id="gh-temp-${e}">250°</span></div>
+          <div class="gh-masa" id="gh-masa-${e}"></div><div class="gh-arm" id="gh-arm-${e}"></div></div>
+        <div class="gh-bar"><i id="gh-bar-${e}"></i><span id="gh-val-${e}"></span></div>
+        <div class="gh-jug" id="gh-jug-${e}"></div></div>`;
+    const arena = () => `<div class="gh-arena" id="gh-arena">
+        <svg width="0" height="0" style="position:absolute"><defs>
+          <pattern id="gh-mos" width="26" height="22" patternUnits="userSpaceOnUse"><rect width="26" height="22" fill="#b4482b"/><rect x="2" y="2" width="22" height="8" rx="3" fill="#c9603a"/><rect x="-11" y="13" width="22" height="8" rx="3" fill="#9c3a22"/><rect x="15" y="13" width="22" height="8" rx="3" fill="#a94025"/></pattern>
+          <radialGradient id="gh-fuego" cx="50%" cy="85%" r="70%"><stop offset="0" stop-color="#ffe07a"/><stop offset=".4" stop-color="#ff8a1f"/><stop offset="1" stop-color="#7a1f0a" stop-opacity="0"/></radialGradient></defs></svg>
+        <div class="gh-top"><div class="gh-score tomate"><span>🍅 Tomate</span><b id="gh-p-tomate">0</b></div>
+          <div class="gh-centro"><div class="gh-ronda" id="gh-ronda"></div><div class="gh-reloj" id="gh-reloj"></div><div class="gh-dots" id="gh-dots"></div></div>
+          <div class="gh-score albahaca"><b id="gh-p-albahaca">0</b><span>Albahaca 🌿</span></div></div>
+        <div class="gh-receta" id="gh-receta"></div>
+        <div class="gh-lados">${lado('tomate')}<div class="gh-vs">VS</div>${lado('albahaca')}</div>
+        <div class="gh-pista" id="gh-pista"><span>🍅</span><div class="gh-riel"><div class="gh-mitad"></div><div class="gh-pal" id="gh-pal">🍕</div></div><span>🌿</span></div>
+        <div class="gh-over" id="gh-over"></div></div>`;
+    let montada = false;
+    const pintar = () => {
+      const w = $('#gh-wrap'); if (!w) return;
+      if (G.fase === 'previa' || G.fase === 'conteo10') { montada = false; w.innerHTML = `<div class="pz-esc">${escenaPrevia({ titulo: '¡Guerra de Hornos!', texto: `Dos equipos, ${max} por lado. Escaneá el QR, poné tu nombre y te toca Tomate 🍅 o Albahaca 🌿. ¡Amasado, armado, horneado y la pala final!`, qr: qrSvg,
+        extra: `<p class="pg-cod">🍅 ${delEq('tomate').length}/${max} · 🌿 ${delEq('albahaca').length}/${max} · Sala <b>${esc(sala || '…')}</b></p>` })}</div>`; return; }
+      if (!montada) { w.innerHTML = arena(); montada = true; pintarJugadores(); }
+      const arenaEl = $('#gh-arena'); arenaEl.dataset.ronda = ronda() ? ronda().id : ''; arenaEl.dataset.fase = G.fase;
+      $('#gh-dots').innerHTML = GH_RONDAS.map((r, i) => `<i class="${i < G.ronda || (i === G.ronda && ['resultado', 'fin'].includes(G.fase)) ? 'ok' : i === G.ronda ? 'act' : ''}" title="${r.nom}">${r.emo}</i>`).join('');
+      $('#gh-ronda').textContent = ronda() ? `Ronda ${G.ronda + 1} · ${ronda().nom}${ronda().pts > 1 ? ' (vale doble)' : ''}` : 'Preparados';
+      $('#gh-receta').innerHTML = ronda() && ronda().id === 'armado' && G.receta ? `Pedido: ${G.receta.map((i) => `<span>${GH_ING[i]} ${i}</span>`).join('<em>→</em>')}` : '';
+      ['tomate', 'albahaca'].forEach((e) => { $('#gh-p-' + e).textContent = G.pts[e]; });
+      const o = $('#gh-over'); let h = '';
+      if (G.fase === 'lobby') h = `<div class="gh-lobby"><div class="gh-lobby-qr">${qrSvg}</div><div><h2>¡Armen los equipos!</h2><p>Escaneá el QR y poné tu nombre. ${max} jugadores por lado.</p>
+          <div class="gh-lobby-eq">${['tomate', 'albahaca'].map((e) => `<div class="${e}"><b>${GH_EQ[e].emo} ${GH_EQ[e].nom} · ${delEq(e).length}/${max}</b><div>${delEq(e).map((j) => `<span class="${j.conectado ? '' : 'off'}">${esc(j.nombre)}</span>`).join('') || '<em>Esperando jugadores…</em>'}</div></div>`).join('')}</div>
+          <p class="pg-cod">Sala <b>${esc(sala || '…')}</b>${control ? ' · cuando estén, tocá <b>🔥 Comenzar partida</b>' : ''}</p></div></div>`;
+      else if (G.fase === 'intro') h = `<div class="gh-intro"><div class="gh-intro-emo">${ronda().emo}</div><small>Ronda ${G.ronda + 1} de ${GH_RONDAS.length}${ronda().pts > 1 ? ' · ¡vale doble!' : ''}</small><h2>${ronda().nom}</h2><p>${esc(ronda().ayuda)}</p>
+          ${ronda().id === 'armado' ? `<div class="gh-receta big">${G.receta.map((i) => `<span>${GH_ING[i]} ${i}</span>`).join('<em>→</em>')}</div>` : ''}<b class="gh-intro-n" id="gh-intro-n"></b></div>`;
+      else if (G.fase === 'resultado') h = `<div class="gh-res ${G.gana}"><small>${ronda().emo} ${ronda().nom}</small><h2>¡Punto para ${GH_EQ[G.gana].emo} ${GH_EQ[G.gana].nom}!</h2><p>${resumenRonda()}</p><div class="gh-marcador">${G.pts.tomate} <span>–</span> ${G.pts.albahaca}</div></div>`;
+      else if (G.fase === 'fin') {
+        const mvp = (e) => delEq(e).map((j) => ({ ...j, v: stats.get(j.id) || 0 })).sort((a, b) => b.v - a.v).slice(0, 3);
+        h = `<div class="gh-fin ${G.ganador}"><div class="gh-trofeo">🏆</div><h2>¡Ganó el equipo ${GH_EQ[G.ganador].nom} ${GH_EQ[G.ganador].emo}!</h2><div class="gh-marcador">${G.pts.tomate} <span>–</span> ${G.pts.albahaca}</div>
+          <div class="gh-mvp">${['tomate', 'albahaca'].map((e) => `<div class="${e}"><b>Figuras ${GH_EQ[e].emo}</b>${mvp(e).map((j, i) => `<span>${['🥇', '🥈', '🥉'][i]} ${esc(j.nombre)}</span>`).join('') || '<em>—</em>'}</div>`).join('')}</div>
+          <div class="pg-fin-acc"><button class="bv-btn" id="gh-rev">🔁 Revancha</button><button class="bv-btn" id="gh-mez2">🔀 Mezclar y jugar</button><button class="bv-btn" id="gh-otros">👥 Que jueguen otros</button></div></div>`;
+      }
+      o.innerHTML = h; o.className = 'gh-over' + (h ? ' on' : '');
+      if ($('#gh-rev')) $('#gh-rev').onclick = nuevaPartida;
+      if ($('#gh-mez2')) $('#gh-mez2').onclick = () => { enviar({ t: 'mezclar' }); setTimeout(nuevaPartida, 400); };
+      if ($('#gh-otros')) $('#gh-otros').onclick = () => { enviar({ t: 'liberar' }); G.fase = 'lobby'; G.ronda = -1; G.pts = { tomate: 0, albahaca: 0 }; pintar(); estado(); botones(); };
+      botones();
+    };
+    const resumenRonda = () => {
+      const r = ronda(), f = (e) => progreso(e);
+      if (r.id === 'amasado') return `Masa lista: 🍅 ${Math.round(f('tomate') * 100)}% · 🌿 ${Math.round(f('albahaca') * 100)}%`;
+      if (r.id === 'armado') return `Puntos por jugador: 🍅 ${f('tomate')} · 🌿 ${f('albahaca')}`;
+      if (r.id === 'horneado') return `Segundos en el punto justo: 🍅 ${f('tomate')} s · 🌿 ${f('albahaca')} s`;
+      return 'La pizza entró al horno ganador 🍕🔥';
+    };
+    const pintarJugadores = () => {
+      for (const e of ['tomate', 'albahaca']) {
+        const el = $('#gh-jug-' + e); if (!el) continue;
+        const js = delEq(e); $('#gh-n-' + e).textContent = `${js.length} jugador${js.length === 1 ? '' : 'es'}`;
+        el.innerHTML = js.map((j) => `<span class="${j.conectado ? '' : 'off'}">${esc(j.nombre)}</span>`).join('');
+      }
+    };
+    const dibujar = () => {
+      if (!montada) return;
+      const r = ronda();
+      const rest = restante();
+      $('#gh-reloj').textContent = G.fase === 'ronda' ? Math.ceil(rest / 1000) : '';
+      if (G.fase === 'intro') { const n = $('#gh-intro-n'); if (n) n.textContent = Math.ceil(rest / 1000) || '¡YA!'; }
+      if (!r || !R.tomate) return;
+      for (const e of ['tomate', 'albahaca']) {
+        const x = R[e], lado = $('.gh-lado.' + e);
+        let fuego = 0.6, bar = 0, val = '';
+        if (r.id === 'amasado') { bar = progreso(e); val = `Masa ${Math.round(bar * 100)}%`; $('#gh-masa-' + e).style.setProperty('--m', (0.35 + bar * 0.9).toFixed(3)); fuego = 0.5 + Math.min(1, x.ema / 6) * 0.6; }
+        else if (r.id === 'armado') { const p = progreso(e); bar = Math.max(0, Math.min(1, p / 25)); val = `${p} pts por jugador`; const n = Math.max(0, Math.min(30, Math.round(p)));
+          const arm = $('#gh-arm-' + e); if (arm.dataset.n !== String(n)) { arm.dataset.n = n; arm.innerHTML = `<div class="gh-pzg">${Array.from({ length: n }, (_, i) => { const a = i * 2.4, rr = 12 + (i % 5) * 7; return `<i style="left:${50 + Math.cos(a) * rr}%;top:${50 + Math.sin(a) * rr}%">${GH_ING[G.receta[(i % (G.receta.length - 1)) + 1]] || '🧀'}</i>`; }).join('')}</div>`; } }
+        else if (r.id === 'horneado') { const t = x.temp; bar = Math.min(1, x.enZona / 30); val = `En el punto ${x.enZona.toFixed(1)} s`; fuego = 0.3 + (t - 100) / 450;
+          $('#gh-merc-' + e).style.height = Math.max(0, Math.min(100, (t - 100) / 6.2)) + '%'; $('#gh-temp-' + e).textContent = Math.round(t) + '°';
+          const zona = t >= GH_ZONA[0] && t <= GH_ZONA[1]; lado.classList.toggle('enzona', zona); lado.classList.toggle('quema', t > GH_QUEMA); lado.classList.toggle('frio', t < GH_ZONA[0] - 60);
+          lado.style.setProperty('--coc', t < GH_ZONA[0] ? '#f0d9a8' : t <= GH_QUEMA ? '#d99a45' : '#4a2a14'); }
+        else if (r.id === 'pala') { fuego = 0.5 + Math.min(1, x.ema / 6) * 0.7; bar = Math.min(1, x.ema / 8); val = `${x.ema.toFixed(1)} toques/s por jugador`; }
+        lado.style.setProperty('--f', Math.max(0.2, Math.min(1.8, fuego)).toFixed(2));
+        $('#gh-bar-' + e).style.width = Math.round(bar * 100) + '%'; $('#gh-val-' + e).textContent = val;
+      }
+      if (r.id === 'pala') $('#gh-pal').style.left = (50 + R.pala * 46) + '%';
+    };
+    const confeti = () => { const o = $('#gh-over'); if (!o) return; for (let i = 0; i < 90; i++) { const p = document.createElement('i'); p.className = 'pg-cf'; p.style.left = Math.random() * 100 + '%'; p.style.background = ['#c8281e', '#ffcf3f', '#2f8f3c', '#fff', '#ff8a1f'][i % 5];
+      p.style.animationDelay = Math.random() * 1.2 + 's'; p.style.animationDuration = 2 + Math.random() * 1.8 + 's'; o.appendChild(p); setTimeout(() => p.remove(), 4500); } };
+
+    // ---- botones ----
+    const botones = () => {
+      if (!$('#gh-ini')) return;
+      const enJuego = !['previa', 'conteo10'].includes(G.fase);
+      $('#gh-ini').hidden = enJuego || G.fase === 'conteo10';
+      $('#gh-go').hidden = G.fase !== 'lobby'; $('#gh-go').disabled = !(delEq('tomate').length || delEq('albahaca').length);
+      $('#gh-fin').hidden = !enJuego;
+    };
+    if ($('#gh-ini')) {
+      $('#gh-ini').onclick = () => { arranca = Date.now() + 10000; G.fase = 'conteo10'; botones(); pintar(); estado();
+        const aviso = setInterval(() => { if (G.fase !== 'conteo10') return clearInterval(aviso); estado(); }, 2000);
+        conteoDiez(arranca, { titulo: '¡Arranca la Guerra de Hornos!', alTerminar: () => { clearInterval(aviso); if (!vivo) return; G.fase = 'lobby'; pintar(); estado(); } }); };
+      $('#gh-go').onclick = nuevaPartida;
+      $('#gh-fin').onclick = () => { G.fase = 'previa'; G.ronda = -1; G.pts = { tomate: 0, albahaca: 0 }; pintar(); estado(); };
+    }
+    $('#gh-max').onchange = (e) => { max = Number(e.target.value); enviar({ t: 'config', max }); pintar(); };
+    $('#gh-mez').onclick = () => enviar({ t: 'mezclar' });
+    $('#gh-lib').onclick = () => { if (confirm('¿Sacar a todos los jugadores de la sala?')) enviar({ t: 'liberar' }); };
+    $('#gh-tv').onclick = () => { document.body.classList.toggle('tv'); $('#gh-tv').textContent = document.body.classList.contains('tv') ? '✕ Salir' : '📺 Modo TV';
+      try { if (document.body.classList.contains('tv')) document.documentElement.requestFullscreen && document.documentElement.requestFullscreen(); else document.fullscreenElement && document.exitFullscreen(); } catch (_) { /* nada */ } };
+    const kd = (e) => { const k = e.key.toLowerCase(); if (k === 'q' || k === 'p') { if (e.target.closest && e.target.closest('input,select,textarea')) return; teclas[k]++; } };
+    addEventListener('keydown', kd);
+    pintar(); botones(); conectar(); raf = requestAnimationFrame(tick);
+    const vigia = setInterval(() => { if (!location.hash.startsWith('#/hornos')) VIEWS.hornos._fin(); }, 500);
+    VIEWS.hornos._fin = () => { vivo = false; document.querySelectorAll('.cd10').forEach((x) => x.remove()); clearInterval(vigia); cancelAnimationFrame(raf); removeEventListener('keydown', kd); document.body.classList.remove('tv'); try { ws && ws.close(); } catch (_) { /* nada */ } VIEWS.hornos._fin = null; };
+  };
+
   VIEWS.pong = async (main) => {
     if (VIEWS.pong._fin) VIEWS.pong._fin();
     main.innerHTML = `<div class="pz pg">

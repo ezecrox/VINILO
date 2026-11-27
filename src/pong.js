@@ -62,7 +62,7 @@ module.exports = function registrarPong({ route, fail, permitir, server, current
   });
   server.on('upgrade', async (req, socket) => {
     const url = new URL(req.url, 'http://x');
-    if (url.pathname !== '/ws/pong') { socket.destroy(); return; }
+    if (url.pathname !== '/ws/pong') { if (!['/ws/hornos'].includes(url.pathname)) socket.destroy(); return; }
     if (url.searchParams.get('rol') === 'tv') {
       const user = await currentUser({ headers: { authorization: 'Bearer ' + (url.searchParams.get('token') || '') } }).catch(() => null);
       if (!user || !(user.permisos || []).includes('juegos')) { socket.write('HTTP/1.1 403 Forbidden\r\n\r\n'); socket.destroy(); return; }

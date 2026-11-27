@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#c8281e">
+<title>Guerra de Hornos · Vinilo</title>
+<link rel="icon" href="/favicon.png?v=2" type="image/png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Nunito:wght@600;800&display=swap" rel="stylesheet">
+<style>
+:root{--c:#c8281e;--c2:#8e1a13;--ink:#20130f;--mut:#7a6760;--line:#eadcd5}
+body.albahaca{--c:#2f8f3c;--c2:#1f6129}
+*{box-sizing:border-box;min-width:0;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;overscroll-behavior:none}
+body{background:#140d0b;color:#fff;font:16px/1.45 Nunito,system-ui,sans-serif;display:flex;justify-content:center;user-select:none;-webkit-user-select:none}
+.app{width:100%;max-width:480px;height:100%;display:flex;flex-direction:column;background:#1d1311}
+h1,h2,.lil{font-family:"Lilita One",Nunito,sans-serif;font-weight:400;margin:0}
+.cab{background:var(--c);padding:calc(10px + env(safe-area-inset-top)) 16px 10px;display:flex;align-items:center;gap:10px;transition:background .3s}
+.cab img{width:40px;height:40px;border-radius:50%;background:#fff}.cab b{font:21px "Lilita One";display:block;line-height:1}.cab small{font-weight:800;opacity:.9}
+.cab .marc{margin-left:auto;font:24px "Lilita One";white-space:nowrap}
+.vista{flex:1;display:flex;flex-direction:column;padding:14px;gap:12px;min-height:0}
+.panel{background:#fff;color:var(--ink);border-radius:18px;padding:18px;display:flex;flex-direction:column;gap:12px}
+.panel p{margin:0;color:var(--mut)}
+label{font-weight:800}
+input{font:700 18px Nunito;padding:14px;border:2px solid var(--line);border-radius:14px;width:100%;color:var(--ink)}
+.btn{font:800 18px Nunito;border:0;border-radius:16px;padding:16px;min-height:56px;background:var(--c);color:#fff;box-shadow:0 5px 0 var(--c2);width:100%;cursor:pointer}
+.btn:active{transform:translateY(3px);box-shadow:0 2px 0 var(--c2)}
+.btn:focus-visible,input:focus-visible{outline:3px solid #ff8a1f;outline-offset:2px}
+.err{color:#c8281e;font-weight:800;min-height:20px}
+.eq{border-radius:18px;padding:16px;text-align:center;font-weight:800;background:var(--c)}
+.eq b{display:block;font:34px "Lilita One"}
+.info{text-align:center;font-weight:800;color:#e8c9bf}
+.titulo{text-align:center}.titulo small{display:block;color:#ffcf3f;font-weight:800}.titulo h2{font-size:34px}
+.reloj{font:900 22px Nunito;color:#ffcf3f;text-align:center}
+/* botón gigante */
+.gran{flex:1;min-height:220px;border:0;border-radius:28px;background:radial-gradient(circle at 50% 40%,color-mix(in srgb,var(--c) 70%,#fff),var(--c) 60%,var(--c2));color:#fff;font:44px "Lilita One";box-shadow:0 10px 0 var(--c2),0 20px 40px rgba(0,0,0,.4);touch-action:manipulation;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;cursor:pointer;transition:transform .05s}
+.gran small{font:800 16px Nunito;opacity:.9}.gran .emo{font-size:72px;line-height:1}
+.gran.pum{transform:translateY(6px) scale(.97);box-shadow:0 4px 0 var(--c2),0 10px 20px rgba(0,0,0,.4)}
+.barras{display:grid;gap:6px}
+.barra{position:relative;height:26px;border-radius:99px;background:rgba(255,255,255,.1);overflow:hidden}
+.barra i{position:absolute;inset:0 auto 0 0;border-radius:99px;transition:width .2s}.barra.tomate i{background:#d8301f}.barra.albahaca i{background:#2f8f3c}
+.barra span{position:relative;display:block;text-align:center;font:800 14px/26px Nunito}
+/* armado */
+.receta{display:flex;flex-wrap:wrap;gap:6px;justify-content:center}.receta span{background:rgba(255,255,255,.1);border-radius:99px;padding:4px 10px;font-weight:800;font-size:14px}
+.receta span.sig{background:#ffcf3f;color:#20130f;transform:scale(1.12)}
+.ing{flex:1;min-height:220px;border:0;border-radius:28px;background:#fff;color:#20130f;display:flex;flex-direction:column;align-items:center;justify-content:center;font:800 22px Nunito;box-shadow:0 10px 0 #cbb9ae;touch-action:manipulation;cursor:pointer}
+.ing .emo{font-size:110px;line-height:1;animation:ap .25s cubic-bezier(.2,1.4,.4,1)}
+.ing.ok{background:#7fd78c}.ing.mal{background:#ff8a7e;animation:tiembla .3s}
+@keyframes ap{from{transform:scale(.3);opacity:0}}@keyframes tiembla{25%{transform:translateX(-10px)}75%{transform:translateX(10px)}}
+.puntos{text-align:center;font:800 18px Nunito}.puntos b{color:#ffcf3f}
+/* horneado */
+.horno{display:flex;gap:14px;align-items:stretch}
+.termo{position:relative;width:56px;border-radius:30px;background:#2b1d1a;border:3px solid #e7d2b8;min-height:220px}
+.termo .zona{position:absolute;left:0;right:0;background:rgba(127,215,140,.35);border-top:2px dashed #7fd78c;border-bottom:2px dashed #7fd78c}
+.termo .merc{position:absolute;left:22%;right:22%;bottom:0;border-radius:30px;background:linear-gradient(0deg,#ffb13b,#d8301f);transition:height .2s linear}
+.consejo{text-align:center;font:24px "Lilita One";min-height:34px}
+.consejo.frio{color:#7fb8ff}.consejo.ok{color:#7fd78c}.consejo.caliente{color:#ff8a7e}
+/* pala */
+.riel{position:relative;height:34px;border-radius:99px;background:linear-gradient(90deg,#d8301f,#c79a5c 45%,#c79a5c 55%,#2f8f3c);margin:10px 8px}
+.riel .pz{position:absolute;top:50%;font-size:46px;transform:translate(-50%,-50%);transition:left .2s linear}
+.riel .mid{position:absolute;left:50%;top:-8px;bottom:-8px;width:3px;background:#fff}
+.cd{position:fixed;inset:0;z-index:50;background:radial-gradient(circle,#5a1a12,#120807 70%);display:grid;place-items:center;text-align:center}
+.cd small{display:block;font-weight:800;color:#ffcf3f;font-size:20px}.cd b{display:block;font:150px/1 "Lilita One",sans-serif;animation:pop .9s cubic-bezier(.2,1.4,.4,1)}.cd b.ya{font-size:64px;color:#7fd78c}
+@keyframes pop{from{transform:scale(2);opacity:0}to{transform:none;opacity:1}}
+.fin{text-align:center}.fin .lil{font-size:40px}
+.cont{font:900 16px Nunito;opacity:.85}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="cab"><img src="/gato.png" alt=""><div><b>Guerra de Hornos</b><small id="sub">Vinilo</small></div><span class="marc" id="marc"></span></header>
+  <main class="vista" id="vista"></main>
+</div>
+<script>
+{
+const $ = (s) => document.querySelector(s);
+const esc = (t) => String(t == null ? '' : t).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+const leer = (k) => { try { return localStorage.getItem(k) || ''; } catch (_) { return ''; } };
+const guardar = (k, v) => { try { localStorage.setItem(k, v); } catch (_) { /* sin storage */ } };
+const SALA = (new URLSearchParams(location.search).get('sala') || '').toUpperCase();
+const EQ = { tomate: { nom: 'Tomate', emo: '🍅' }, albahaca: { nom: 'Albahaca', emo: '🌿' } };
+const ING = { salsa: '🥫', mozzarella: '🧀', albahaca: '🌿', jamon: '🍖', morron: '🫑', cebolla: '🧅', aceitunas: '🫒', rucula: '🥬', crudo: '🥓', anana: '🍍', chocolate: '🍫', pescado: '🐟' };
+const DISTR = ['anana', 'chocolate', 'pescado'];
+let ID = leer('gh_id'); if (!ID) { ID = Math.random().toString(36).slice(2) + Date.now().toString(36); guardar('gh_id', ID); }
+const vista = $('#vista');
+let ws = null, nombre = leer('pz_nombre'), equipo = null, unido = false, liberado = false, est = {}, wake = null, pantallaActual = '';
+let pend = 0, misToques = 0, armIdx = 0, armPts = 0;
+
+function conectar() {
+  ws = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws/hornos?sala=${encodeURIComponent(SALA)}`);
+  ws.onopen = () => { if (unido) ws.send(JSON.stringify({ t: 'unir', nombre, id: ID })); };
+  ws.onmessage = (e) => { let m; try { m = JSON.parse(e.data); } catch (_) { return; } recibir(m); };
+  ws.onclose = () => { if (!liberado) { $('#sub').textContent = 'Reconectando…'; setTimeout(conectar, 1500); } };
+}
+const enviar = (o) => { if (ws && ws.readyState === 1) ws.send(JSON.stringify(o)); };
+setInterval(() => { if (pend > 0) { enviar({ t: 'tap', n: pend }); pend = 0; } }, 150);
+
+function ponerEquipo(e) { equipo = e; document.body.className = e; $('#sub').textContent = `Equipo ${EQ[e].nom} ${EQ[e].emo}`; }
+function recibir(m) {
+  if (m.t === 'error') { if (!unido) { const e = $('#err'); if (e) e.textContent = m.msg; else aviso('Ups', m.msg); } return; }
+  if (m.t === 'lleno') { const e = $('#err'); if (e && !unido) { e.textContent = m.msg; $('#go').disabled = false; } else { unido = false; liberado = true; aviso('¡Equipos completos!', m.msg); } return; }
+  if (m.t === 'unido') { unido = true; ponerEquipo(m.equipo); pantallaActual = ''; render(); pedirPantallaEncendida(); return; }
+  if (m.t === 'equipo') { ponerEquipo(m.equipo); pantallaActual = ''; render(); return; }
+  if (m.t === 'estado') { const antes = est.fase + '|' + est.ronda; est = m; if (antes !== est.fase + '|' + est.ronda) pantallaActual = ''; render(); return; }
+  if (m.t === 'vibrar') { vib(m.ms || 60); return; }
+  if (m.t === 'pantalla') { if (!m.conectada) $('#sub').textContent = 'La pantalla del bar se desconectó…'; else if (equipo) ponerEquipo(equipo); return; }
+  if (m.t === 'liberado') { liberado = true; unido = false; aviso('¡Gracias por jugar!', 'La partida terminó. Escaneá el QR de la pantalla para volver a jugar.'); $('#marc').textContent = ''; }
+}
+const vib = (ms) => { try { navigator.vibrate && navigator.vibrate(ms); } catch (_) { /* nada */ } };
+function aviso(t, msg) { vista.innerHTML = `<div class="panel"><h2 style="color:#20130f">${esc(t)}</h2><p>${esc(msg)}</p></div>`; }
+
+function unirse() {
+  vista.innerHTML = `<div class="panel"><h2 style="color:#20130f">¡Guerra de Hornos! 🍕🔥</h2><p>Dos equipos, Tomate contra Albahaca. Tu celular es el control y el juego se ve en la pantalla del bar.</p>
+    <label for="nom">Tu nombre</label><input id="nom" maxlength="14" placeholder="Ej.: Caro" value="${esc(nombre)}" autocomplete="given-name">
+    <div class="err" id="err"></div><button class="btn" id="go">Entrar al juego</button></div>`;
+  $('#go').onclick = async () => {
+    const n = $('#nom').value.trim(); if (n.length < 2) { $('#err').textContent = 'Poné tu nombre'; return; }
+    nombre = n; guardar('pz_nombre', n); $('#go').disabled = true;
+    // Permiso para usar el movimiento (iPhone lo pide con un toque)
+    try { if (window.DeviceMotionEvent && typeof DeviceMotionEvent.requestPermission === 'function') await DeviceMotionEvent.requestPermission(); } catch (_) { /* sin permiso: se juega tocando */ }
+    enviar({ t: 'unir', nombre, id: ID });
+  };
+}
+
+// Agitar el celular cuenta como toque (ronda de amasado)
+let ultSacudida = 0;
+addEventListener('devicemotion', (e) => {
+  if (!unido || est.fase !== 'ronda' || est.ronda !== 'amasado') return;
+  const a = e.accelerationIncludingGravity || e.acceleration; if (!a) return;
+  const g = Math.sqrt((a.x || 0) ** 2 + (a.y || 0) ** 2 + (a.z || 0) ** 2);
+  const ahora = Date.now();
+  if (g > 19 && ahora - ultSacudida > 110) { ultSacudida = ahora; toque(); }
+});
+function toque() { pend++; misToques++; const c = $('#cont'); if (c) c.textContent = misToques; const b = $('#gran'); if (b) { b.classList.add('pum'); setTimeout(() => b.classList.remove('pum'), 70); } }
+
+function barras() {
+  const p = est.prog || {}; const r = est.ronda;
+  const val = (e) => r === 'amasado' ? `${Math.round((p[e] || 0) * 100)}%` : r === 'armado' ? `${p[e] || 0} pts` : r === 'horneado' ? `${p[e] || 0} s` : '';
+  const w = (e) => r === 'amasado' ? (p[e] || 0) * 100 : r === 'armado' ? Math.max(0, Math.min(100, (p[e] || 0) * 4)) : r === 'horneado' ? Math.min(100, (p[e] || 0) / 30 * 100) : 0;
+  return ['tomate', 'albahaca'].map((e) => `<div class="barra ${e}"><i style="width:${w(e)}%"></i><span>${EQ[e].emo} ${val(e)}</span></div>`).join('');
+}
+
+function render() {
+  if (!unido) return;
+  const f = est.fase || 'previa', r = est.ronda;
+  if (est.pts) $('#marc').textContent = `🍅 ${est.pts.tomate} – ${est.pts.albahaca} 🌿`;
+  if (f === 'conteo10') conteoCel(est.restante); else if (cdEl) { cdEl.remove(); cdEl = null; }
+  const clave = f + '|' + r;
+  if (clave !== pantallaActual) {
+    pantallaActual = clave; armar(f, r);
+  }
+  actualizar(f, r);
+}
+
+function armar(f, r) {
+  const eqCard = `<div class="eq">Sos del equipo<b>${EQ[equipo].emo} ${EQ[equipo].nom}</b></div>`;
+  if (['previa', 'conteo10', 'lobby'].includes(f)) { vista.innerHTML = `${eqCard}<div class="panel"><h2 style="color:#20130f">¡Ya estás adentro!</h2><p>Mirá la pantalla del bar. El juego arranca cuando el admin lo inicie. Son 4 rondas: amasado, armado, horneado y la pala final.</p></div>`; return; }
+  if (f === 'intro') { vista.innerHTML = `${eqCard}<div class="titulo"><small>Ronda ${est.n} de ${est.total}</small><h2>${esc(est.rondaNom)}</h2></div><div class="panel"><p style="color:#20130f;font-weight:800">${esc(est.ayuda)}</p>
+      ${r === 'armado' && est.receta ? `<div class="receta">${est.receta.map((i) => `<span style="background:#f3e9e3;color:#20130f">${ING[i]} ${i}</span>`).join('')}</div>` : ''}</div><div class="reloj" id="reloj"></div>`; misToques = 0; armIdx = 0; armPts = 0; return; }
+  if (f === 'ronda' && (r === 'amasado' || r === 'horneado' || r === 'pala')) {
+    const txt = { amasado: ['🫓', '¡AMASÁ!', 'Tocá sin parar o agitá el celular'], horneado: ['🔥', 'AVIVAR', 'Tocá para darle fuego'], pala: ['🥖', '¡TIRÁ!', '¡Lo más rápido que puedas!'] }[r];
+    vista.innerHTML = `<div class="reloj" id="reloj"></div>
+      ${r === 'horneado' ? `<div class="consejo" id="consejo"></div><div class="horno"><div class="termo"><div class="zona" style="bottom:${(est.zona[0] - 100) / 6.2}%;height:${(est.zona[1] - est.zona[0]) / 6.2}%"></div><div class="merc" id="merc"></div></div>
+        <button class="gran" id="gran"><span class="emo">${txt[0]}</span>${txt[1]}<small>${txt[2]}</small><span class="cont" id="cont">0</span></button></div>`
+      : r === 'pala' ? `<div class="riel"><div class="mid"></div><div class="pz" id="pzr">🍕</div></div><div class="info" id="pinfo"></div><button class="gran" id="gran"><span class="emo">${txt[0]}</span>${txt[1]}<small>${txt[2]}</small><span class="cont" id="cont">0</span></button>`
+      : `<button class="gran" id="gran"><span class="emo">${txt[0]}</span>${txt[1]}<small>${txt[2]}</small><span class="cont" id="cont">0</span></button>`}
+      <div class="barras" id="barras"></div>`;
+    const b = $('#gran');
+    b.addEventListener('pointerdown', (e) => { e.preventDefault(); toque(); });
+    b.addEventListener('touchstart', (e) => { e.preventDefault(); }, { passive: false });
+    return;
+  }
+  if (f === 'ronda' && r === 'armado') {
+    vista.innerHTML = `<div class="reloj" id="reloj"></div><div class="receta" id="receta"></div><button class="ing" id="ing"></button><div class="puntos">Tus puntos: <b id="apts">0</b></div><div class="barras" id="barras"></div>`;
+    nuevoIng();
+    $('#ing').addEventListener('pointerdown', (e) => { e.preventDefault(); tocarIng(); });
+    return;
+  }
+  if (f === 'resultado') { const gane = est.gana === equipo; vista.innerHTML = `${eqCard}<div class="panel fin"><div class="lil" style="color:${gane ? '#2f8f3c' : '#c8281e'}">${gane ? '¡Punto para tu equipo! 🎉' : `Punto de ${EQ[est.gana].nom} ${EQ[est.gana].emo}`}</div><p>${esc(est.rondaNom)} · 🍅 ${est.pts.tomate} – ${est.pts.albahaca} 🌿</p></div>`; return; }
+  if (f === 'fin') { const gane = est.ganador === equipo; vista.innerHTML = `${eqCard}<div class="panel fin"><div class="lil" style="color:${gane ? '#2f8f3c' : '#c8281e'}">${gane ? '¡GANARON! 🏆' : 'Esta vez no 😅'}</div><p>🍅 ${est.pts.tomate} – ${est.pts.albahaca} 🌿</p><p>Mirá la pantalla: ¡están las figuras de cada equipo!</p></div>`; return; }
+}
+
+// ---- armado: van apareciendo ingredientes; hay que tocar el que sigue en el pedido ----
+let ingAct = null, ingTocado = false, ingTimer = 0;
+function nuevoIng() {
+  clearTimeout(ingTimer);
+  const rec = est.receta || ['salsa', 'mozzarella', 'albahaca'];
+  const sig = rec[armIdx % rec.length];
+  const otros = [...rec.filter((x) => x !== sig), ...DISTR];
+  ingAct = Math.random() < 0.5 ? sig : otros[Math.floor(Math.random() * otros.length)];
+  ingTocado = false;
+  const b = $('#ing'); if (!b) return;
+  b.className = 'ing'; b.innerHTML = `<span class="emo">${ING[ingAct]}</span>${ingAct}`;
+  const rc = $('#receta'); if (rc) rc.innerHTML = rec.map((x, i) => `<span class="${i === armIdx % rec.length ? 'sig' : ''}">${ING[x]} ${x}</span>`).join('');
+  ingTimer = setTimeout(nuevoIng, 800);
+}
+function tocarIng() {
+  if (ingTocado || !ingAct) return; ingTocado = true;
+  const rec = est.receta || []; const ok = ingAct === rec[armIdx % rec.length];
+  enviar({ t: 'arm', ok });
+  const b = $('#ing'); b.classList.add(ok ? 'ok' : 'mal');
+  if (ok) { armIdx++; armPts++; vib(25); } else { armPts--; vib(180); }
+  $('#apts').textContent = armPts;
+  clearTimeout(ingTimer); ingTimer = setTimeout(nuevoIng, ok ? 220 : 500);
+}
+
+function actualizar(f, r) {
+  const rel = $('#reloj'); if (rel) rel.textContent = f === 'intro' ? `Empieza en ${Math.max(0, Math.ceil(est.restante / 1000))}…` : f === 'ronda' ? `⏱ ${Math.ceil(est.restante / 1000)} s` : '';
+  const ba = $('#barras'); if (ba) ba.innerHTML = barras();
+  if (f === 'ronda' && r === 'horneado' && est.temp) {
+    const t = est.temp[equipo]; $('#merc').style.height = Math.max(0, Math.min(100, (t - 100) / 6.2)) + '%';
+    const c = $('#consejo'); const [z0, z1] = est.zona;
+    c.className = 'consejo ' + (t < z0 ? 'frio' : t > z1 ? 'caliente' : 'ok'); c.textContent = t < z0 ? `${t}° · ¡Más fuego! 🔥` : t > z1 ? `${t}° · ¡Pará, se quema! ✋` : `${t}° · ¡Perfecto, mantenelo! 👌`;
+  }
+  if (f === 'ronda' && r === 'pala') { const p = Number(est.pala) || 0; $('#pzr').style.left = (50 + p * 46) + '%';
+    const vamos = (equipo === 'tomate' && p < 0) || (equipo === 'albahaca' && p > 0); $('#pinfo').textContent = Math.abs(p) < 0.05 ? '¡Parejo!' : vamos ? '¡Van ganando! Sigan así 💪' : '¡Los están arrastrando! ¡Más rápido!'; }
+  if (f !== 'ronda' || r !== 'armado') clearTimeout(ingTimer);
+}
+
+let cdEl = null, cdFin = 0;
+function conteoCel(restante) {
+  cdFin = Date.now() + (Number(restante) || 0);
+  if (cdEl) return;
+  cdEl = document.createElement('div'); cdEl.className = 'cd'; cdEl.innerHTML = '<div><small>¡Arranca la Guerra de Hornos!</small><b id="cdn">10</b></div>'; document.body.appendChild(cdEl);
+  let ult = null;
+  const paso = () => { if (!cdEl) return; const resta = cdFin - Date.now(), n = Math.max(0, Math.ceil(resta / 1000));
+    if (n !== ult) { ult = n; const b = cdEl.querySelector('#cdn'); b.textContent = n > 0 ? n : '¡A jugar!'; b.classList.toggle('ya', n === 0); b.style.animation = 'none'; void b.offsetWidth; b.style.animation = ''; vib(n === 0 ? 200 : 30); }
+    if (resta <= -900) { cdEl.remove(); cdEl = null; return; } requestAnimationFrame(paso); };
+  requestAnimationFrame(paso);
+}
+async function pedirPantallaEncendida() { try { if ('wakeLock' in navigator && !wake) { wake = await navigator.wakeLock.request('screen'); wake.addEventListener('release', () => { wake = null; }); } } catch (_) { /* no soportado */ } }
+document.addEventListener('visibilitychange', () => { if (!document.hidden && unido) pedirPantallaEncendida(); });
+
+if (!SALA) aviso('Guerra de Hornos', 'Escaneá el QR que aparece en la pantalla del bar para entrar al juego.');
+else { unirse(); conectar(); }
+}
+</script>
+</body>
+</html>

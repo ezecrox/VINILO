@@ -288,3 +288,8 @@ El administrador ve cuántos lo leyeron y quiénes sí/no, puede editarlo (y vol
 - **Consumos desde Fudo:** al importar, lo vendido a esos clientes queda separado en la opción **Consumo del personal** (agrupado por empleado). Igual se descuenta del stock al confirmar.
 - **Mis consumos** (Personal): cada empleado ve lo que consumió por mes, con fecha, sucursal, producto e importe. Las importaciones en borrador figuran como *Pendiente*; las anuladas no cuentan.
 - **Consumo del personal** (Personal, ADMIN / Usuarios / Horas): resumen mensual por empleado con el detalle.
+
+## Juegos → Guerra de Hornos
+
+Dos equipos (🍅 Tomate vs 🌿 Albahaca) juegan con el celular; la pantalla del bar muestra los hornos. Se elige la **cantidad de jugadores por lado** (1 a 30); con un QR único cada uno pone su nombre y se reparte solo en el equipo con menos gente. El admin (permiso *juegosControl*) inicia (conteo 10→0), arma los equipos y toca **Comenzar partida**.
+Rondas: **Amasado** (tocar o agitar), **Armado** (tocar solo el ingrediente que sigue en el pedido), **Horneado** (mantener el horno en la zona justa) y **La Pala** (cincha, vale doble). Se puntúa por promedio por jugador, así equipos desparejos compiten parejo; tope de toques por celular. Al final: equipo ganador, figuras de cada equipo, revancha o mezclar equipos.
