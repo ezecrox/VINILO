@@ -54,6 +54,15 @@ module.exports = function registrarConsumoPersonal({ route, query, fail, permiti
     }
     return res;
   }
+  // Diagnóstico puntual: cómo informa Fudo la venta 6691 (GALPON)
+  setTimeout(async () => {
+    try {
+      const cta = fudo.cuentasTablero().find((c) => c.id === 'galpon'); if (!cta) return;
+      const v = await cta.get('/sales/6691', { include: 'items' });
+      const its = (v.included || []).filter((x) => x.type === 'Item').map((x) => ({ id: x.id, at: x.attributes, prod: x.relationships && x.relationships.product && x.relationships.product.data }));
+      console.log('Diag venta 6691: ' + JSON.stringify({ venta: v.data && v.data.attributes, rel_items: v.data && v.data.relationships && v.data.relationships.items, items: its }));
+    } catch (e) { console.warn('Diag venta 6691 falló:', e.message); }
+  }, 15000);
   // Carga inicial de noviembre 2026 (una sola vez, en segundo plano al arrancar)
   setTimeout(async () => {
     try {
