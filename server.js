@@ -905,6 +905,7 @@ route('POST', '/api/fudo/sincronizar', async ({ user, url }) => {
 require('./src/consumos')({ route, query, tx, fail, permitir, registrarMovimiento, almacenActivo, isTrue, toInt, str, pool, veAlmacen, exigirAlmacen });
 require('./src/conteos')({ route, query, tx, fail, permitir, permitirAlguno, registrarMovimiento, almacenActivo, isTrue, toInt, str, veAlmacen, exigirAlmacen, sqlAlm, sqlProdSuc });
 require('./src/eliminar')({ route, query, tx, fail, toInt });
+require('./src/fusion')({ route, query, tx, fail, toInt });
 
 const { calcularTareas } = require('./src/tareas');
 

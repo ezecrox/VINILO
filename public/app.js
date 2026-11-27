@@ -3054,7 +3054,7 @@
         <div class="f"><label>Alerta</label><select id="pr-al"><option value="">Todas</option><option value="any">Con alguna alerta</option><option value="venc">Vencimiento próximo</option><option value="cuid">De cuidado</option><option value="frio">Cadena de frío</option></select></div>
         <label class="check" style="margin-bottom:10px"><input type="checkbox" id="pr-inac"> Ver inactivos</label>
         <div class="spacer"></div>
-        <button class="btn sec" id="pr-tpl">Plantilla CSV</button><button class="btn sec" id="pr-imp">Importar maestro</button><button class="btn" id="pr-new">+ Nuevo producto</button>
+        ${S.user.rol === 'ADMIN' && sucs.length > 1 ? '<button class="btn sec" id="pr-fus" title="Unir un producto del Fudo del GALPON con su equivalente del Fudo del BAR">🔗 Fusionar productos</button>' : ''}<button class="btn sec" id="pr-tpl">Plantilla CSV</button><button class="btn sec" id="pr-imp">Importar maestro</button><button class="btn" id="pr-new">+ Nuevo producto</button>
       </div><div id="pr-tbl"></div>`;
     // Sucursal → Categoría: no se lista nada hasta elegir ambas; las categorías dependen de la sucursal.
     const FKEY = 'vinilo_pr_filtro';
@@ -3125,6 +3125,7 @@
       } catch (err) { toast(err.message, true); b.disabled = false; b.textContent = 'Sincronizar con Fudo'; }
     };
     $('#pr-imp').onclick = importarMaestro;
+    if ($('#pr-fus')) $('#pr-fus').onclick = () => fusionarProductos(productos);
     $('#pr-tpl').onclick = () => descargarCSV('plantilla_productos.csv', [
       ['codigo', 'nombre', 'categoria', 'unidad', 'vencimiento_proximo', 'fecha_vencimiento', 'cuidado', 'cadena_frio', 'nota_alerta', 'activo', 'gestion_stock'],
       ['BEB001', 'Cerveza rubia lata 473ml', 'Bebidas', 'UN', '', '', '', 'SI', 'Mantener refrigerada', 'SI', 'SI'],
@@ -3133,6 +3134,48 @@
     ]);
     pintar();
   };
+
+  // Fusión GALPON + BAR: queda un producto con los dos IDs de Fudo; cada consumo se identifica por el ID de su sucursal
+  async function fusionarProductos(productos) {
+    const m = modal(`<h2>🔗 Fusionar productos GALPON + BAR</h2>
+      <p class="muted" style="margin-top:-4px">Une un producto del Fudo del <b>GALPON</b> con su equivalente del Fudo del <b>BAR</b>. Queda <b>un solo producto</b> con los dos IDs de Fudo:
+      los consumos de cada sucursal se siguen reconociendo por su propio ID. El stock por almacén, mínimos, movimientos, conteos y recetas pasan al producto que queda.
+      Los que tienen exactamente el mismo nombre ya se unieron solos al sincronizar.</p>
+      <h3 style="margin:14px 0 6px">Sugeridos por nombre parecido</h3><div id="fu-sug"><div class="card empty">Buscando parecidos…</div></div>
+      <h3 style="margin:18px 0 6px">Elegir a mano</h3>
+      <div class="row"><div class="f w"><label>Producto del GALPON (queda este)</label><select id="fu-g"><option value="">—</option>${productos.filter((p) => p.fudo_id && !p.fudo_bar_id).sort((a, b) => a.nombre.localeCompare(b.nombre)).map((p) => `<option value="${p.id}">${esc(p.nombre)} · Fudo ${esc(p.fudo_id)}</option>`).join('')}</select></div>
+        <div class="f w"><label>Producto del BAR (se une al anterior)</label><select id="fu-b"><option value="">—</option>${productos.filter((p) => p.fudo_bar_id && !p.fudo_id).sort((a, b) => a.nombre.localeCompare(b.nombre)).map((p) => `<option value="${p.id}">${esc(p.nombre)} · Fudo BAR ${esc(p.fudo_bar_id)}</option>`).join('')}</select></div>
+        <button class="btn" id="fu-man" style="align-self:flex-end">Fusionar</button></div>
+      <div class="form-actions"><button class="btn sec" data-close>Cerrar</button></div>`, { wide: true });
+    let hubo = false;
+    m.addEventListener('click', (e) => { if (hubo && e.target.closest('[data-close]')) router(); });
+    const fusionar = async (g, b, nomG, nomB) => {
+      if (!confirm(`¿Fusionar "${nomB}" (BAR) dentro de "${nomG}" (GALPON)?\n\nQueda un solo producto con los dos IDs de Fudo y se suma su stock por almacén. No se puede deshacer.`)) return false;
+      try {
+        const r = await api('/api/productos/fusionar', { method: 'POST', body: { principal_id: g, otro_id: b } });
+        hubo = true; toast(`Fusionado: ${r.nombre} · Fudo GALPON ${r.fudo_id} · BAR ${r.fudo_bar_id}`); return true;
+      } catch (err) { toast(err.message, true); return false; }
+    };
+    $('#fu-man', m).onclick = async () => {
+      const g = $('#fu-g', m), b = $('#fu-b', m);
+      if (!g.value || !b.value) return toast('Elegí un producto del GALPON y uno del BAR', true);
+      if (await fusionar(Number(g.value), Number(b.value), g.selectedOptions[0].textContent, b.selectedOptions[0].textContent)) {
+        $$(`option[value="${g.value}"]`, m).forEach((o) => o.remove()); $$(`option[value="${b.value}"]`, m).forEach((o) => o.remove()); cargarSug();
+      }
+    };
+    const cargarSug = async () => {
+      let pares = [];
+      try { pares = await api('/api/productos/fusion/sugerencias'); } catch (err) { $('#fu-sug', m).innerHTML = `<p class="bad">${esc(err.message)}</p>`; return; }
+      $('#fu-sug', m).innerHTML = !pares.length ? '<div class="card empty">No hay productos con nombre parecido para fusionar.</div>'
+        : `<div class="tbl-wrap"><table><thead><tr><th>GALPON (queda)</th><th>BAR</th><th class="num">Parecido</th><th></th></tr></thead><tbody>
+          ${pares.map((x, i) => `<tr><td><b>${esc(x.galpon.nombre)}</b><div class="muted">${esc(x.galpon.categoria || '')} · Fudo ${esc(x.galpon.fudo_id)}</div></td>
+            <td>${esc(x.bar.nombre)}<div class="muted">${esc(x.bar.categoria || '')} · Fudo BAR ${esc(x.bar.fudo_bar_id)}</div></td>
+            <td class="num">${x.similitud}%</td><td class="num"><button class="btn sm" data-fu="${i}">Fusionar</button></td></tr>`).join('')}</tbody></table></div>`;
+      $$('[data-fu]', m).forEach((btn) => (btn.onclick = async () => { const x = pares[btn.dataset.fu];
+        if (await fusionar(x.galpon.id, x.bar.id, x.galpon.nombre, x.bar.nombre)) { $$(`#fu-g option[value="${x.galpon.id}"], #fu-b option[value="${x.bar.id}"]`, m).forEach((o) => o.remove()); cargarSug(); } }));
+    };
+    cargarSug();
+  }
 
   async function editarProducto(p) {
     const sucs = await sucursalesLista();
