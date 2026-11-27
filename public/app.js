@@ -3047,23 +3047,48 @@
       ${fudoHtml}
       <div class="toolbar">
         <div class="grow"><label>Buscar</label><input id="pr-q" placeholder="Código, nombre o categoría…"></div>
-        ${sucs.length ? `<div class="f"><label>Sucursal</label><select id="pr-suc"><option value="">Todas</option>${sucs.map((s) => `<option value="${s.id}">${esc(s.nombre)}</option>`).join('')}<option value="ninguna">Sin sucursal (compartidos)</option></select></div>` : ''}
-        <div class="f"><label>Categoría</label><select id="pr-cat"><option value="">Todas</option>${[...new Set(productos.map((p) => p.categoria).filter(Boolean))].sort().map((c) => `<option>${esc(c)}</option>`).join('')}</select></div>
+        ${sucs.length ? `<div class="f"><label>Sucursal *</label><select id="pr-suc"><option value="">Elegí sucursal…</option>${sucs.map((s) => `<option value="${s.id}">${esc(s.nombre)}</option>`).join('')}<option value="ninguna">Sin sucursal (compartidos)</option><option value="todas">Todas las sucursales</option></select></div>` : ''}
+        <div class="f"><label>Categoría *</label><select id="pr-cat"></select></div>
         <div class="f"><label>Gestión de stock</label><select id="pr-gs"><option value="">Todos</option><option value="si">Con gestión de stock</option><option value="no">Solo maestro (sin gestión)</option><option value="prod">Con gestión de producción</option></select></div>
         <div class="f"><label>Alerta</label><select id="pr-al"><option value="">Todas</option><option value="any">Con alguna alerta</option><option value="venc">Vencimiento próximo</option><option value="cuid">De cuidado</option><option value="frio">Cadena de frío</option></select></div>
         <label class="check" style="margin-bottom:10px"><input type="checkbox" id="pr-inac"> Ver inactivos</label>
         <div class="spacer"></div>
         <button class="btn sec" id="pr-tpl">Plantilla CSV</button><button class="btn sec" id="pr-imp">Importar maestro</button><button class="btn" id="pr-new">+ Nuevo producto</button>
       </div><div id="pr-tbl"></div>`;
+    // Sucursal → Categoría: no se lista nada hasta elegir ambas; las categorías dependen de la sucursal.
+    const FKEY = 'vinilo_pr_filtro';
+    const enSuc = (p, sf) => !sucs.length || sf === 'todas' || (sf === 'ninguna' ? !(p.sucursales || []).length : (p.sucursales || []).includes(Number(sf)));
+    const SIN_CAT = '__sin__';
+    const armarCategorias = (keep) => {
+      const sel = $('#pr-cat');
+      const sf = $('#pr-suc') ? $('#pr-suc').value : 'todas';
+      if (!sf) { sel.innerHTML = '<option value="">Primero elegí la sucursal</option>'; sel.disabled = true; return; }
+      const inac = $('#pr-inac').checked;
+      const cuenta = new Map();
+      productos.filter((p) => (inac || p.activo) && enSuc(p, sf)).forEach((p) => { const c = p.categoria || SIN_CAT; cuenta.set(c, (cuenta.get(c) || 0) + 1); });
+      const cats = [...cuenta.keys()].sort((a, b) => (a === SIN_CAT) - (b === SIN_CAT) || a.localeCompare(b, 'es'));
+      const total = [...cuenta.values()].reduce((a, b) => a + b, 0);
+      sel.disabled = false;
+      sel.innerHTML = `<option value="">Elegí categoría… (${cats.length})</option><option value="*">Todas las categorías (${total})</option>`
+        + cats.map((c) => `<option value="${esc(c)}">${c === SIN_CAT ? 'Sin categoría' : esc(c)} (${cuenta.get(c)})</option>`).join('');
+      if (keep && (keep === '*' || cuenta.has(keep))) sel.value = keep;
+    };
+    try { const f = JSON.parse(localStorage.getItem(FKEY) || 'null'); if (f && $('#pr-suc') && [...$('#pr-suc').options].some((o) => o.value === f.suc)) $('#pr-suc').value = f.suc; armarCategorias(f && f.cat); } catch (_) { armarCategorias(); }
+    const guardarFiltro = () => { try { localStorage.setItem(FKEY, JSON.stringify({ suc: $('#pr-suc') ? $('#pr-suc').value : '', cat: $('#pr-cat').value })); } catch (_) { /* sin storage */ } };
     const pintar = () => {
+      guardarFiltro();
+      const sfSel = $('#pr-suc') ? $('#pr-suc').value : 'todas';
+      if (!sfSel || !$('#pr-cat').value) {
+        $('#pr-tbl').innerHTML = `<div class="card empty">🔎 ${!sfSel ? 'Elegí una <b>sucursal</b> y luego una <b>categoría</b> para ver los productos.' : 'Ahora elegí una <b>categoría</b> (o “Todas las categorías”).'}<br><span class="muted">${productos.length} productos en el maestro.</span></div>`;
+        return;
+      }
       const q = $('#pr-q').value.trim().toLowerCase();
       const al = $('#pr-al').value;
       const inac = $('#pr-inac').checked;
       const cat = $('#pr-cat').value;
       const gs = $('#pr-gs').value;
-      const sf = $('#pr-suc') ? $('#pr-suc').value : '';
-      const rows = productos.filter((p) => (inac || p.activo) && (!sf || (sf === 'ninguna' ? !(p.sucursales || []).length : (p.sucursales || []).includes(Number(sf))))
-        && (!cat || p.categoria === cat) && (!gs || (gs === 'prod' ? p.gestion_produccion : gs === 'si' ? p.gestion_stock : !p.gestion_stock))
+      const rows = productos.filter((p) => (inac || p.activo) && enSuc(p, sfSel)
+        && (cat === '*' || (cat === SIN_CAT ? !p.categoria : p.categoria === cat)) && (!gs || (gs === 'prod' ? p.gestion_produccion : gs === 'si' ? p.gestion_stock : !p.gestion_stock))
         && (!q || `${p.codigo} ${p.nombre} ${p.categoria || ''}`.toLowerCase().includes(q))
         && (!al || (al === 'any' && tieneAlerta(p)) || (al === 'venc' && p.alerta_vencimiento) || (al === 'cuid' && p.alerta_cuidado) || (al === 'frio' && p.alerta_frio)));
       $('#pr-tbl').innerHTML = rows.length ? `<div class="tbl-wrap"><table><thead><tr><th>Código</th><th>Nombre</th><th>Categoría</th><th>Unidad</th><th>Stock</th><th>Alertas</th><th>Nota</th><th></th></tr></thead><tbody>
@@ -3087,7 +3112,8 @@
       if ($('#pr-gs-off')) $('#pr-gs-off').onclick = () => cambiarGestion(rows.filter((p) => p.gestion_stock).map((p) => p.id), false, `${rows.filter((p) => p.gestion_stock).length} productos filtrados`);
       $$('[data-ed]').forEach((b) => b.addEventListener('click', () => editarProducto(productos.find((p) => p.id == b.dataset.ed))));
     };
-    ['#pr-q', '#pr-al', '#pr-inac', '#pr-cat', '#pr-gs', '#pr-suc'].forEach((s) => $(s) && $(s).addEventListener('input', pintar));
+    ['#pr-q', '#pr-al', '#pr-cat', '#pr-gs'].forEach((s) => $(s) && $(s).addEventListener('input', pintar));
+    ['#pr-suc', '#pr-inac'].forEach((s) => $(s) && $(s).addEventListener('input', () => { armarCategorias($('#pr-cat').value); pintar(); }));
     $('#pr-new').onclick = () => editarProducto(null);
     if ($('#pr-sync')) $('#pr-sync').onclick = async () => {
       const b = $('#pr-sync'); b.disabled = true; b.textContent = 'Sincronizando…';
