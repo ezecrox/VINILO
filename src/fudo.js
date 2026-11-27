@@ -419,4 +419,12 @@ function cuentasTablero() {
   return (cuentasCache = c);
 }
 
-module.exports = { sincronizarProductosBar, sucursalDeCuenta, cambiarPrecioFudo, fudoEnviar, cuentasTablero, crearCliente, fudoGet, configurado, sincronizarProveedores, sincronizarProductos, sincronizarTodo, iniciarSincronizacionAutomatica, direccionLegible };
+// Cuentas de Fudo que puede ver el usuario según sus sucursales (null = todas)
+async function cuentasDeUsuario(pool, user) {
+  const cs = cuentasTablero();
+  if (!user || !user.sucursales) return cs;
+  const out = [];
+  for (const c of cs) { const s = await sucursalDeCuenta(pool, c.id); if (s === null || user.sucursales.includes(s)) out.push(c); }
+  return out;
+}
+module.exports = { cuentasDeUsuario, sincronizarProductosBar, sucursalDeCuenta, cambiarPrecioFudo, fudoEnviar, cuentasTablero, crearCliente, fudoGet, configurado, sincronizarProveedores, sincronizarProductos, sincronizarTodo, iniciarSincronizacionAutomatica, direccionLegible };

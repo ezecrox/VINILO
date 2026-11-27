@@ -3032,6 +3032,7 @@
   VIEWS.productos = async (main) => {
     const [productos, fe, sucs] = await Promise.all([api('/api/productos?todos=1'), api('/api/fudo/estado').catch(() => null), sucursalesLista()]);
     const u = fe && fe.ultimo_productos, ub = fe && fe.ultimo_productos_bar;
+    const sucsVis = S.user.sucursales ? sucs.filter((x) => S.user.sucursales.includes(x.id)) : sucs;
     const lineaSync = (x) => (x ? `Última: ${fmtFecha(x.fin || x.inicio)} · ${x.ok === false ? `<b class="bad">Error: ${esc(x.detalle || '')}</b>` : x.ok ? `${x.leidos} leídos, ${x.creados} nuevos, ${x.actualizados} actualizados, ${x.desactivados} desactivados` : 'en curso…'}` : 'Todavía no se sincronizó.');
     const fudoHtml = !fe ? '' : !fe.configurado
       ? `<div class="card" style="background:#faf8f5">🔌 <b>Fudo:</b> sincronización no configurada. Cargá <span class="code">FUDO_API_KEY</span> y <span class="code">FUDO_API_SECRET</span> en Render para traer los productos automáticamente.</div>`
@@ -3047,7 +3048,7 @@
       ${fudoHtml}
       <div class="toolbar">
         <div class="grow"><label>Buscar</label><input id="pr-q" placeholder="Código, nombre o categoría…"></div>
-        ${sucs.length ? `<div class="f"><label>Sucursal *</label><select id="pr-suc"><option value="">Elegí sucursal…</option>${sucs.map((s) => `<option value="${s.id}">${esc(s.nombre)}</option>`).join('')}<option value="ninguna">Sin sucursal (compartidos)</option><option value="todas">Todas las sucursales</option></select></div>` : ''}
+        ${sucs.length ? `<div class="f"><label>Sucursal *</label><select id="pr-suc"><option value="">Elegí sucursal…</option>${sucsVis.map((s) => `<option value="${s.id}">${esc(s.nombre)}</option>`).join('')}<option value="ninguna">Sin sucursal (compartidos)</option><option value="todas">${S.user.sucursales ? 'Todas mis sucursales' : 'Todas las sucursales'}</option></select></div>` : ''}
         <div class="f"><label>Categoría *</label><select id="pr-cat"></select></div>
         <div class="f"><label>Gestión de stock</label><select id="pr-gs"><option value="">Todos</option><option value="si">Con gestión de stock</option><option value="no">Solo maestro (sin gestión)</option><option value="prod">Con gestión de producción</option></select></div>
         <div class="f"><label>Alerta</label><select id="pr-al"><option value="">Todas</option><option value="any">Con alguna alerta</option><option value="venc">Vencimiento próximo</option><option value="cuid">De cuidado</option><option value="frio">Cadena de frío</option></select></div>
@@ -3073,7 +3074,7 @@
         + cats.map((c) => `<option value="${esc(c)}">${c === SIN_CAT ? 'Sin categoría' : esc(c)} (${cuenta.get(c)})</option>`).join('');
       if (keep && (keep === '*' || cuenta.has(keep))) sel.value = keep;
     };
-    try { const f = JSON.parse(localStorage.getItem(FKEY) || 'null'); if (f && $('#pr-suc') && [...$('#pr-suc').options].some((o) => o.value === f.suc)) $('#pr-suc').value = f.suc; armarCategorias(f && f.cat); } catch (_) { armarCategorias(); }
+    try { const f = JSON.parse(localStorage.getItem(FKEY) || 'null'); if (f && $('#pr-suc') && [...$('#pr-suc').options].some((o) => o.value === f.suc)) $('#pr-suc').value = f.suc; if (!(f && f.suc) && sucsVis.length === 1 && $('#pr-suc')) $('#pr-suc').value = String(sucsVis[0].id); armarCategorias(f && f.cat); } catch (_) { armarCategorias(); }
     const guardarFiltro = () => { try { localStorage.setItem(FKEY, JSON.stringify({ suc: $('#pr-suc') ? $('#pr-suc').value : '', cat: $('#pr-cat').value })); } catch (_) { /* sin storage */ } };
     const pintar = () => {
       guardarFiltro();
@@ -3249,23 +3250,25 @@
 
   // ---------- Almacenes (ADMIN) ----------
   VIEWS.almacenes = async (main) => {
-    const [alms, dash] = await Promise.all([api('/api/almacenes'), api('/api/dashboard')]);
+    const [alms, dash, sucs] = await Promise.all([api('/api/almacenes'), api('/api/dashboard'), sucursalesLista()]);
     const info = new Map((dash.almacenes || []).map((a) => [a.id, a]));
     main.innerHTML = `<h1>Almacenes</h1><p class="sub">Depósitos donde se guarda mercadería.</p>
       <div class="toolbar"><div class="spacer"></div><button class="btn" id="al-new">+ Nuevo almacén</button></div>
-      <div class="tbl-wrap"><table><thead><tr><th>#</th><th>Nombre</th><th class="num">Productos con stock</th><th class="num">Unidades</th><th>Estado</th><th></th></tr></thead><tbody>
-      ${alms.map((a) => `<tr class="${a.activo ? '' : 'inactive'}"><td>${a.id}</td><td><b>${esc(a.nombre)}</b></td><td class="num">${fmtN(info.get(a.id)?.productos)}</td><td class="num">${fmtN(info.get(a.id)?.unidades)}</td>
+      <div class="tbl-wrap"><table><thead><tr><th>#</th><th>Nombre</th><th>Sucursal</th><th class="num">Productos con stock</th><th class="num">Unidades</th><th>Estado</th><th></th></tr></thead><tbody>
+      ${alms.map((a) => `<tr class="${a.activo ? '' : 'inactive'}"><td>${a.id}</td><td><b>${esc(a.nombre)}</b></td><td>${a.sucursal_id ? chipsSuc({ sucursales: [a.sucursal_id] }, sucs) : '<span class="muted">Compartido</span>'}</td><td class="num">${fmtN(info.get(a.id)?.productos)}</td><td class="num">${fmtN(info.get(a.id)?.unidades)}</td>
         <td>${a.activo ? 'Activo' : 'Inactivo'}</td><td class="num"><button class="btn ghost sm" data-ed="${a.id}">Editar</button></td></tr>`).join('')}
       </tbody></table></div>`;
     const editar = (a) => {
       const m = modal(`<h2>${a ? 'Editar' : 'Nuevo'} almacén</h2><form id="f-al">
         <div class="f"><label>Nombre</label><input name="nombre" value="${esc(a ? a.nombre : '')}" required maxlength="80"></div>
+        ${sucs.length ? `<div class="f mt"><label>Sucursal</label><select name="sucursal_id"><option value="">Compartido (lo ven todas las sucursales)</option>${sucs.map((s) => `<option value="${s.id}" ${a && a.sucursal_id === s.id ? 'selected' : ''}>${esc(s.nombre)}</option>`).join('')}</select>
+          <p class="stock-hint" style="margin:4px 0 0">Los usuarios con sucursal asignada solo ven los almacenes de su sucursal y los compartidos.</p></div>` : ''}
         ${a ? `<label class="check mt"><input type="checkbox" name="activo" ${a.activo ? 'checked' : ''}> Activo</label>` : ''}
         <div class="form-actions"><button type="button" class="btn sec" data-close>Cancelar</button><button class="btn">Guardar</button></div></form>`);
       $('#f-al', m).addEventListener('submit', async (e) => {
         e.preventDefault();
         try {
-          await api(a ? '/api/almacenes/' + a.id : '/api/almacenes', { method: a ? 'PUT' : 'POST', body: { nombre: e.target.nombre.value, activo: a ? e.target.activo.checked : true } });
+          await api(a ? '/api/almacenes/' + a.id : '/api/almacenes', { method: a ? 'PUT' : 'POST', body: { nombre: e.target.nombre.value, activo: a ? e.target.activo.checked : true, ...(e.target.sucursal_id ? { sucursal_id: e.target.sucursal_id.value || null } : {}) } });
           await cargarAlmacenes();
           closeModal(); toast('Almacén guardado'); router();
         } catch (err) { toast(err.message, true); }

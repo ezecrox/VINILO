@@ -685,6 +685,16 @@ BEGIN
   END IF;
 END $$;
 
+-- Almacenes por sucursal (NULL = compartido entre sucursales, p. ej. CENTRAL)
+ALTER TABLE almacenes ADD COLUMN IF NOT EXISTS sucursal_id INT REFERENCES sucursales(id) ON DELETE SET NULL;
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM app_config WHERE clave = 'almacenes_sucursal') THEN
+    UPDATE almacenes a SET sucursal_id = (SELECT id FROM sucursales WHERE nombre ILIKE '%BAR%' ORDER BY id LIMIT 1) WHERE a.sucursal_id IS NULL AND a.nombre ILIKE '%BAR%';
+    UPDATE almacenes a SET sucursal_id = (SELECT id FROM sucursales WHERE nombre ILIKE '%GALP%' ORDER BY id LIMIT 1) WHERE a.sucursal_id IS NULL AND a.nombre ILIKE '%GALP%';
+    INSERT INTO app_config (clave, valor) VALUES ('almacenes_sucursal', '1');
+  END IF;
+END $$;
+
 -- Productos por sucursal (un producto puede estar en una o en las dos) y vínculo con el Fudo de VINILO BAR
 CREATE TABLE IF NOT EXISTS producto_sucursales (
   producto_id INT NOT NULL REFERENCES productos(id) ON DELETE CASCADE,

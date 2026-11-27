@@ -208,12 +208,13 @@ async function diagnostico(cta) {
 
 module.exports = function registrarTablero({ route, query, fail, permitir }) {
   setTimeout(() => fudo.cuentasTablero().forEach((c, i) => setTimeout(() => diagnostico(c), i * 3000)), 8000);
-  const cuenta = (q) => { const cs = fudo.cuentasTablero(); if (!cs.length) fail(400, 'Fudo no está configurado: cargá FUDO_API_KEY y FUDO_API_SECRET.');
+  const cuenta = async (q, user) => { if (!fudo.cuentasTablero().length) fail(400, 'Fudo no está configurado: cargá FUDO_API_KEY y FUDO_API_SECRET.');
+    const cs = await fudo.cuentasDeUsuario({ query }, user); if (!cs.length) fail(403, 'Tu sucursal no tiene una cuenta de Fudo asociada');
     const c = cs.find((x) => x.id === (q && q.cuenta)) || cs[0]; return c; };
-  route('GET', '/api/tablero/cuentas', async ({ user }) => { permitir(user, 'tablero'); return fudo.cuentasTablero().map(({ id, nombre }) => ({ id, nombre })); });
+  route('GET', '/api/tablero/cuentas', async ({ user }) => { permitir(user, 'tablero'); return (await fudo.cuentasDeUsuario({ query }, user)).map(({ id, nombre }) => ({ id, nombre })); });
   route('GET', '/api/tablero', async ({ user, url }) => { const q = { cuenta: url.searchParams.get('cuenta') };
     permitir(user, 'tablero');
-    const cta = cuenta(q); const ch = cache[cta.id];
+    const cta = await cuenta(q, user); const ch = cache[cta.id];
     if (ch && Date.now() - ch.t < CACHE_MS) return { ...ch.datos, cuenta: cta.id, sucursal: cta.nombre, cache: true };
     try { const datos = { ...(await armar(query, cta)), cuenta: cta.id, sucursal: cta.nombre }; cache[cta.id] = { t: Date.now(), datos }; return datos; }
     catch (e) {
@@ -223,7 +224,7 @@ module.exports = function registrarTablero({ route, query, fail, permitir }) {
   });
   route('GET', '/api/tablero/comparacion', async ({ user, url }) => { const q = { cuenta: url.searchParams.get('cuenta') };
     permitir(user, 'tablero');
-    const cta = cuenta(q);
+    const cta = await cuenta(q, user);
     try { return await comparacion(cta); } catch (e) { fail(502, 'No se pudo leer la semana anterior: ' + e.message); }
   });
 };

@@ -55,8 +55,19 @@ module.exports = function registrarConsumos({ route, query, tx, fail, permitir, 
   const verPermiso = (u) => { if (!puede(u, 'consumir') && !puede(u, 'verMovimientos')) fail(403, 'No tenés permiso para esta operación'); };
 
   // Cuentas de Fudo: galpon (principal) y bar (si está configurada)
-  const cuentas = () => fudo.cuentasTablero().map(({ id, nombre }) => ({ id, nombre }));
-  const cuentaDe = (v) => { const c = fudo.cuentasTablero().find((x) => x.id === v) || fudo.cuentasTablero()[0]; if (!c) fail(400, 'La integración con Fudo no está configurada'); return c; };
+  // Solo las cuentas de Fudo de las sucursales del usuario
+  const cuentasU = async (user) => (await fudo.cuentasDeUsuario(pool, user)).map(({ id, nombre }) => ({ id, nombre }));
+  const cuentaDe = async (v, user) => {
+    if (!fudo.cuentasTablero().length) fail(400, 'La integración con Fudo no está configurada');
+    const cs = await fudo.cuentasDeUsuario(pool, user);
+    if (!cs.length) fail(403, 'Tu sucursal no tiene una cuenta de Fudo asociada');
+    const c = cs.find((x) => x.id === v); if (!c) fail(403, 'No tenés acceso a los consumos de esa sucursal'); return c;
+  };
+  async function verCuentaImp(user, id) {
+    if (!user.sucursales) return;
+    const { rows } = await query('SELECT cuenta FROM consumo_importaciones WHERE id = $1', [id]);
+    if (rows[0] && !(await cuentasU(user)).some((c) => c.id === rows[0].cuenta)) fail(403, 'No tenés acceso a los consumos de esa sucursal');
+  }
   async function ultimoPeriodo(cuenta = 'galpon') {
     const { rows } = await query(
       "SELECT id, desde, hasta, estado FROM consumo_importaciones WHERE estado <> 'ANULADA' AND cuenta = $1 ORDER BY hasta DESC LIMIT 1", [cuenta]);
@@ -65,6 +76,7 @@ module.exports = function registrarConsumos({ route, query, tx, fail, permitir, 
 
   route('GET', '/api/consumos-fudo', async ({ user }) => {
     verPermiso(user);
+    const ctas = await cuentasU(user);
     const { rows } = await query(
       `SELECT ci.id, ci.cuenta, ci.desde, ci.hasta, ci.estado, ci.items_leidos, ci.items_cancelados, ci.movimiento_id, ci.creado_en, ci.confirmado_en,
               a.nombre AS almacen, u.nombre AS creado_por, uc.nombre AS confirmado_por,
@@ -73,13 +85,13 @@ module.exports = function registrarConsumos({ route, query, tx, fail, permitir, 
               (SELECT count(*)::int FROM consumo_import_items x WHERE x.importacion_id = ci.id AND x.producto_id IS NULL) AS sin_vincular
        FROM consumo_importaciones ci LEFT JOIN almacenes a ON a.id = ci.almacen_id JOIN usuarios u ON u.id = ci.creado_por
        LEFT JOIN usuarios uc ON uc.id = ci.confirmado_por
-       ${user.almacenes ? `WHERE ci.almacen_id IS NULL OR ci.almacen_id = ANY('{${user.almacenes.join(',')}}'::int[])` : ''}
-       ORDER BY ci.hasta DESC, ci.id DESC LIMIT 200`);
+       WHERE ci.cuenta = ANY($1::text[]) ${user.almacenes ? `AND (ci.almacen_id IS NULL OR ci.almacen_id = ANY('{${user.almacenes.join(',')}}'::int[]))` : ''}
+       ORDER BY ci.hasta DESC, ci.id DESC LIMIT 200`, [`{${ctas.map((c) => c.id).join(',')}}`]);
     return {
       configurado: fudo.configurado(),
-      cuentas: cuentas(),
-      ultimo: await ultimoPeriodo('galpon'),
-      ultimos: Object.fromEntries(await Promise.all(cuentas().map(async (c) => [c.id, await ultimoPeriodo(c.id)]))),
+      cuentas: ctas,
+      ultimo: ctas[0] ? await ultimoPeriodo(ctas[0].id) : null,
+      ultimos: Object.fromEntries(await Promise.all(ctas.map(async (c) => [c.id, await ultimoPeriodo(c.id)]))),
       importaciones: rows.map((r) => ({ ...r, id: Number(r.id), lineas: Number(r.lineas), unidades: Number(r.unidades), sin_vincular: Number(r.sin_vincular),
         items_leidos: Number(r.items_leidos), items_cancelados: Number(r.items_cancelados) })),
     };
@@ -88,6 +100,7 @@ module.exports = function registrarConsumos({ route, query, tx, fail, permitir, 
   route('GET', '/api/consumos-fudo/:id', async ({ user, params }) => {
     verPermiso(user);
     const id = toInt(params.id);
+    await verCuentaImp(user, id);
     const { rows } = await query(
       `SELECT ci.*, a.nombre AS almacen, u.nombre AS creado_por_nombre, uc.nombre AS confirmado_por_nombre
        FROM consumo_importaciones ci LEFT JOIN almacenes a ON a.id = ci.almacen_id JOIN usuarios u ON u.id = ci.creado_por
@@ -122,7 +135,7 @@ module.exports = function registrarConsumos({ route, query, tx, fail, permitir, 
     if (hasta <= desde) fail(400, 'El fin del período debe ser posterior al inicio');
     if (hasta > new Date(Date.now() + 5 * 60 * 1000)) fail(400, 'El período no puede terminar en el futuro');
     if (hasta - desde > 93 * 24 * 3600 * 1000) fail(400, 'El período no puede superar los 3 meses');
-    const cta = cuentaDe(body.cuenta === 'bar' ? 'bar' : 'galpon');
+    const cta = await cuentaDe(body.cuenta === 'bar' ? 'bar' : 'galpon', user);
     const { rows: solapa } = await query(
       "SELECT id, desde, hasta FROM consumo_importaciones WHERE estado <> 'ANULADA' AND cuenta = $3 AND desde < $2 AND hasta > $1 ORDER BY desde LIMIT 1",
       [desde.toISOString(), hasta.toISOString(), cta.id]);
@@ -185,6 +198,7 @@ module.exports = function registrarConsumos({ route, query, tx, fail, permitir, 
   route('PUT', '/api/consumos-fudo/:id', async ({ user, body, params }) => {
     permitir(user, 'consumir');
     const id = toInt(params.id);
+    await verCuentaImp(user, id);
     return tx(async (client) => {
       await borrador(client, id);
       const almId = body.almacen_id ? toInt(body.almacen_id) : null;
@@ -205,6 +219,7 @@ module.exports = function registrarConsumos({ route, query, tx, fail, permitir, 
   route('POST', '/api/consumos-fudo/:id/confirmar', async ({ user, body, params }) => {
     permitir(user, 'consumir');
     const id = toInt(params.id);
+    await verCuentaImp(user, id);
     return tx(async (client) => {
       const imp = await borrador(client, id);
       const almId = toInt(body.almacen_id || imp.almacen_id);
@@ -242,6 +257,7 @@ module.exports = function registrarConsumos({ route, query, tx, fail, permitir, 
   route('POST', '/api/consumos-fudo/:id/anular', async ({ user, params }) => {
     permitir(user, 'consumir');
     const id = toInt(params.id);
+    await verCuentaImp(user, id);
     return tx(async (client) => {
       await borrador(client, id);
       await client.query("UPDATE consumo_importaciones SET estado = 'ANULADA' WHERE id = $1", [id]);

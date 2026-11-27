@@ -188,14 +188,14 @@ function permitidoLLM(uid) {
   return true;
 }
 
-module.exports = function registrarVinilito({ route, query, fail, calcularTareas, fudo, sqlAlm }) {
+module.exports = function registrarVinilito({ route, query, fail, calcularTareas, fudo, sqlAlm, sqlProdSuc }) {
   route('GET', '/api/vinilito', async () => ({ modo: llmDisponible() ? 'claude' : 'reglas', ejemplos: EJEMPLOS }));
 
   route('POST', '/api/vinilito', async ({ user, body }) => {
     const mensaje = String(body.mensaje || '').trim().slice(0, 1000);
     if (!mensaje) fail(400, 'Escribí una consulta');
     const historial = Array.isArray(body.historial) ? body.historial.filter((h) => h && h.texto) : [];
-    const D = crearDatos({ query, user, calcularTareas, fudo, sqlAlm });
+    const D = crearDatos({ query, user, calcularTareas, fudo, sqlAlm, sqlProdSuc });
     if (llmDisponible() && permitidoLLM(user.id)) {
       try {
         return { ...(await responderConClaude(mensaje, historial, D, user)), modo: 'claude' };

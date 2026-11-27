@@ -98,6 +98,12 @@ async function currentUser(req) {
     sucursales: u.rol === 'ADMIN' || !u.sucursales_csv ? null : String(u.sucursales_csv).split(',').map(Number).filter(Number.isInteger),
   };
   user.permisos = permisosDe(user, u.rol_permisos);
+  // Con sucursal asignada: solo los almacenes de esas sucursales y los compartidos (sin sucursal), dentro de los del rol
+  if (user.sucursales) {
+    const { rows: al } = await query('SELECT id FROM almacenes WHERE sucursal_id IS NULL OR sucursal_id = ANY($1::int[])', [`{${user.sucursales.join(',')}}`]);
+    const ids = al.map((a) => Number(a.id));
+    user.almacenes = user.almacenes ? user.almacenes.filter((x) => ids.includes(x)) : ids;
+  }
   // "Ver como": token emitido por un ADMIN para ver la app como este usuario (solo lectura, 2 h)
   if (payload.imp) {
     if (!payload.vc_hasta || payload.vc_hasta < Date.now()) return null;
@@ -466,9 +472,9 @@ route('DELETE', '/api/roles/:codigo', async ({ user, params }) => {
 // ---------- Almacenes ----------
 // ?todos=1 devuelve todos los almacenes (para elegir el destino de una transferencia o el origen de un pedido)
 route('GET', '/api/almacenes', async ({ user, url }) => {
-  const { rows } = await query('SELECT id, nombre, activo FROM almacenes ORDER BY id');
+  const { rows } = await query('SELECT a.id, a.nombre, a.activo, a.sucursal_id, s.nombre AS sucursal FROM almacenes a LEFT JOIN sucursales s ON s.id = a.sucursal_id ORDER BY a.id');
   const todos = url.searchParams.get('todos') === '1' || user.permisos.includes('almacenes');
-  return rows.map((r) => ({ ...r, id: Number(r.id), activo: isTrue(r.activo), visible: veAlmacen(user, r.id) }))
+  return rows.map((r) => ({ ...r, id: Number(r.id), activo: isTrue(r.activo), sucursal_id: r.sucursal_id ? Number(r.sucursal_id) : null, visible: veAlmacen(user, r.id) }))
     .filter((r) => todos || r.visible);
 });
 
@@ -477,7 +483,8 @@ route('POST', '/api/almacenes', async ({ user, body }) => {
   const nombre = str(body.nombre, 80);
   if (!nombre) fail(400, 'El nombre es obligatorio');
   try {
-    const { rows } = await query('INSERT INTO almacenes (nombre) VALUES ($1) RETURNING id', [nombre.toUpperCase()]);
+    const suc = toInt(body.sucursal_id);
+    const { rows } = await query('INSERT INTO almacenes (nombre, sucursal_id) VALUES ($1, (SELECT id FROM sucursales WHERE id = $2)) RETURNING id', [nombre.toUpperCase(), Number.isInteger(suc) ? suc : null]);
     return { id: Number(rows[0].id) };
   } catch (e) {
     if (e.code === '23505' || /duplicate|unique/i.test(e.message)) fail(409, 'Ya existe un almacén con ese nombre');
@@ -495,7 +502,9 @@ route('PUT', '/api/almacenes/:id', async ({ user, body, params }) => {
     const { rows } = await query('SELECT coalesce(sum(cantidad),0)::int AS n FROM stock WHERE almacen_id = $1', [id]);
     if (Number(rows[0].n) > 0) fail(409, 'No se puede desactivar un almacén con stock. Transferí o ajustá primero.');
   }
-  await query('UPDATE almacenes SET nombre = $2, activo = $3 WHERE id = $1', [id, nombre.toUpperCase(), activo]);
+  const suc = toInt(body.sucursal_id);
+  await query('UPDATE almacenes SET nombre = $2, activo = $3' + (body.sucursal_id !== undefined ? ', sucursal_id = (SELECT id FROM sucursales WHERE id = $4)' : '') + ' WHERE id = $1',
+    body.sucursal_id !== undefined ? [id, nombre.toUpperCase(), activo, Number.isInteger(suc) ? suc : null] : [id, nombre.toUpperCase(), activo]);
   return { ok: true };
 });
 
@@ -900,10 +909,10 @@ require('./src/eliminar')({ route, query, tx, fail, toInt });
 const { calcularTareas } = require('./src/tareas');
 
 // ---------- Vinilito (asistente) ----------
-require('./src/vinilito/agente')({ route, query, fail, calcularTareas, fudo, sqlAlm });
+require('./src/vinilito/agente')({ route, query, fail, calcularTareas, fudo, sqlAlm, sqlProdSuc });
 
 // ---------- Producción ----------
-require('./src/produccion')({ route, query, tx, fail, permitir, permitirAlguno, almacenActivo, exigirAlmacen, isTrue, toInt, str, veAlmacen });
+require('./src/produccion')({ route, query, tx, fail, permitir, permitirAlguno, almacenActivo, exigirAlmacen, isTrue, toInt, str, veAlmacen, sqlProdSuc });
 
 // ---------- Personal (solicitudes de empleados) ----------
 require('./src/personal')({ route, query, tx, fail, permitir, permitirAlguno, isTrue, toInt, str, fechaOk });
@@ -927,7 +936,7 @@ crosschex({ route, query, fail, permitir, permitirAlguno, toInt, fechaOk, pool }
 
 // ---------- Panel ----------
 route('GET', '/api/dashboard', async ({ user }) => {
-  const res = { rol: user.rol, pedidos_pendientes: 0, tareas: await calcularTareas(user, { query, fudo, sqlAlm }) };
+  const res = { rol: user.rol, pedidos_pendientes: 0, tareas: await calcularTareas(user, { query, fudo, sqlAlm, sqlProdSuc }) };
   if (user.permisos.includes('verCompras') || user.permisos.includes('portalProveedor')) {
     const prov = user.rol === 'PROVEEDOR';
     const { rows } = await query(
@@ -952,7 +961,7 @@ route('GET', '/api/dashboard', async ({ user }) => {
       .filter((a) => veAlmacen(user, a.id));
     const { rows: alertas } = await query(
       `SELECT ${PRODUCTO_COLS}, (SELECT coalesce(sum(cantidad),0)::int FROM stock s WHERE s.producto_id = productos.id) AS total
-       FROM productos WHERE activo AND gestion_stock AND (alerta_vencimiento OR alerta_cuidado OR alerta_frio)
+       FROM productos WHERE activo AND gestion_stock AND (alerta_vencimiento OR alerta_cuidado OR alerta_frio) ${sqlProdSuc(user)}
        ORDER BY alerta_vencimiento DESC, fecha_vencimiento NULLS LAST, nombre`);
     res.alertas = alertas.map((a) => ({ ...normalizarProducto(a), total: Number(a.total) }));
     const { rows: ult } = await query(

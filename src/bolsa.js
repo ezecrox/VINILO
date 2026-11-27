@@ -140,33 +140,33 @@ async function armar(cta, merc, ocultos, crash, demo = false) {
 }
 
 module.exports = function registrarBolsa({ route, query, fail, permitir }) {
-  const cuenta = (url) => { const cs = fudo.cuentasTablero(); if (!cs.length) fail(400, 'Fudo no está configurado.'); const id = url.searchParams.get('cuenta'); return cs.find((x) => x.id === id) || cs[0]; };
+  const cuenta = async (url, user) => { if (!fudo.cuentasTablero().length) fail(400, 'Fudo no está configurado.'); const cs = await fudo.cuentasDeUsuario({ query }, user); if (!cs.length) fail(403, 'Tu sucursal no tiene una cuenta de Fudo asociada'); const id = url.searchParams.get('cuenta'); return cs.find((x) => x.id === id) || cs[0]; };
   const cfg = async (clave, def) => { const r = (await query('SELECT valor FROM app_config WHERE clave = $1', [clave])).rows[0]; try { return r ? JSON.parse(r.valor) : def; } catch (_) { return def; } };
   const setCfg = (clave, v) => query('INSERT INTO app_config (clave, valor) VALUES ($1, $2) ON CONFLICT (clave) DO UPDATE SET valor = EXCLUDED.valor', [clave, JSON.stringify(v)]);
   const claveOcultos = (cta, merc) => (merc === 'tragos' ? 'bolsa_ocultos_' + cta.id : `bolsa_ocultos_${merc}_${cta.id}`);
   const esAdmin = (user) => { if (user.rol !== 'ADMIN') fail(403, 'Solo el administrador configura la bolsa'); };
 
-  route('GET', '/api/bolsa/cuentas', async ({ user }) => { permitir(user, 'juegos'); return fudo.cuentasTablero().map(({ id, nombre }) => ({ id, nombre })); });
+  route('GET', '/api/bolsa/cuentas', async ({ user }) => { permitir(user, 'juegos'); return (await fudo.cuentasDeUsuario({ query }, user)).map(({ id, nombre }) => ({ id, nombre })); });
   route('GET', '/api/bolsa', async ({ user, url }) => {
     permitir(user, 'juegos');
-    const cta = cuenta(url); const merc = mercadoDe(url.searchParams.get('mercado')); const demo = url.searchParams.get('demo') === '1';
+    const cta = await cuenta(url, user); const merc = mercadoDe(url.searchParams.get('mercado')); const demo = url.searchParams.get('demo') === '1';
     const k = cta.id + ':' + merc + (demo ? ':demo' : ''); const ch = cache[k];
     if (ch && Date.now() - ch.t < (demo ? 5000 : CACHE_MS)) return ch.datos;
     try { const datos = await armar(cta, merc, new Set(await cfg(claveOcultos(cta, merc), [])), await cfg('bolsa_crash_' + cta.id + (demo ? '_demo' : ''), null), demo); cache[k] = { t: Date.now(), datos }; return datos; }
     catch (e) { if (ch) return { ...ch.datos, desactualizado: true }; fail(502, `No se pudieron leer las ventas de Fudo de ${cta.nombre}: ${e.message}`); }
   });
   route('GET', '/api/bolsa/config', async ({ user, url }) => {
-    esAdmin(user); const cta = cuenta(url); const merc = mercadoDe(url.searchParams.get('mercado')); const ocultos = new Set(await cfg(claveOcultos(cta, merc), []));
+    esAdmin(user); const cta = await cuenta(url, user); const merc = mercadoDe(url.searchParams.get('mercado')); const ocultos = new Set(await cfg(claveOcultos(cta, merc), []));
     return [...deMercado(await productosMercado(cta), merc).values()].sort((a, b) => a.nombre.localeCompare(b.nombre)).map((p) => ({ ...p, oculto: ocultos.has(p.id) }));
   });
   route('PUT', '/api/bolsa/config', async ({ user, url, body }) => {
-    esAdmin(user); const cta = cuenta(url); const merc = mercadoDe(url.searchParams.get('mercado'));
+    esAdmin(user); const cta = await cuenta(url, user); const merc = mercadoDe(url.searchParams.get('mercado'));
     const ids = Array.isArray(body && body.ocultos) ? body.ocultos.map(String).slice(0, 1000) : [];
     await setCfg(claveOcultos(cta, merc), ids); delete cache[cta.id + ':' + merc]; return { ok: true, ocultos: ids.length };
   });
   // CRASH: baja todos los precios de la sucursal un % durante unos minutos (permiso juegosCrash)
   route('POST', '/api/bolsa/crash', async ({ user, url, body }) => {
-    permitir(user, 'juegosCrash'); const cta = cuenta(url); const sfx = url.searchParams.get('demo') === '1' ? '_demo' : '';
+    permitir(user, 'juegosCrash'); const cta = await cuenta(url, user); const sfx = url.searchParams.get('demo') === '1' ? '_demo' : '';
     const minutos = Math.min(60, Math.max(1, Math.round(Number(body && body.minutos) || 10)));
     const caida = Math.min(60, Math.max(5, Math.round(Number(body && body.caida) || 30)));
     const desde = new Date(); const crash = { desde: desde.toISOString(), hasta: new Date(desde.getTime() + minutos * 60e3).toISOString(), caida, minutos, por: user.nombre };
@@ -175,7 +175,7 @@ module.exports = function registrarBolsa({ route, query, fail, permitir }) {
     return crash;
   });
   route('DELETE', '/api/bolsa/crash', async ({ user, url }) => {
-    permitir(user, 'juegosCrash'); const cta = cuenta(url); const sfx = url.searchParams.get('demo') === '1' ? '_demo' : '';
+    permitir(user, 'juegosCrash'); const cta = await cuenta(url, user); const sfx = url.searchParams.get('demo') === '1' ? '_demo' : '';
     const c = await cfg('bolsa_crash_' + cta.id + sfx, null);
     if (c && new Date(c.hasta) > new Date()) { c.hasta = new Date().toISOString(); await setCfg('bolsa_crash_' + cta.id + sfx, c); }
     for (const k of Object.keys(cache)) if (k.startsWith(cta.id + ':')) delete cache[k];

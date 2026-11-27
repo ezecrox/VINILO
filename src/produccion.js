@@ -1,5 +1,5 @@
 // Producción: recetas (insumos por tanda) y órdenes de producción que descuentan insumos y suman lo producido.
-module.exports = function registrarProduccion({ route, query, tx, fail, permitir, permitirAlguno, almacenActivo, exigirAlmacen, isTrue, toInt, str, veAlmacen }) {
+module.exports = function registrarProduccion({ route, query, tx, fail, permitir, permitirAlguno, almacenActivo, exigirAlmacen, isTrue, toInt, str, veAlmacen, sqlProdSuc = () => '' }) {
   async function cargarReceta(productoId, client = { query }) {
     const { rows: r } = await client.query('SELECT rendimiento, instrucciones, actualizado_en FROM recetas WHERE producto_id = $1', [productoId]);
     const { rows: ins } = await client.query(
@@ -57,7 +57,7 @@ module.exports = function registrarProduccion({ route, query, tx, fail, permitir
     const { rows } = await query(
       `SELECT p.id, p.codigo, p.nombre, p.categoria, p.unidad, r.rendimiento IS NOT NULL AS con_receta
        FROM productos p LEFT JOIN recetas r ON r.producto_id = p.id
-       WHERE p.activo AND p.gestion_produccion AND p.gestion_stock ORDER BY p.nombre`);
+       WHERE p.activo AND p.gestion_produccion AND p.gestion_stock ${sqlProdSuc(user, 'p.id')} ORDER BY p.nombre`);
     const productos = [];
     for (const r of rows) productos.push({ id: Number(r.id), codigo: r.codigo, nombre: r.nombre, categoria: r.categoria, unidad: r.unidad,
       receta: isTrue(r.con_receta) ? await cargarReceta(Number(r.id)) : null });

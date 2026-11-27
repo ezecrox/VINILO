@@ -4,7 +4,7 @@ const fmt = (d) => new Date(d).toLocaleString('es-AR', { timeZone: 'America/Arge
 const fmtDia = (d) => (d ? String(d).slice(0, 10).split('-').reverse().join('/') : '');
 const n = (v) => Number(v || 0);
 
-async function calcularTareas(user, { query, fudo, sqlAlm }) {
+async function calcularTareas(user, { query, fudo, sqlAlm, sqlProdSuc = () => '' }) {
   const p = (x) => user.permisos.includes(x);
   const t = [];
   const add = (x) => { if (x.cantidad > 0 || x.siempre) t.push(x); };
@@ -108,7 +108,8 @@ async function calcularTareas(user, { query, fudo, sqlAlm }) {
       `SELECT ci.id, ci.desde, ci.hasta, a.nombre AS almacen,
               (SELECT count(*)::int FROM consumo_import_items x WHERE x.importacion_id = ci.id AND x.producto_id IS NOT NULL AND x.incluir) AS productos
        FROM consumo_importaciones ci LEFT JOIN almacenes a ON a.id = ci.almacen_id WHERE ci.estado = 'BORRADOR'
-       ${user.almacenes ? `AND (ci.almacen_id IS NULL ${sqlAlm(user, 'ci.almacen_id').replace(' AND', ' OR')})` : ''} ORDER BY ci.desde`);
+       ${user.almacenes ? `AND (ci.almacen_id IS NULL ${sqlAlm(user, 'ci.almacen_id').replace(' AND', ' OR')})` : ''}
+       ${user.sucursales && fudo.cuentasDeUsuario ? `AND ci.cuenta = ANY('{${(await fudo.cuentasDeUsuario({ query }, user)).map((c) => c.id).join(',')}}'::text[])` : ''} ORDER BY ci.desde`);
     add({ id: 'cf-borrador', prioridad: 'alta', titulo: 'Consumos de Fudo sin confirmar', cantidad: bor.length, link: '#/consumos-fudo', accion: 'Revisar consumos',
       detalle: 'Ventas importadas en borrador: elegí el almacén y confirmá para descontar el stock.',
       items: bor.slice(0, 6).map((r) => ({ texto: `#${r.id} · ${fmt(r.desde)} → ${fmt(r.hasta)}`, sub: `${r.productos} productos · ${r.almacen || 'almacén a definir'}`, link: '#/consumos-fudo' })) });
@@ -186,7 +187,7 @@ async function calcularTareas(user, { query, fudo, sqlAlm }) {
       `SELECT m.almacen_id, a.nombre AS almacen, m.producto_id, pr.codigo, pr.nombre, m.minimo, coalesce(s.cantidad,0)::int AS cantidad
        FROM stock_minimos m JOIN productos pr ON pr.id = m.producto_id AND pr.activo AND pr.gestion_stock JOIN almacenes a ON a.id = m.almacen_id AND a.activo
        LEFT JOIN stock s ON s.almacen_id = m.almacen_id AND s.producto_id = m.producto_id
-       WHERE coalesce(s.cantidad,0) < m.minimo ${sqlAlm(user, 'm.almacen_id')} ORDER BY (coalesce(s.cantidad,0) = 0) DESC, a.id, pr.nombre`);
+       WHERE coalesce(s.cantidad,0) < m.minimo ${sqlAlm(user, 'm.almacen_id')} ${sqlProdSuc(user, 'pr.id')} ORDER BY (coalesce(s.cantidad,0) = 0) DESC, a.id, pr.nombre`);
     if (bajo.length) {
       const ids = [...new Set(bajo.map((b) => Number(b.producto_id)))];
       const { rows: otros } = await query(
@@ -218,7 +219,7 @@ async function calcularTareas(user, { query, fudo, sqlAlm }) {
     const { rows: venc } = await query(
       `SELECT pr.id, pr.nombre, pr.fecha_vencimiento, (pr.fecha_vencimiento - CURRENT_DATE) AS dias,
               (SELECT coalesce(sum(cantidad),0)::int FROM stock s WHERE s.producto_id = pr.id ${sqlAlm(user, 's.almacen_id')}) AS total
-       FROM productos pr WHERE pr.activo AND pr.gestion_stock AND pr.alerta_vencimiento AND pr.fecha_vencimiento IS NOT NULL AND pr.fecha_vencimiento <= CURRENT_DATE + 7
+       FROM productos pr WHERE pr.activo AND pr.gestion_stock AND pr.alerta_vencimiento AND pr.fecha_vencimiento IS NOT NULL AND pr.fecha_vencimiento <= CURRENT_DATE + 7 ${sqlProdSuc(user, 'pr.id')}
        ORDER BY pr.fecha_vencimiento`);
     const conStock = venc.filter((v) => n(v.total) > 0);
     add({ id: 'vencimientos', prioridad: conStock.some((v) => n(v.dias) <= 2) ? 'alta' : 'media', titulo: 'Productos por vencer', cantidad: conStock.length, link: '#/stock', accion: 'Ver stock',

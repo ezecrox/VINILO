@@ -8,7 +8,7 @@ const norm = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[̀-
 const singular = (t) => (t.length > 4 && t.endsWith('es') && !t.endsWith('ces') ? t.slice(0, -2) : t.length > 3 && t.endsWith('s') ? t.slice(0, -1) : t);
 const tokens = (s) => norm(s).split(' ').filter(Boolean).map(singular);
 
-module.exports = function crearDatos({ query, user, calcularTareas, fudo, sqlAlm }) {
+module.exports = function crearDatos({ query, user, calcularTareas, fudo, sqlAlm, sqlProdSuc = () => '' }) {
   const p = (x) => user.permisos.includes(x);
   const ve = (id) => !user.almacenes || user.almacenes.includes(Number(id));
   const sinPermiso = (que) => ({ error: `Tu usuario no tiene acceso a ${que}.` });
@@ -41,7 +41,7 @@ module.exports = function crearDatos({ query, user, calcularTareas, fudo, sqlAlm
   async function buscarProductos(texto, { excluir = [] } = {}) {
     const q = tokens(texto).filter((t) => !STOP.has(t) && !excluir.includes(t));
     if (!q.length) return [];
-    const { rows } = await query('SELECT id, codigo, nombre, categoria, unidad, activo FROM productos WHERE gestion_stock');
+    const { rows } = await query(`SELECT id, codigo, nombre, categoria, unidad, activo FROM productos WHERE gestion_stock ${sqlProdSuc(user)}`);
     const res = [];
     for (const r of rows) {
       const tp = tokens(`${r.nombre}`);
@@ -94,14 +94,14 @@ module.exports = function crearDatos({ query, user, calcularTareas, fudo, sqlAlm
       `SELECT a.nombre AS almacen, pr.nombre AS producto, m.minimo, coalesce(s.cantidad,0)::int AS cantidad
        FROM stock_minimos m JOIN productos pr ON pr.id = m.producto_id AND pr.activo AND pr.gestion_stock JOIN almacenes a ON a.id = m.almacen_id AND a.activo
        LEFT JOIN stock s ON s.almacen_id = m.almacen_id AND s.producto_id = m.producto_id
-       WHERE coalesce(s.cantidad,0) < m.minimo ${sqlAlm(user, 'm.almacen_id')} ${almId ? `AND m.almacen_id = ${Number(almId)}` : ''}
+       WHERE coalesce(s.cantidad,0) < m.minimo ${sqlAlm(user, 'm.almacen_id')} ${sqlProdSuc(user, 'pr.id')} ${almId ? `AND m.almacen_id = ${Number(almId)}` : ''}
        ORDER BY a.id, pr.nombre`);
     const { rows: hay } = await query('SELECT count(*)::int AS n FROM stock_minimos');
     return { definidos: Number(hay[0].n) > 0, productos: rows.map((r) => ({ ...r, minimo: Number(r.minimo), cantidad: Number(r.cantidad), faltan: Number(r.minimo) - Number(r.cantidad) })) };
   }
 
   async function tareas() {
-    const t = await calcularTareas(user, { query, fudo, sqlAlm });
+    const t = await calcularTareas(user, { query, fudo, sqlAlm, sqlProdSuc });
     return t.map((x) => ({ titulo: x.titulo, prioridad: x.prioridad, cantidad: x.cantidad, detalle: x.detalle, link: x.link,
       ejemplos: x.items.slice(0, 5).map((i) => `${i.texto}${i.sub ? ' — ' + i.sub : ''}`) }));
   }
@@ -112,7 +112,7 @@ module.exports = function crearDatos({ query, user, calcularTareas, fudo, sqlAlm
     const { rows } = await query(
       `SELECT pr.nombre, pr.fecha_vencimiento, (pr.fecha_vencimiento - CURRENT_DATE) AS dias,
               (SELECT coalesce(sum(cantidad),0)::int FROM stock s WHERE s.producto_id = pr.id ${sqlAlm(user, 's.almacen_id')}) AS total
-       FROM productos pr WHERE pr.activo AND pr.gestion_stock AND pr.alerta_vencimiento AND pr.fecha_vencimiento IS NOT NULL AND pr.fecha_vencimiento <= CURRENT_DATE + ${d}
+       FROM productos pr WHERE pr.activo AND pr.gestion_stock AND pr.alerta_vencimiento AND pr.fecha_vencimiento IS NOT NULL AND pr.fecha_vencimiento <= CURRENT_DATE + ${d} ${sqlProdSuc(user, 'pr.id')}
        ORDER BY pr.fecha_vencimiento`);
     return { dias: d, productos: rows.map((r) => ({ producto: r.nombre, vence: String(r.fecha_vencimiento).slice(0, 10), dias: Number(r.dias), stock: Number(r.total) })) };
   }
