@@ -961,3 +961,4 @@ body.tv .pg-cancha { max-height: calc(100vh - 120px); aspect-ratio: 16 / 9; marg
 .pz-esc { margin-top: 16px; } .pz-ini { background: #2f8f3c !important; border-color: #2f8f3c !important; color: #fff !important; font-weight: 800; }
 body.tv .pz-esc .esc { max-height: calc(100vh - 130px); margin: 0 auto; }
 .ct-rubro { font-size: 1.08rem; color: var(--side); }
+.ct-omit .check { align-items: flex-start; } .ct-omit details { margin-top: 6px; } .ct-omit summary { cursor: pointer; font-weight: 700; }

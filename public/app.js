@@ -2475,7 +2475,7 @@
     const lista = await api('/api/conteos');
     const enCurso = lista.filter((c) => c.estado === 'EN_CURSO'), hist = lista.filter((c) => c.estado !== 'EN_CURSO');
     const pct = (c) => (c.total ? Math.min(100, Math.round((c.contados / c.total) * 100)) : 0);
-    main.innerHTML = `<h1>Conteo de inventario</h1><p class="sub">Contá el stock desde el celular. Pueden contar varias personas a la vez: cada producto se guarda al instante.${puede('ajustar') ? ' Al terminar, revisás las diferencias y aplicás el conteo.' : ''}</p>
+    main.innerHTML = `<h1>Conteo de inventario</h1><p class="sub">Contá el stock desde el celular. Pueden contar varias personas a la vez, aunque el conteo lo haya abierto otro: cada producto se guarda al instante.${puede('cerrarConteo') || puede('ajustar') ? ' Al terminar, revisás las diferencias y cerrás el conteo (los productos sin contar se pueden omitir).' : ''}</p>
       ${puede('contar') ? '<div class="toolbar"><div class="spacer"></div><button class="btn" id="ct-new">+ Nuevo conteo</button></div>' : ''}
       ${enCurso.length ? `<div class="ct-cards">${enCurso.map((c) => `<a class="card ct-card" href="#/conteo?id=${c.id}">
           <div class="ct-card-top"><b class="ct-rubro">${esc(c.categoria || 'Todos los rubros')}</b><span class="badge b-PENDIENTE">En curso</span></div>
@@ -2538,8 +2538,8 @@
         ${cats.length > 1 ? `<select id="ct-cat" class="ct-cat"><option value="">Todas las categorías</option>${cats.map((c) => `<option>${esc(c)}</option>`).join('')}</select>` : ''}
       </div>
       <div id="ct-list" class="ct-list"></div>
-      ${abierto ? `<div class="ct-pie">${d.puede_aplicar ? '<button class="btn" id="ct-aplicar">Revisar y aplicar</button>' : '<a class="btn" href="#/conteo">Terminé de contar</a>'}
-        <button class="btn ghost sm" id="ct-anular">Anular</button></div>` : ''}`;
+      ${abierto ? `<div class="ct-pie">${d.puede_aplicar ? '<button class="btn" id="ct-aplicar">Revisar y cerrar</button>' : '<a class="btn" href="#/conteo">Terminé de contar</a>'}
+        ${d.puede_anular ? '<button class="btn ghost sm" id="ct-anular">Anular</button>' : ''}</div>` : ''}`;
     const conDif = (p) => p.contado !== null && p.sistema !== null && p.contado !== p.sistema;
     const chips = () => {
       const c = d.productos.filter((p) => p.contado !== null).length, tot = d.productos.length;
@@ -2663,7 +2663,7 @@
       if ($('#ct-scan')) $('#ct-scan').onclick = escanear;
       $('#ct-ref').onclick = () => recargar().then(() => toast('Actualizado'));
       clearInterval(VIEWS.conteo._t); VIEWS.conteo._t = setInterval(() => { if (!location.hash.startsWith('#/conteo?id=' + id)) return clearInterval(VIEWS.conteo._t); recargar().catch(() => {}); }, 20000);
-      $('#ct-anular').onclick = async () => {
+      if ($('#ct-anular')) $('#ct-anular').onclick = async () => {
         if (!confirm('¿Anular este conteo? Se descarta lo contado y el stock no cambia.')) return;
         try { await api(`/api/conteos/${id}/anular`, { method: 'POST' }); toast('Conteo anulado'); location.hash = '#/conteo'; } catch (err) { toast(err.message, true); }
       };
@@ -2671,25 +2671,28 @@
         await recargar();
         const contados = d.productos.filter((p) => p.contado !== null);
         const difs = contados.filter(conDif).sort((a, b) => Math.abs(b.contado - b.sistema) - Math.abs(a.contado - a.sistema));
-        const sinContar = d.productos.filter((p) => p.en_alcance && p.contado === null && p.sistema > 0);
+        const pendientes = d.productos.filter((p) => p.en_alcance && p.contado === null);
+        const sinContar = pendientes.filter((p) => p.sistema > 0);
         const neto = difs.reduce((a, p) => a + (p.contado - p.sistema), 0);
-        const m = modal(`<h2>Revisar y aplicar el conteo</h2>
-          <div class="resumen" style="margin-bottom:12px"><a><span>Contados</span><b>${contados.length}</b></a><a><span>Con diferencia</span><b style="${difs.length ? 'color:var(--accent)' : ''}">${difs.length}</b></a>
-            <a><span>Diferencia neta</span><b>${neto > 0 ? '+' : ''}${neto}</b><small>unidades</small></a><a><span>Sin contar con stock</span><b>${sinContar.length}</b></a></div>
+        if (!contados.length) { toast('Todavía no se contó ningún producto: contá al menos uno o anulá el conteo', true); return; }
+        const m = modal(`<h2>Revisar y cerrar el conteo</h2>
+          <p class="muted" style="margin-top:-4px">${esc(d.categoria || 'Todos los rubros')} · ${esc(d.almacen)} · abierto por ${esc(d.creado_por)}</p>
+          <div class="resumen" style="margin-bottom:12px"><a><span>Contados</span><b>${contados.length}</b><small>de ${contados.length + pendientes.length}</small></a><a><span>Con diferencia</span><b style="${difs.length ? 'color:var(--accent)' : ''}">${difs.length}</b></a>
+            <a><span>Diferencia neta</span><b>${neto > 0 ? '+' : ''}${neto}</b><small>unidades</small></a><a><span>Sin contar</span><b>${pendientes.length}</b><small>${sinContar.length} con stock</small></a></div>
           ${difs.length ? `<div class="tbl-wrap" style="max-height:300px;overflow:auto"><table><thead><tr><th>Producto</th><th class="num">Sistema</th><th class="num">Contado</th><th class="num">Diferencia</th></tr></thead><tbody>
             ${difs.map((p) => `<tr><td>${esc(p.nombre)}</td><td class="num">${p.sistema}</td><td class="num"><b>${p.contado}</b></td><td class="num" style="color:${p.contado < p.sistema ? 'var(--accent)' : 'var(--ok)'}"><b>${p.contado > p.sistema ? '+' : ''}${p.contado - p.sistema}</b></td></tr>`).join('')}</tbody></table></div>`
             : '<div class="card" style="background:#e9f5ee;border-color:#b9dcc6">✅ Lo contado coincide con el sistema.</div>'}
-          ${sinContar.length ? `<div class="f mt"><label>Productos sin contar que tienen stock en el sistema (${sinContar.length})</label>
-            <label class="check"><input type="radio" name="nc" value="MANTENER" checked> Dejarlos como están</label>
-            <label class="check"><input type="radio" name="nc" value="CERO"> Ponerlos en 0 (no hay ninguno)</label>
-            <div class="stock-hint">${sinContar.slice(0, 8).map((p) => esc(p.nombre) + ' (' + p.sistema + ')').join(', ')}${sinContar.length > 8 ? '…' : ''}</div></div>` : ''}
-          <p class="stock-hint mt">Al aplicar, el stock de ${esc(d.almacen)} pasa a ser lo contado y queda un movimiento de <b>Ajuste</b>. El stock del sistema se toma en este momento.</p>
-          <div class="form-actions"><button class="btn sec" data-close>Seguir contando</button><button class="btn" id="ap-ok">Aplicar conteo</button></div>`, { wide: true });
+          ${pendientes.length ? `<div class="f mt ct-omit"><label>Hay ${pendientes.length} ${pendientes.length === 1 ? 'producto sin contar' : 'productos sin contar'}: ¿qué hacemos con ${pendientes.length === 1 ? 'él' : 'ellos'}?</label>
+            <label class="check"><input type="radio" name="nc" value="MANTENER" checked> <span><b>Omitirlos</b>: se cierra igual y su stock queda como está</span></label>
+            ${sinContar.length ? `<label class="check"><input type="radio" name="nc" value="CERO"> <span><b>Ponerlos en 0</b>: no hay ninguno (${sinContar.length} tienen stock en el sistema)</span></label>` : ''}
+            <details class="stock-hint"><summary>Ver los productos sin contar</summary>${pendientes.map((p) => esc(p.nombre) + (p.sistema ? ' (' + p.sistema + ')' : '')).join(', ')}</details></div>` : ''}
+          <p class="stock-hint mt">Al cerrar, el stock de ${esc(d.almacen)} pasa a ser lo contado y queda un movimiento de <b>Ajuste</b>. El stock del sistema se toma en este momento.</p>
+          <div class="form-actions"><button class="btn sec" data-close>Seguir contando</button><button class="btn" id="ap-ok">Cerrar y aplicar</button></div>`, { wide: true });
         $('#ap-ok', m).onclick = async () => {
           const nc = $('input[name=nc]:checked', m);
           try {
             const r = await api(`/api/conteos/${id}/aplicar`, { method: 'POST', body: { no_contados: nc ? nc.value : 'MANTENER' } });
-            closeModal(); toast(r.movimiento_id ? `Conteo aplicado: ${r.productos_ajustados} productos ajustados` : 'Conteo aplicado: no había diferencias'); location.hash = '#/conteo';
+            closeModal(); toast((r.movimiento_id ? `Conteo cerrado: ${r.productos_ajustados} productos ajustados` : 'Conteo cerrado: no había diferencias') + (pendientes.length && (!nc || nc.value === 'MANTENER') ? ` · ${pendientes.length} omitidos` : '')); location.hash = '#/conteo';
           } catch (err) { toast(err.message, true); }
         };
       };

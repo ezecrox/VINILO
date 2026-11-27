@@ -2,6 +2,7 @@
 // y quien tiene "Ajuste de inventario" revisa diferencias y aplica (genera un movimiento de AJUSTE).
 module.exports = function registrarConteos({ route, query, tx, fail, permitir, permitirAlguno, registrarMovimiento, almacenActivo, isTrue, toInt, str, veAlmacen, exigirAlmacen, sqlAlm }) {
   const puede = (u, p) => u.permisos.includes(p);
+  const puedeCerrar = (u) => puede(u, 'cerrarConteo') || puede(u, 'ajustar');
   const idPos = (v) => { const n = toInt(v); return Number.isInteger(n) && n > 0 ? n : null; };
 
   async function cargar(id, user) {
@@ -59,7 +60,7 @@ module.exports = function registrarConteos({ route, query, tx, fail, permitir, p
   route('GET', '/api/conteos/:id', async ({ user, params }) => {
     permitirAlguno(user, 'contar', 'ajustar');
     const c = await cargar(idPos(params.id), user);
-    const verSistema = !isTrue(c.ciego) || puede(user, 'ajustar') || c.estado !== 'EN_CURSO';
+    const verSistema = !isTrue(c.ciego) || puedeCerrar(user) || c.estado !== 'EN_CURSO';
     const { rows } = await query(
       `SELECT p.id, p.codigo, p.codigo_barras, p.nombre, p.categoria, p.unidad,
               coalesce(s.cantidad, 0) AS sistema, i.cantidad AS contado, i.contado_en, uc.nombre AS contado_por,
@@ -76,7 +77,7 @@ module.exports = function registrarConteos({ route, query, tx, fail, permitir, p
       sistema: verSistema ? Number(r.sistema) : null, en_alcance: isTrue(r.en_alcance),
     }));
     const contados = productos.filter((p) => p.contado !== null).length;
-    return cab(c, { productos, contados, total: productos.filter((p) => p.en_alcance).length, ve_sistema: verSistema, puede_aplicar: puede(user, 'ajustar') });
+    return cab(c, { productos, contados, total: productos.filter((p) => p.en_alcance).length, ve_sistema: verSistema, puede_aplicar: puedeCerrar(user), puede_anular: puedeCerrar(user) || Number(c.creado_por) === user.id });
   });
 
   // Guardar el conteo de un producto (cantidad final, o sumar a lo ya contado)
@@ -108,7 +109,7 @@ module.exports = function registrarConteos({ route, query, tx, fail, permitir, p
 
   // Aplicar: el stock del almacén pasa a ser lo contado (movimiento de AJUSTE)
   route('POST', '/api/conteos/:id/aplicar', async ({ user, body, params }) => {
-    permitir(user, 'ajustar');
+    if (!puedeCerrar(user)) fail(403, 'No tenés permiso para cerrar conteos');
     const id = idPos(params.id);
     const noContados = body.no_contados === 'CERO' ? 'CERO' : 'MANTENER';
     return tx(async (client) => {
@@ -116,7 +117,7 @@ module.exports = function registrarConteos({ route, query, tx, fail, permitir, p
       const c = rows[0];
       if (!c || !veAlmacen(user, c.almacen_id)) fail(404, 'Conteo inexistente');
       if (c.estado !== 'EN_CURSO') fail(409, `El conteo ya está ${c.estado === 'APLICADO' ? 'aplicado' : 'anulado'}`);
-      exigirAlmacen(user, c.almacen_id, 'ajuste');
+      if (!veAlmacen(user, c.almacen_id)) fail(403, 'No tenés acceso a ese almacén');
       const { rows: it } = await client.query('SELECT producto_id, cantidad FROM conteo_items WHERE conteo_id = $1', [id]);
       const items = it.map((r) => ({ producto_id: Number(r.producto_id), cantidad: Number(r.cantidad) }));
       if (noContados === 'CERO') {
@@ -130,7 +131,7 @@ module.exports = function registrarConteos({ route, query, tx, fail, permitir, p
       let movId = null;
       try {
         movId = await registrarMovimiento(client, { tipo: 'AJUSTE', origen_id: c.almacen_id, usuario_id: user.id, items,
-          referencia: `Conteo #${id}`, observacion: `Conteo de inventario #${id}${c.categoria ? ` (${c.categoria})` : ''}${noContados === 'CERO' ? ' · no contados en 0' : ''}` });
+          referencia: `Conteo #${id}`, observacion: `Conteo de inventario #${id}${c.categoria ? ` (${c.categoria})` : ''}${noContados === 'CERO' ? ' · no contados en 0' : ' · no contados omitidos'}` });
       } catch (e) {
         if (!/no produce cambios/.test(e.message)) throw e; // todo coincidía: se cierra igual, sin movimiento
       }
@@ -144,7 +145,7 @@ module.exports = function registrarConteos({ route, query, tx, fail, permitir, p
     permitirAlguno(user, 'contar', 'ajustar');
     const c = await cargar(idPos(params.id), user);
     if (c.estado !== 'EN_CURSO') fail(409, 'El conteo ya está cerrado');
-    if (!puede(user, 'ajustar') && Number(c.creado_por) !== user.id) fail(403, 'Solo quien lo empezó o quien puede ajustar inventario lo puede anular');
+    if (!puedeCerrar(user) && Number(c.creado_por) !== user.id) fail(403, 'Solo quien lo empezó o quien tiene permiso para cerrar conteos lo puede anular');
     await query("UPDATE conteos SET estado = 'ANULADO', cerrado_por = $2, cerrado_en = now() WHERE id = $1", [c.id, user.id]);
     return { ok: true };
   });

@@ -675,3 +675,12 @@ CREATE TABLE IF NOT EXISTS juego_partidas (
   terminado_en TIMESTAMPTZ
 );
 CREATE INDEX IF NOT EXISTS juego_partidas_rank ON juego_partidas (sucursal_id, jornada, estado, puntos DESC);
+
+-- Una sola vez: quien ya podía ajustar inventario también puede cerrar (aplicar/anular) cualquier conteo
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM app_config WHERE clave = 'permiso_cerrar_conteo') THEN
+    UPDATE roles SET permisos = permisos || ',cerrarConteo' WHERE (',' || permisos || ',') LIKE '%,ajustar,%' AND (',' || permisos || ',') NOT LIKE '%,cerrarConteo,%';
+    INSERT INTO app_config (clave, valor) VALUES ('permiso_cerrar_conteo', '1');
+  END IF;
+END $$;

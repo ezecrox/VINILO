@@ -264,3 +264,8 @@ El administrador ve cuántos lo leyeron y quiénes sí/no, puede editarlo (y vol
 - **▶ Iniciar juego** (permiso `juegosControl`) muestra en la pantalla y en los celulares un conteo de **10 a 0** sincronizado (hora del servidor). En el Pizzaiolo, los que ya se anotaron arrancan solos al llegar a cero; en el Pong, al terminar el conteo empieza el partido (con su 3‑2‑1) cuando están los dos jugadores.
 - **⏹ Terminar juego** vuelve a la escena de espera. Estado del Pizzaiolo por sucursal en `app_config` (`juego_estado_<id>`).
 - Pong más rápido: el celular manda cada movimiento en el próximo cuadro (~60/s) y la pantalla sigue a la pala casi sin suavizado.
+
+### Conteos: abrir, cerrar y omitir
+- Con `contar` cualquiera abre conteos y cuenta en cualquier conteo en curso de sus almacenes, aunque lo haya abierto otro.
+- Permiso **`cerrarConteo`** ("Cerrar conteos"): aplicar o anular cualquier conteo aunque lo haya abierto otro usuario. Se otorgó una vez a los roles que tenían `ajustar` (que también puede cerrar). Quien abrió un conteo siempre puede anular el suyo.
+- Al cerrar, los productos sin contar se pueden **omitir** (su stock queda como está; opción por defecto) o poner en 0.
