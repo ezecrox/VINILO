@@ -2766,7 +2766,7 @@
   const tablaConsumos = (items, conEmpleado = false) => `<div class="tbl-wrap"><table><thead><tr><th>Fecha</th>${conEmpleado ? '<th>Empleado</th>' : ''}<th>Sucursal</th><th>Producto</th><th class="num">Cant.</th><th class="num">Importe</th><th></th></tr></thead><tbody>
     ${items.map((x) => `<tr><td>${fmtFecha(x.fecha)}</td>${conEmpleado ? `<td>${esc(x.empleado)}</td>` : ''}<td><span class="badge suc-chip ${x.cuenta === 'bar' ? 'bar' : 'gal'}">${esc(String(x.sucursal).replace(/^VINILO\s*/i, ''))}</span></td>
       <td>${esc(x.nombre)}</td><td class="num">${fmtN(x.cantidad)}</td><td class="num">${x.importe === null ? '<span class="muted">—</span>' : fmtPesos(x.importe)}</td>
-      <td>${x.estado === 'BORRADOR' ? '<span class="badge b-PENDIENTE" title="La importación todavía no se confirmó">Pendiente</span>' : ''}</td></tr>`).join('')}</tbody></table></div>`;
+      <td>${x.estado === 'BORRADOR' ? '<span class="badge b-PENDIENTE" title="La importación todavía no se confirmó">Pendiente</span>' : x.estado === 'CARGA_INICIAL' ? '<span class="muted" title="Traído de Fudo como carga inicial (no movió stock)">carga inicial</span>' : ''}</td></tr>`).join('')}</tbody></table></div>`;
 
   VIEWS['mis-consumos'] = async (main) => {
     let mes = mesActual();
@@ -2789,7 +2789,18 @@
   VIEWS['consumos-personal'] = async (main) => {
     let mes = mesActual();
     main.innerHTML = `<h1>Consumo del personal</h1><p class="sub">Consumos con cuenta corriente en Fudo de cada empleado (se asigna el cliente de Fudo en Usuarios → Editar).</p>
-      <div class="toolbar"><div class="f"><label>Mes</label>${selMes('cp-mes', mes)}</div></div><div id="cp-body"><div class="card empty">Cargando…</div></div>`;
+      <div class="toolbar"><div class="f"><label>Mes</label>${selMes('cp-mes', mes)}</div><div class="spacer"></div>
+        ${S.user.rol === 'ADMIN' ? '<button class="btn sec" id="cp-traer" title="Trae de Fudo lo vendido a las cuentas corrientes de los empleados en el mes elegido, sin mover stock">⬇ Traer cuentas corrientes del mes desde Fudo</button>' : ''}</div><div id="cp-body"><div class="card empty">Cargando…</div></div>`;
+    if ($('#cp-traer')) $('#cp-traer').onclick = async () => {
+      const b = $('#cp-traer'); const [y, mm] = mes.split('-').map(Number);
+      const desde = new Date(y, mm - 1, 1), hasta = new Date(Math.min(Date.now(), new Date(y, mm, 1).getTime()));
+      if (!confirm(`¿Traer de Fudo los consumos de las cuentas corrientes del personal de ${mes}?\n\nNo mueve stock. Reemplaza la carga anterior del mismo mes (lo que vino con una importación de consumos no se toca).`)) return;
+      b.disabled = true; b.textContent = 'Leyendo Fudo…';
+      try { const r = await api('/api/consumos-personal/carga-inicial', { method: 'POST', body: { desde: desde.toISOString(), hasta: hasta.toISOString() } });
+        toast(r.cuentas.map((c) => `${c.nombre}: ${c.items} ítems de ${c.empleados} empleados`).join(' · ')); cargar();
+      } catch (err) { toast(err.message, true); }
+      b.disabled = false; b.textContent = '⬇ Traer cuentas corrientes del mes desde Fudo';
+    };
     const cargar = async () => {
       let d; try { d = await api('/api/consumos-personal?mes=' + mes); } catch (err) { $('#cp-body').innerHTML = `<div class="card empty bad">${esc(err.message)}</div>`; return; }
       $('#cp-body').innerHTML = !d.empleados.length ? '<div class="card empty">No hay consumos del personal en este mes.</div>'

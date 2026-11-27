@@ -214,6 +214,8 @@ module.exports = function registrarConsumos({ route, query, tx, fail, permitir, 
            VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
           [impId, fid, prod ? Number(prod.id) : null, (prod ? prod.nombre : v.nombre) || `Producto Fudo ${fid}`, v.cantidad, Math.round(v.cantidad), !!gestiona, v.usuario_id || null]);
       }
+      // Lo cargado como "carga inicial" en este período queda reemplazado por el detalle de esta importación
+      if (personal.length) await client.query('DELETE FROM consumos_personal WHERE importacion_id IS NULL AND cuenta = $1 AND fecha >= $2 AND fecha < $3', [cta.id, desde.toISOString(), hasta.toISOString()]);
       for (const x of personal) {
         const prod = await buscarProd(x.fid);
         await client.query(
@@ -304,3 +306,5 @@ module.exports = function registrarConsumos({ route, query, tx, fail, permitir, 
     });
   });
 };
+module.exports.leerItemsFudo = leerItemsFudo;
+module.exports.esCancelado = esCancelado;

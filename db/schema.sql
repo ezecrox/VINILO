@@ -744,3 +744,5 @@ CREATE TABLE IF NOT EXISTS consumos_personal (
 );
 CREATE INDEX IF NOT EXISTS idx_cp_usuario ON consumos_personal (usuario_id, fecha);
 CREATE INDEX IF NOT EXISTS idx_cp_imp ON consumos_personal (importacion_id);
+-- Carga inicial del consumo del personal (sin importación asociada: no mueve stock)
+ALTER TABLE consumos_personal ALTER COLUMN importacion_id DROP NOT NULL;
