@@ -2478,25 +2478,39 @@
     main.innerHTML = `<h1>Conteo de inventario</h1><p class="sub">Contá el stock desde el celular. Pueden contar varias personas a la vez: cada producto se guarda al instante.${puede('ajustar') ? ' Al terminar, revisás las diferencias y aplicás el conteo.' : ''}</p>
       ${puede('contar') ? '<div class="toolbar"><div class="spacer"></div><button class="btn" id="ct-new">+ Nuevo conteo</button></div>' : ''}
       ${enCurso.length ? `<div class="ct-cards">${enCurso.map((c) => `<a class="card ct-card" href="#/conteo?id=${c.id}">
-          <div class="ct-card-top"><b>${esc(c.almacen)}</b><span class="badge b-PENDIENTE">En curso</span></div>
-          <div class="muted" style="font-size:.85rem">${c.categoria ? esc(c.categoria) + ' · ' : 'Todos los productos · '}${c.ciego ? 'ciego' : 'con stock visible'} · por ${esc(c.creado_por)}, ${fmtFecha(c.creado_en)}</div>
+          <div class="ct-card-top"><b class="ct-rubro">${esc(c.categoria || 'Todos los rubros')}</b><span class="badge b-PENDIENTE">En curso</span></div>
+          <div class="muted" style="font-size:.85rem">📍 ${esc(c.almacen)} · ${c.ciego ? 'ciego' : 'con stock visible'} · por ${esc(c.creado_por)}, ${fmtFecha(c.creado_en)}</div>
           <div class="ct-bar"><i style="width:${pct(c)}%"></i></div><div class="ct-card-foot"><span><b>${c.contados}</b> de ${c.total} contados${c.personas ? ` · ${c.personas} ${c.personas === 1 ? 'persona' : 'personas'}` : ''}</span><span class="btn sm">Contar →</span></div></a>`).join('')}</div>`
         : '<div class="card empty">No hay conteos en curso.</div>'}
-      ${hist.length ? `<h2 class="mt" style="margin-top:22px">Historial</h2><div class="tbl-wrap"><table><thead><tr><th>#</th><th>Almacén</th><th>Alcance</th><th>Estado</th><th class="num">Contados</th><th>Cerrado</th><th></th></tr></thead><tbody>
-        ${hist.map((c) => `<tr><td>${c.id}</td><td><b>${esc(c.almacen)}</b></td><td>${esc(c.categoria || 'Todos')}</td><td><span class="badge ${c.estado === 'APLICADO' ? 'b-COMPLETADO' : ''}">${c.estado === 'APLICADO' ? 'Aplicado' : 'Anulado'}</span></td>
+      ${hist.length ? `<div class="toolbar" style="margin-top:22px"><h2 style="margin:0">Historial</h2><div class="spacer"></div><select id="ct-filtro" aria-label="Filtrar por rubro"><option value="">Todos los rubros</option>${[...new Set(hist.map((c) => c.categoria || '(todos)'))].sort().map((r) => `<option>${esc(r)}</option>`).join('')}</select></div>
+        <div class="tbl-wrap"><table><thead><tr><th>#</th><th>Rubro</th><th>Almacén</th><th>Estado</th><th class="num">Contados</th><th>Cerrado</th><th></th></tr></thead><tbody id="ct-hist">
+        ${hist.map((c) => `<tr data-rubro="${esc(c.categoria || '(todos)')}"><td>${c.id}</td><td><b>${esc(c.categoria || 'Todos los rubros')}</b></td><td>${esc(c.almacen)}</td><td><span class="badge ${c.estado === 'APLICADO' ? 'b-COMPLETADO' : ''}">${c.estado === 'APLICADO' ? 'Aplicado' : 'Anulado'}</span></td>
           <td class="num">${c.contados}</td><td class="muted">${c.cerrado_en ? fmtFecha(c.cerrado_en) : ''}${c.cerrado_por ? ' · ' + esc(c.cerrado_por) : ''}</td>
           <td class="num"><a class="btn ghost sm" href="#/conteo?id=${c.id}">Ver</a></td></tr>`).join('')}</tbody></table></div>` : ''}`;
+    if ($('#ct-filtro')) $('#ct-filtro').onchange = (e) => $$('#ct-hist tr').forEach((tr) => { tr.hidden = !!e.target.value && tr.dataset.rubro !== e.target.value; });
     if ($('#ct-new')) $('#ct-new').onclick = async () => {
       const prods = await api('/api/productos');
-      const cats = [...new Set(prods.map((p) => p.categoria).filter(Boolean))].sort();
+      const cats = [...new Set(prods.filter((p) => p.gestion_stock !== false && p.activo !== false).map((p) => p.categoria).filter(Boolean))].sort();
       const alms = S.almacenes.filter((a) => a.activo);
       const m = modal(`<h2>Nuevo conteo</h2><form id="f-ct">
         <div class="f"><label>Almacén</label><select name="almacen_id">${alms.map((a) => `<option value="${a.id}">${esc(a.nombre)}</option>`).join('')}</select></div>
-        <div class="f mt"><label>Qué se cuenta</label><select name="categoria"><option value="">Todos los productos con gestión de stock</option>${cats.map((c) => `<option>${esc(c)}</option>`).join('')}</select></div>
+        <div class="f mt"><label>Rubro a contar</label><select name="categoria" id="ct-rub"></select>
+          <p class="stock-hint" id="ct-ocup" style="margin-top:6px"></p></div>
         ${puede('ajustar') ? '<label class="check mt"><input type="checkbox" name="ciego" checked> Conteo ciego: quien cuenta no ve el stock del sistema (recomendado)</label>' : ''}
         <div class="f mt"><label>Observación</label><input name="observacion" maxlength="500" placeholder="Ej.: conteo mensual, cierre de noviembre"></div>
         <p class="stock-hint mt">Conviene contar con el local cerrado o sin movimientos: al aplicar, el stock pasa a ser lo contado.</p>
         <div class="form-actions"><button type="button" class="btn sec" data-close>Cancelar</button><button class="btn">Empezar a contar</button></div></form>`);
+      // Rubros ocupados en el almacén elegido: se pueden abrir varios conteos a la vez si son de rubros distintos
+      const opciones = () => {
+        const alm = Number(m.querySelector('[name=almacen_id]').value), abiertos = enCurso.filter((c) => c.almacen_id === alm), ocup = new Set(abiertos.map((c) => c.categoria || ''));
+        const hayTodos = ocup.has(''), hayAlguno = abiertos.length > 0;
+        $('#ct-rub', m).innerHTML = cats.map((c) => `<option value="${esc(c)}" ${ocup.has(c) || hayTodos ? 'disabled' : ''}>${esc(c)}${ocup.has(c) ? ' · ya en curso' : ''}</option>`).join('')
+          + `<option value="" ${hayAlguno ? 'disabled' : ''}>Todos los rubros${hayTodos ? ' · ya en curso' : hayAlguno ? ' · no disponible: hay conteos por rubro en curso' : ''}</option>`;
+        const libre = [...$('#ct-rub', m).options].find((o) => !o.disabled); if (libre) libre.selected = true;
+        $('#ct-ocup', m).textContent = abiertos.length ? `En curso en este almacén: ${abiertos.map((c) => c.categoria || 'todos los rubros').join(', ')}. Podés abrir otro de un rubro distinto.` : 'Podés abrir varios conteos a la vez en este almacén, uno por rubro.';
+        m.querySelector('button.btn:not(.sec)').disabled = !libre;
+      };
+      m.querySelector('[name=almacen_id]').onchange = opciones; opciones();
       $('#f-ct', m).addEventListener('submit', async (e) => {
         e.preventDefault(); const f = e.target;
         try {

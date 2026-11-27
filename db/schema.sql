@@ -475,7 +475,9 @@ CREATE TABLE IF NOT EXISTS conteos (
   no_contados   VARCHAR(10),                       -- MANTENER | CERO (al aplicar)
   movimiento_id INT REFERENCES movimientos(id)
 );
-CREATE UNIQUE INDEX IF NOT EXISTS conteos_uno_en_curso ON conteos (almacen_id) WHERE estado = 'EN_CURSO';
+-- Un conteo en curso por almacén y rubro (se pueden abrir varios a la vez si son de rubros distintos)
+DROP INDEX IF EXISTS conteos_uno_en_curso;
+CREATE UNIQUE INDEX IF NOT EXISTS conteos_en_curso_rubro ON conteos (almacen_id, coalesce(categoria, '')) WHERE estado = 'EN_CURSO';
 CREATE TABLE IF NOT EXISTS conteo_items (
   conteo_id   INT NOT NULL REFERENCES conteos(id) ON DELETE CASCADE,
   producto_id INT NOT NULL REFERENCES productos(id),

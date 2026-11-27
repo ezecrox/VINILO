@@ -38,12 +38,20 @@ module.exports = function registrarConteos({ route, query, tx, fail, permitir, p
     await almacenActivo({ query }, alm, 'conteo');
     // Ciego (no muestra el stock del sistema) salvo que quien lo crea pueda ajustar y elija verlo
     const ciego = body.ciego === undefined ? true : (!!body.ciego || !puede(user, 'ajustar'));
+    // Se permiten varios conteos en curso en el mismo almacén si son de rubros distintos.
+    // No se permite el mismo rubro dos veces, ni "todos los rubros" junto con otro (contarían los mismos productos).
+    const rubro = str(body.categoria, 80) || null;
+    const { rows: abiertos } = await query("SELECT id, categoria FROM conteos WHERE almacen_id = $1 AND estado = 'EN_CURSO'", [alm]);
+    const mismo = abiertos.find((x) => (x.categoria || null) === rubro);
+    if (mismo) fail(409, rubro ? `Ya hay un conteo en curso de ${rubro} en ese almacén (#${mismo.id}): sumate a ese o terminalo antes de abrir otro` : `Ya hay un conteo de todos los rubros en curso en ese almacén (#${mismo.id})`);
+    if (!rubro && abiertos.length) fail(409, `No se puede contar todos los rubros mientras haya conteos en curso de: ${abiertos.map((x) => x.categoria).join(', ')}. Terminalos o elegí un rubro.`);
+    if (rubro && abiertos.some((x) => !x.categoria)) fail(409, `Hay un conteo de todos los rubros en curso en ese almacén (#${abiertos.find((x) => !x.categoria).id}): terminalo antes de abrir uno por rubro`);
     try {
       const { rows } = await query('INSERT INTO conteos (almacen_id, categoria, ciego, observacion, creado_por) VALUES ($1,$2,$3,$4,$5) RETURNING id',
-        [alm, str(body.categoria, 80), ciego, str(body.observacion, 500), user.id]);
+        [alm, rubro, ciego, str(body.observacion, 500), user.id]);
       return { id: Number(rows[0].id) };
     } catch (e) {
-      if (e.code === '23505' || /duplicate|unique/i.test(e.message)) fail(409, 'Ya hay un conteo en curso en ese almacén: sumate a ese o terminalo antes de empezar otro');
+      if (e.code === '23505' || /duplicate|unique/i.test(e.message)) fail(409, 'Ya hay un conteo en curso de ese rubro en ese almacén: sumate a ese o terminalo antes de abrir otro');
       throw e;
     }
   });
